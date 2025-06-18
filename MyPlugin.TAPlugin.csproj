@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.6" />
+		<PackageReference Include="MySql.Data" Version="9.3.0" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="ImGui.NET">
+			<HintPath>using\ImGui.NET.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="ReLogic">
+			<HintPath>using\ReLogic.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="TerraAngel.PluginAPI">
+			<HintPath>using\TerraAngel.PluginAPI.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="Terraria">
+			<HintPath>using\Terraria.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="TNA">
+			<HintPath>using\TNA.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+	</ItemGroup>
+
+</Project>
