@@ -4,6 +4,7 @@ using TerraAngel.Input;
 using TerraAngel.Plugin;
 using TerraAngel.Tools;
 using Terraria;
+using Terraria.Audio;
 using Terraria.ID;
 using static Terraria.GameContent.Bestiary.BestiaryDatabaseNPCsPopulator.CommonTags.SpawnConditions;
 
@@ -14,7 +15,7 @@ public class MyPlugin : Plugin
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 2);
+    public Version Version => new(1, 0, 3);
     #endregion
 
     #region 注册与卸载
@@ -75,6 +76,21 @@ public class MyPlugin : Plugin
         AutoUseItem(InputSystem.IsKeyPressed(Config.AutoUseKey));
 
         SetItem(InputSystem.IsKeyPressed(Config.ItemManagerKey));
+
+        //快捷键P 开启关闭修改批量前缀窗口
+        if (InputSystem.IsKeyPressed(Config.ShowEditPrefixKey))
+        {
+            SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
+            UITool.ShowEditPrefix = !UITool.ShowEditPrefix;
+        }
+
+        //快捷键O 快速收藏物品
+        if (InputSystem.IsKeyPressed(Config.FavoriteKey))
+        {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
+            UITool.FavoriteAllItems(Main.LocalPlayer);
+        }
+
     }
     #endregion
 
@@ -95,6 +111,8 @@ public class MyPlugin : Plugin
         // Alt+按键：添加当前物品到预设列表
         if (InputSystem.Alt)
         {
+            SoundEngine.PlaySound(SoundID.MenuTick);
+
             // 创建新物品预设
             ItemData newItem = ItemData.FromItem(plr.HeldItem);
 
@@ -106,7 +124,7 @@ public class MyPlugin : Plugin
             // 检查名称是否已存在，如果存在则添加后缀
             while (Config.items.Any(p => p.Name == newName))
             {
-                newName = $"{prefix++}.{baseName}";
+                newName = $"{baseName}_{prefix++}";
             }
 
             newItem.Name = newName;
@@ -119,6 +137,8 @@ public class MyPlugin : Plugin
         // Ctrl+按键：删除当前类型的预设
         if (InputSystem.Ctrl)
         {
+            SoundEngine.PlaySound(SoundID.MenuTick);
+
             // 查找匹配的预设
             ItemData presetToRemove = Config.items.FirstOrDefault(p => p.Type == item.type)!;
 
@@ -162,6 +182,7 @@ public class MyPlugin : Plugin
     {
         if (key)
         {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
             Config.AutoUseItem = !Config.AutoUseItem;
             string status = Config.AutoUseItem ? "开启" : "关闭";
             ClientLoader.Chat.WriteLine($"自动使用物品已{status}", Color.Yellow);
@@ -183,9 +204,9 @@ public class MyPlugin : Plugin
             else
             {
                 plr.controlUseItem = true;
+                plr.ItemCheck();
                 //使用物品时伤害鼠标范围内的NPC
                 UseItemStrikeNPC(plr.controlUseItem);
-                plr.ItemCheck();
             }
 
             // 发送网络同步消息
@@ -231,6 +252,7 @@ public class MyPlugin : Plugin
     {
         if (!Config.Heal || !key) return;
 
+        SoundEngine.PlaySound(SoundID.MenuTick);
         var plr = Main.player[Main.myPlayer];
         plr.Heal(Config.HealVal);
 

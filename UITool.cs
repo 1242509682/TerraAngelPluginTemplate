@@ -1,10 +1,13 @@
-﻿using ImGuiNET;
+﻿using System.Numerics;
+using ImGuiNET;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Tools;
 using Terraria;
-using Microsoft.Xna.Framework;
+using Terraria.Audio;
+using Terraria.ID;
 using static MyPlugin.MyPlugin;
 
 namespace MyPlugin;
@@ -15,18 +18,29 @@ public class UITool : Tool
     public override ToolTabs Tab => ToolTabs.MainTools;
 
     // 用于临时存储按键编辑状态
-    private bool editingHealKey = false;
-    private bool editingKillKey = false;
-    private bool editingAutoUseKey = false;
+    private bool EditHealKey = false;
+    private bool EditKillKey = false;
+    private bool EditAutoUseKey = false;
+    private bool editShowEditPrefixKey = false;
+    private bool editFavoriteKey = false;
+    private bool EditItemManagerKey = false; // 物品管理器按键编辑状态
 
-    // 添加编辑状态变量
-    private bool editingItemManagerKey = false;
-    private static string searchFilter = ""; // 物品搜索过滤器
-    private static bool showItemManager = false; // 是否显示物品管理器窗口
+    private static string SearchFilter = ""; // 物品搜索过滤器
+    private static bool ShowItemManagerWindow = false; // 显示物品管理器窗口
+
+    public static bool ShowEditPrefix = false; // 显示批量修改前缀窗口
+    private static int PrefixId = 0; // 用于存储新前缀ID的变量
+
+    // 分页相关变量
+    private static int NowPage = 0; //当前页码
+    private const int PageLimit = 8; // 每页显示8个物品
+    private static int AllPages = 0; // 总页数
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
     {
+        var plr = Main.player[Main.myPlayer];
+
         bool enabled = Config.Enabled; //插件总开关
         bool Heal = Config.Heal; //回血开关
         int HealVal = Config.HealVal; //回血值
@@ -49,19 +63,22 @@ public class UITool : Tool
         ImGui.Checkbox("启用羽学插件", ref enabled);
         if (enabled)
         {
+            // 播放界面点击音效
+            SoundEngine.PlaySound(SoundID.MenuTick);
+
             // 快速死亡复活开关（单bool + 自定义按键）
             ImGui.Separator();
             ImGui.Checkbox("快速死亡/复活", ref killOrRESpawn);
             ImGui.SameLine();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref killKey, ref editingKillKey);
+            DrawKeySelector("按键", ref killKey, ref EditKillKey);
 
             // 回血设置 （bool + 滑块 + 自定义按键）
             ImGui.Separator();
             ImGui.Checkbox("强制回血", ref Heal);
             ImGui.SameLine(); // 回血按键设置
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref healKey, ref editingHealKey);
+            DrawKeySelector("按键", ref healKey, ref EditHealKey);
             if (Heal)
             {
                 ImGui.Indent();
@@ -79,13 +96,13 @@ public class UITool : Tool
             ImGui.Checkbox("自动使用物品", ref autoUseItem);
             ImGui.SameLine();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref autoUseKey, ref editingAutoUseKey);
+            DrawKeySelector("按键", ref autoUseKey, ref EditAutoUseKey);
             if (autoUseItem)
             {
                 ImGui.Indent();
                 ImGui.Text("使用间隔(毫秒):");
                 ImGui.SameLine();
-                ImGui.SetNextItemWidth(150);
+                ImGui.SetNextItemWidth(200);
                 ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 20000, "%d ms");
                 ImGui.Unindent();
 
@@ -107,22 +124,81 @@ public class UITool : Tool
             ImGui.Separator();
             ImGui.Checkbox("物品管理", ref itemManager);
             ImGui.SameLine();
-            DrawKeySelector("按键", ref itemManagerKey, ref editingItemManagerKey);
+            DrawKeySelector("按键", ref itemManagerKey, ref EditItemManagerKey);
             if (itemManager)
             {
                 ImGui.SameLine();
                 if (ImGui.Button("打开物品管理器"))
                 {
-                    showItemManager = true;
+                    SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
+                    ShowItemManagerWindow = true;
                 }
 
-                // 添加物品管理器窗口
-                if (showItemManager)
+                // 物品管理器窗口
+                if (ShowItemManagerWindow)
                 {
-                    DrawItemManagerWindow();
+                    DrawItemManagerWindow(plr);
+                }
+
+                // 一键修改饰品前缀按钮
+                if (ImGui.Button("一键前缀"))
+                {
+                    // 播放界面打开音效
+                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                    ShowEditPrefix = true;
+                    PrefixId = 0; // 重置为0
+                }
+
+                // 修改前缀窗口热键配置
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref editShowEditPrefixKey);
+
+                // 添加提示文本
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text("一键修改盔甲组的所有饰品前缀");
+                    ImGui.Text("仅适配大师难度");
+                    ImGui.EndTooltip();
+                }
+
+                // 显示一键修改前缀窗口
+                if (ShowEditPrefix)
+                {
+                    DrawEditPrefixWindow();
+                }
+
+                // +++ 新增一键收藏按钮 +++
+                ImGui.SameLine();
+                if (ImGui.Button("一键收藏背包"))
+                {
+                    // 播放收藏音效
+                    SoundEngine.PlaySound(SoundID.MenuTick);
+
+                    // 收藏所有格子物品（包括虚空袋）
+                    int favoritedItems = FavoriteAllItems(plr);
+
+                    // 显示操作结果
+                    ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
+                }
+
+                // 一键收藏热键配置
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.FavoriteKey, ref editFavoriteKey);
+
+                // 添加提示文本
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text("收藏所有背包中的物品（主背包+虚空袋）");
+                    ImGui.Text("防止意外丢弃或出售重要物品");
+                    ImGui.EndTooltip();
                 }
             }
-
         }
 
         // 更新配置值
@@ -149,6 +225,7 @@ public class UITool : Tool
         // 保存按钮
         if (ImGui.Button("保存设置"))
         {
+            SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
             Config.Write();
             ClientLoader.Chat.WriteLine("插件设置已保存", color);
         }
@@ -157,30 +234,76 @@ public class UITool : Tool
         ImGui.SameLine();
         if (ImGui.Button("重置默认"))
         {
+            SoundEngine.PlaySound(SoundID.MenuClose); // 播放界面关闭音效
             Config.SetDefault();
             ClientLoader.Chat.WriteLine("已重置为默认设置", color);
         }
     }
     #endregion
 
+    #region 一键收藏所有物品
+    public static int FavoriteAllItems(Player plr)
+    {
+        int count = 0;
+
+        // 遍历玩家背包（主背包、钱币栏、弹药栏）
+        for (int i = 0; i < 49; i++) // 0-49是主背包，50-53是钱币栏，54-57是弹药栏
+        {
+            Item item = plr.inventory[i];
+
+            if (!item.IsAir)
+            {
+                item.favorited = !item.favorited;
+                count++;
+            }
+        }
+
+        // 虚空袋（plr.bank4.item：40格）
+        for (int i = 0; i < 40; i++)
+        {
+            Item item = plr.bank4.item[i];
+
+            if (!item.IsAir)
+            {
+                item.favorited = !item.favorited;
+                count++;
+            }
+        }
+
+        return count;
+    }
+    #endregion
+
     #region 实现物品管理器窗口
-    private static ItemData editingItem = null!; // 当前正在编辑的物品
-    private static bool showEditItemWindow = false; // 是否显示编辑窗口
-    internal static void DrawItemManagerWindow()
+    private static ItemData EditItem = null!; // 当前正在编辑的物品
+    private static bool ShowEditWindow = false; // 是否显示编辑窗口
+    internal static void DrawItemManagerWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(500, 400), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin("物品管理器", ref showItemManager, ImGuiWindowFlags.NoCollapse))
+        if (ImGui.Begin("物品管理器", ref ShowItemManagerWindow, ImGuiWindowFlags.NoCollapse))
         {
             // 搜索框
-            ImGui.InputText("搜索", ref searchFilter, 100);
+            ImGui.InputText("搜索", ref SearchFilter, 100);
+
+            var AllItems = Config.items.Where(item => string.IsNullOrEmpty(SearchFilter) ||
+            FuzzyMatch(item.Name, SearchFilter)).ToList();
+
+            // 计算总页数
+            AllPages = (int)Math.Ceiling(AllItems.Count / (float)PageLimit);
+            if (AllPages == 0) AllPages = 1;
+
+            // 确保当前页在有效范围内
+            if (NowPage >= AllPages) NowPage = AllPages - 1;
+            if (NowPage < 0) NowPage = 0;
 
             // 添加物品按钮
-            if (ImGui.Button($"添加当前手持物品(Alt+{Config.ItemManagerKey})"))
+            if (ImGui.Button($"添加(Alt+{Config.ItemManagerKey})"))
             {
-                var plr = Main.player[Main.myPlayer];
-             
                 if (plr.HeldItem != null && !plr.HeldItem.IsAir)
                 {
+                    // 播放界面打开音效
+                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+
                     // 创建新物品预设
                     ItemData newItem = ItemData.FromItem(plr.HeldItem);
 
@@ -192,11 +315,10 @@ public class UITool : Tool
                     // 检查名称是否已存在，如果存在则添加后缀
                     while (Config.items.Any(p => p.Name == newName))
                     {
-                        newName = $"{prefix++}.{baseName}";
+                        newName = $"{baseName}_{prefix++}";
                     }
 
                     newItem.Name = newName;
-
                     Config.items.Add(newItem);
                     Config.Write();
 
@@ -210,233 +332,466 @@ public class UITool : Tool
                 }
             }
 
+            // 清空列表按钮
             ImGui.SameLine();
             if (ImGui.Button("清空列表"))
             {
+                // 播放界面关闭音效
+                SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                ShowEditWindow = false;
                 Config.items.Clear();
                 Config.Write();
             }
 
             // 物品列表
             ImGui.Separator();
-            ImGui.BeginChild("物品列表", new System.Numerics.Vector2(0, 300), ImGuiChildFlags.Borders);
+            ImGui.BeginChild("物品列表", new Vector2(0, 220), ImGuiChildFlags.Borders);
 
-            foreach (var item in Config.items.ToList())
+            // 获取当前页的物品
+            var GetPage = AllItems.Skip(NowPage * PageLimit).Take(PageLimit).ToList();
+
+            foreach (var data in GetPage)
             {
-                // 应用搜索过滤器
-                if (!string.IsNullOrEmpty(searchFilter) &&
-                    !item.Name.Contains(searchFilter, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                ImGui.PushID(item.Name);
+                ImGui.PushID(data.Name);
                 ImGui.Columns(2, "item_columns", false);
                 ImGui.SetColumnWidth(0, 200);
 
-                // 显示物品名称
-                ImGui.Text($"{item.Name}({item.Type})");
-                ImGui.Text($"伤害: {item.Damage}  防御: {item.Defense}  数量: {item.Stack}");
-                ImGui.Text($"暴击: {item.Crit}%  击退: {item.KnockBack:F1}");
+                // 点击物品名称 打开编辑界面
+                if (ImGui.Selectable($"{data.Name}({data.Type})"))
+                {
+                    // 播放界面打开音效
+                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                    EditItem = data;
+                    ShowEditWindow = true;
+                }
 
-                // 第二列：按钮
+                // 悬停区域显示工具提示
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.DelayNormal | ImGuiHoveredFlags.AllowWhenDisabled))
+                {
+                    Item tempItem = new Item();
+                    tempItem.SetDefaults(data.Type);
+                    data.ApplyTo(tempItem);
+                    TerraAngel.Graphics.ImGuiUtil.ImGuiItemTooltip(tempItem);
+                }
+
                 ImGui.NextColumn();
-
-                // 应用按钮
                 if (ImGui.Button($"应用({Config.ItemManagerKey})"))
                 {
-                    var player = Main.player[Main.myPlayer];
-                    editingItem.ApplyTo(player.HeldItem);
-                    ClientLoader.Chat.WriteLine($"已应用物品预设: {item.Name}", Color.Green);
+                    data.ApplyTo(Main.player[Main.myPlayer].HeldItem);
+                    ClientLoader.Chat.WriteLine($"已应用物品预设: {data.Name}", Color.Green);
                 }
-
-                ImGui.SameLine();
 
                 // 编辑按钮
+                ImGui.SameLine();
                 if (ImGui.Button("编辑"))
                 {
-                    editingItem = item;
-                    showEditItemWindow = true;
+                    // 播放界面打开音效
+                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                    EditItem = data;
+                    ShowEditWindow = true;
                 }
 
-                ImGui.SameLine();
-
                 // 删除按钮
+                ImGui.SameLine();
                 if (ImGui.Button($"删除(Ctrl+{Config.ItemManagerKey})"))
                 {
-                    Config.items.Remove(item);
+                    // 播放界面关闭音效
+                    SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                    ShowEditWindow = false;
+                    Config.items.Remove(data);
                     Config.Write();
-                    ClientLoader.Chat.WriteLine($"已删除物品预设: {item.Name}", Color.Yellow);
+                    ClientLoader.Chat.WriteLine($"已删除物品预设: {data.Name}", Color.Yellow);
                 }
 
                 ImGui.Columns(1);
                 ImGui.PopID();
             }
 
+            // 如果没有物品显示提示
+            if (GetPage.Count == 0)
+            {
+                ImGui.Text($"没有找到匹配的物品 请使用Alt + {Config.ItemManagerKey} 添加");
+            }
+
             ImGui.EndChild();
+
+            // 分页与跳转
+            ListPage(AllItems);
         }
         ImGui.End();
 
         // 显示物品编辑窗口
-        if (showEditItemWindow && editingItem != null)
+        if (ShowEditWindow && EditItem != null)
         {
-            DrawItemEditorWindow();
+            DrawItemEditWindow(plr);
+        }
+    }
+    #endregion
+
+    #region 模糊搜索匹配方法
+    private static bool FuzzyMatch(string target, string pattern)
+    {
+        if (string.IsNullOrEmpty(pattern)) return true;
+
+        pattern = pattern.ToLower();
+        target = target.ToLower();
+
+        int patternIndex = 0;
+        foreach (char c in target)
+        {
+            if (c == pattern[patternIndex])
+            {
+                patternIndex++;
+                if (patternIndex == pattern.Length)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    } 
+    #endregion
+
+    #region 分页与跳转功能
+    private static void ListPage(List<ItemData> AllItems)
+    {
+        // 显示分页信息和控件
+        ImGui.Text($"第 {NowPage + 1} / {AllPages} 页 (共{AllItems.Count}个物品)");
+        ImGui.SameLine();
+        // 上一页按钮
+        if (ImGui.Button("上页") && NowPage > 0)
+        {
+            // 播放界面点击音效
+            SoundEngine.PlaySound(SoundID.MenuTick);
+            NowPage--;
+        }
+
+        // 添加页面跳转输入框
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(80);
+        int GotoPage = NowPage + 1;
+        if (ImGui.InputInt("跳转", ref GotoPage, 1, 10))
+        {
+            if (GotoPage > 0 && GotoPage <= AllPages)
+            {
+                // 播放界面点击音效
+                SoundEngine.PlaySound(SoundID.MenuTick);
+                NowPage = GotoPage - 1;
+            }
+        }
+
+        // 下一页按钮
+        ImGui.SameLine();
+        if (ImGui.Button("下页") && NowPage < AllPages - 1)
+        {
+            // 播放界面点击音效
+            SoundEngine.PlaySound(SoundID.MenuTick);
+            NowPage++;
         }
     }
     #endregion
 
     #region 物品编辑器窗口
-    private static void DrawItemEditorWindow()
+    private static void DrawItemEditWindow(Player plr)
     {
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(600, 700), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin($"编辑物品: {editingItem.Name}", ref showEditItemWindow, ImGuiWindowFlags.NoCollapse))
+        ImGui.SetNextWindowSize(new Vector2(200, 200), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin($"编辑物品: {EditItem.Name}", ref ShowEditWindow, ImGuiWindowFlags.NoCollapse))
         {
             // 基本信息
-            ImGui.Text($"物品类型: {editingItem.Type} ({Lang.GetItemNameValue(editingItem.Type)})");
+            ImGui.Text($"物品类型: {EditItem.Type} ({Lang.GetItemNameValue(EditItem.Type)})");
+
+            // 添加悬停区域显示工具提示
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.DelayNormal | ImGuiHoveredFlags.AllowWhenDisabled))
+            {
+                Item tempItem = new Item();
+                tempItem.SetDefaults(EditItem.Type);
+                EditItem.ApplyTo(tempItem);
+                TerraAngel.Graphics.ImGuiUtil.ImGuiItemTooltip(tempItem);
+            }
+
             ImGui.Separator();
-
-            // 名称编辑
-            string name = editingItem.Name;
-            ImGui.InputText("名称", ref name, 100);
-            editingItem.Name = name;
-
-            // 基础属性
-            ImGui.Separator();
-            ImGui.Text("基础属性:");
-
-            int damage = editingItem.Damage;
-            ImGui.InputInt("伤害", ref damage);
-            editingItem.Damage = damage;
-
-            int defense = editingItem.Defense;
-            ImGui.InputInt("防御", ref defense);
-            editingItem.Defense = defense;
-
-            int stack = editingItem.Stack;
-            ImGui.InputInt("数量", ref stack);
-            editingItem.Stack = stack;
-
-            int prefix = (byte)editingItem.Prefix;
-            ImGui.InputInt("前缀ID", ref prefix);
-            editingItem.Prefix = (byte)prefix;
-
-            int crit = editingItem.Crit;
-            ImGui.InputInt("暴击率", ref crit);
-            editingItem.Crit = crit;
-
-            float knockBack = editingItem.KnockBack;
-            ImGui.InputFloat("击退", ref knockBack);
-            editingItem.KnockBack = knockBack;
-
-            // 使用属性
-            ImGui.Separator();
-            ImGui.Text("使用属性:");
-
-            int useTime = editingItem.UseTime;
-            ImGui.InputInt("使用时间", ref useTime);
-            editingItem.UseTime = useTime;
-
-            int useAnimation = editingItem.UseAnimation;
-            ImGui.InputInt("使用动画", ref useAnimation);
-            editingItem.UseAnimation = useAnimation;
-
-            int useAmmo = editingItem.UseAmmo;
-            ImGui.InputInt("使用弹药", ref useAmmo);
-            editingItem.UseAmmo = useAmmo;
-
-            int ammo = editingItem.Ammo;
-            ImGui.InputInt("是否弹药", ref ammo);
-            editingItem.Ammo = ammo;
-
-            int useStyle = editingItem.UseStyle;
-            ImGui.InputInt("使用样式", ref useStyle);
-            editingItem.UseStyle = useStyle;
-
-            int bait = editingItem.bait; // 添加钓鱼饵属性
-            ImGui.InputInt("鱼饵力", ref bait);
-            editingItem.bait = bait;
-
-            int healLife = editingItem.HealLife; // 物品使用时回复的生命值
-            ImGui.InputInt("使用时回复生命", ref healLife);
-            editingItem.HealLife = healLife;
-
-            int healMana = editingItem.HealMana; // 物品使用时回复的魔法值
-            ImGui.InputInt("使用时回复魔法", ref healMana);
-            editingItem.HealMana = healMana;
-
-            bool autoReuse = editingItem.AutoReuse;
-            ImGui.Checkbox("自动挥舞", ref autoReuse);
-            editingItem.AutoReuse = autoReuse;
-
-            bool useTurn = editingItem.UseTurn;
-            ImGui.Checkbox("使用转向", ref useTurn);
-            editingItem.UseTurn = useTurn;
-
-            bool channel = editingItem.Channel;
-            ImGui.Checkbox("持续使用", ref channel);
-            editingItem.Channel = channel;
-
-            bool noMelee = editingItem.NoMelee;
-            ImGui.Checkbox("无近战伤害", ref noMelee);
-            editingItem.NoMelee = noMelee;
-
-            bool noUseGraphic = editingItem.NoUseGraphic;
-            ImGui.Checkbox("无使用图像", ref noUseGraphic);
-            editingItem.NoUseGraphic = noUseGraphic;
-
-            // 射击属性
-            ImGui.Separator();
-            ImGui.Text("射击属性:");
-
-            int shoot = editingItem.Shoot;
-            ImGui.InputInt("弹幕ID", ref shoot);
-            editingItem.Shoot = shoot;
-
-            float shootSpeed = editingItem.ShootSpeed;
-            ImGui.InputFloat("发射速度", ref shootSpeed);
-            editingItem.ShootSpeed = shootSpeed;
-
-            // 武器类型
-            ImGui.Separator();
-            ImGui.Text("武器类型:");
-
-            bool melee = editingItem.Melee;
-            ImGui.Checkbox("近战", ref melee);
-            editingItem.Melee = melee;
-
-            bool magic = editingItem.Magic;
-            ImGui.Checkbox("魔法", ref magic);
-            editingItem.Magic = magic;
-
-            bool ranged = editingItem.Ranged;
-            ImGui.Checkbox("远程", ref ranged);
-            editingItem.Ranged = ranged;
-
-            bool summon = editingItem.Summon;
-            ImGui.Checkbox("召唤", ref summon);
-            editingItem.Summon = summon;
-
-            // 价值
-            ImGui.Separator();
-            int value = editingItem.Value;
-            ImGui.InputInt("价值", ref value);
-            editingItem.Value = value;
 
             // 保存按钮
             if (ImGui.Button("保存更改"))
             {
+                // 播放界面关闭音效
+                SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                ShowEditWindow = false;
                 Config.Write();
-                showEditItemWindow = false;
-                ClientLoader.Chat.WriteLine($"已保存物品预设: {editingItem.Name}", Color.Green);
+                EditItem.ApplyTo(Main.player[Main.myPlayer].HeldItem);
+                ClientLoader.Chat.WriteLine($"已保存物品预设: {EditItem.Name}", Color.Green);
             }
 
             ImGui.SameLine();
             if (ImGui.Button("取消"))
             {
-                showEditItemWindow = false;
+                // 播放界面关闭音效
+                SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                ShowEditWindow = false;
+                ClientLoader.Chat.WriteLine($"已取消本次修改: {EditItem.Name}", Color.Green);
+            }
+
+            // 名称编辑
+            string name = EditItem.Name;
+            ImGui.InputText("名称", ref name, 100);
+            EditItem.Name = name;
+
+            // 基础属性
+            ImGui.Separator();
+            ImGui.Text("基础属性:");
+
+            int damage = EditItem.Damage;
+            ImGui.InputInt("伤害", ref damage);
+            EditItem.Damage = damage;
+
+            int defense = EditItem.Defense;
+            ImGui.InputInt("防御", ref defense);
+            EditItem.Defense = defense;
+
+            int stack = EditItem.Stack;
+            ImGui.InputInt("数量", ref stack);
+            EditItem.Stack = stack;
+
+            int prefix = (byte)EditItem.Prefix;
+            ImGui.InputInt("前缀ID", ref prefix);
+            EditItem.Prefix = (byte)prefix;
+
+            int crit = EditItem.Crit;
+            ImGui.InputInt("暴击率", ref crit);
+            EditItem.Crit = crit;
+
+            float knockBack = EditItem.KnockBack;
+            ImGui.InputFloat("击退", ref knockBack);
+            EditItem.KnockBack = knockBack;
+
+            int bait = EditItem.bait; // 添加钓鱼饵属性
+            ImGui.InputInt("渔饵力", ref bait);
+            EditItem.bait = bait;
+
+            int fishingPole = EditItem.fishingPole; // 添加钓鱼竿等级属性
+            ImGui.InputInt("渔力", ref fishingPole);
+            EditItem.fishingPole = fishingPole;
+
+            int pick = EditItem.pick; // 添加镐力属性
+            ImGui.InputInt("镐力", ref pick);
+            EditItem.pick = pick;
+
+            int axe = EditItem.axe; // 添加斧力属性
+            ImGui.InputInt("斧力", ref axe);
+            EditItem.axe = axe;
+
+            int hammer = EditItem.hammer; // 添加锤力属性
+            ImGui.InputInt("锤力", ref hammer);
+            EditItem.hammer = hammer;
+
+            int createTile = EditItem.createTile; // 创建的方块类型
+            ImGui.InputInt("图格ID", ref createTile);
+            EditItem.createTile = createTile;
+
+            int createWall = EditItem.createWall; // 创建的墙类型
+            ImGui.InputInt("墙壁ID", ref createWall);
+            EditItem.createWall = createWall;
+
+            int value = EditItem.Value;
+            ImGui.InputInt("价值", ref value);
+            EditItem.Value = value;
+
+            // 射击属性
+            ImGui.Separator();
+            ImGui.Text("射击属性:");
+            int shoot = EditItem.Shoot;
+            ImGui.InputInt("弹幕ID", ref shoot);
+            EditItem.Shoot = shoot;
+            float shootSpeed = EditItem.ShootSpeed;
+            ImGui.InputFloat("发射速度", ref shootSpeed);
+            EditItem.ShootSpeed = shootSpeed;
+
+            // 使用属性
+            ImGui.Separator();
+            ImGui.Text("使用属性:");
+
+            int useTime = EditItem.UseTime;
+            ImGui.InputInt("使用时间", ref useTime);
+            EditItem.UseTime = useTime;
+
+            int useAnimation = EditItem.UseAnimation;
+            ImGui.InputInt("使用动画", ref useAnimation);
+            EditItem.UseAnimation = useAnimation;
+
+            int useAmmo = EditItem.UseAmmo;
+            ImGui.InputInt("使用弹药", ref useAmmo);
+            EditItem.UseAmmo = useAmmo;
+
+            int ammo = EditItem.Ammo;
+            ImGui.InputInt("是否弹药", ref ammo);
+            EditItem.Ammo = ammo;
+
+            int useStyle = EditItem.UseStyle;
+            ImGui.InputInt("使用样式", ref useStyle);
+            EditItem.UseStyle = useStyle;
+
+            int healLife = EditItem.HealLife; // 物品使用时回复的生命值
+            ImGui.InputInt("回复生命", ref healLife);
+            EditItem.HealLife = healLife;
+
+            int healMana = EditItem.HealMana; // 物品使用时回复的魔法值
+            ImGui.InputInt("回复魔法", ref healMana);
+            EditItem.HealMana = healMana;
+
+            // 武器类型
+            ImGui.Separator();
+            ImGui.Text("物品类型:");
+            bool melee = EditItem.Melee;
+            ImGui.Checkbox("近战", ref melee);
+            EditItem.Melee = melee;
+            ImGui.SameLine();
+            bool magic = EditItem.Magic;
+            ImGui.Checkbox("魔法", ref magic);
+            EditItem.Magic = magic;
+            ImGui.SameLine();
+            bool ranged = EditItem.Ranged;
+            ImGui.Checkbox("远程", ref ranged);
+            EditItem.Ranged = ranged;
+            ImGui.SameLine();
+            bool summon = EditItem.Summon;
+            ImGui.Checkbox("召唤", ref summon);
+            EditItem.Summon = summon;
+            ImGui.SameLine();
+            bool sentry = EditItem.sentry; // 是否为哨兵
+            ImGui.SameLine();
+            ImGui.Checkbox("哨兵", ref sentry);
+
+            ImGui.Separator();
+            bool accessory = EditItem.accessory; // 是否为饰品
+            ImGui.Checkbox("饰品", ref accessory);
+            EditItem.accessory = accessory;
+            ImGui.SameLine();
+            bool wornArmor = EditItem.wornArmor;
+            ImGui.Checkbox("盔甲", ref wornArmor);
+            EditItem.wornArmor = wornArmor;
+            ImGui.SameLine();
+            bool consumable = EditItem.consumable; // 是否为消耗品
+            ImGui.Checkbox("消耗品", ref consumable);
+            EditItem.consumable = consumable;
+            ImGui.SameLine();
+            bool material = EditItem.material; // 是否为材料
+            ImGui.Checkbox("材料", ref material);
+            EditItem.material = material;
+
+            ImGui.Separator();
+            int headSlot = EditItem.headSlot; // 头盔槽位
+            ImGui.InputInt("头盔槽位", ref headSlot);
+            EditItem.headSlot = headSlot;
+            int bodySlot = EditItem.bodySlot; // 上衣槽位
+            ImGui.InputInt("上衣槽位", ref bodySlot);
+            EditItem.bodySlot = bodySlot;
+            int legSlot = EditItem.legSlot; // 裤子槽位
+            ImGui.InputInt("裤子槽位", ref legSlot);
+            EditItem.legSlot = legSlot;
+
+            ImGui.Separator();
+            ImGui.Text("使用类型:");
+            bool autoReuse = EditItem.AutoReuse;
+            ImGui.Checkbox("自动挥舞", ref autoReuse);
+            EditItem.AutoReuse = autoReuse;
+            ImGui.SameLine();
+            bool useTurn = EditItem.UseTurn;
+            ImGui.Checkbox("使用转向", ref useTurn);
+            EditItem.UseTurn = useTurn;
+            ImGui.SameLine();
+            bool channel = EditItem.Channel;
+            ImGui.Checkbox("持续使用", ref channel);
+            EditItem.Channel = channel;
+            ImGui.SameLine();
+            bool noMelee = EditItem.NoMelee;
+            ImGui.Checkbox("无近战伤害", ref noMelee);
+            EditItem.NoMelee = noMelee;
+            ImGui.SameLine();
+            bool noUseGraphic = EditItem.NoUseGraphic;
+            ImGui.Checkbox("无使用图像", ref noUseGraphic);
+            EditItem.NoUseGraphic = noUseGraphic;
+        }
+        ImGui.End();
+    }
+    #endregion
+
+    #region 一键修改前缀窗口
+    private static void DrawEditPrefixWindow()
+    {
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(300, 150), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowPos(ImGui.GetMainViewport().GetCenter(), ImGuiCond.Appearing, new System.Numerics.Vector2(0.5f, 0.5f));
+
+        if (ImGui.Begin("批量修改饰品前缀", ref ShowEditPrefix, ImGuiWindowFlags.NoCollapse))
+        {
+            ImGui.Text("将修改玩家饰品栏的前缀");
+
+            ImGui.Spacing();
+            ImGui.InputInt("新前缀ID", ref PrefixId);
+
+            // 限制前缀ID在有效范围内(0-84)
+            if (PrefixId < 0) PrefixId = 0;
+            if (PrefixId > 84) PrefixId = 84;
+
+            ImGui.Spacing();
+            if (ImGui.Button("应用"))
+            {
+                // 播放界面关闭音效
+                SoundEngine.PlaySound(SoundID.MenuClose);
+                ApplyPrefix();
+                ShowEditPrefix = false;
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("取消"))
+            {
+                // 播放界面关闭音效
+                SoundEngine.PlaySound(SoundID.MenuClose);
+                ShowEditPrefix = false;
             }
         }
         ImGui.End();
+    }
+    #endregion
+
+    #region 批量修改饰品
+    private static void ApplyPrefix()
+    {
+        Player plr = Main.player[Main.myPlayer];
+        int count = 0;
+
+        var pr = Lang.prefix[PrefixId].ToString();
+        if (string.IsNullOrEmpty(pr))
+        {
+            pr = "无";
+        }
+
+        // 默认跳过的槽位：装饰栏
+        List<int> NotSlot;
+        if (plr.extraAccessory)
+        {
+            // 开启额外饰品：饰品栏为 3~9，跳过 10、11、12
+            NotSlot = new List<int>() { 10, 11, 12 };
+        }
+        else
+        {
+            // 未开启额外饰品：饰品栏为 3~8，跳过 9、10、11
+            NotSlot = new List<int>() { 9, 10, 11 };
+        }
+
+        for (int i = 3; i < plr.armor.Length; i++)
+        {
+            if (NotSlot.Contains(i)) continue;
+            var item = plr.armor[i];
+
+            if (item != null && !item.IsAir &&
+                item.accessory && PrefixId != 0)
+            {
+                item.Prefix((byte)PrefixId);
+                count++;
+            }
+        }
+
+        ClientLoader.Chat.WriteLine($"已为 {count} 个饰品槽位设置前缀: {pr}", color);
     }
     #endregion
 
@@ -465,6 +820,8 @@ public class UITool : Tool
 
                 if (InputSystem.IsKeyPressed(k))
                 {
+                    // 播放按键选择音效
+                    SoundEngine.PlaySound(SoundID.MenuTick);
                     key = k;
                     editing = false;
                     break;

@@ -34,11 +34,16 @@ internal class Configuration
     [JsonProperty("使用间隔(毫秒)", Order = 5)]
     public int AutoUseInterval { get; set; } = 500; // 默认500毫秒
 
-    [JsonProperty("物品管理", Order = 6)]
+    [JsonProperty("修改前缀按键", Order = 6)]
+    public Keys ShowEditPrefixKey = Keys.P;
+    [JsonProperty("快速收藏按键", Order = 6)]
+    public Keys FavoriteKey = Keys.O;
+
+    [JsonProperty("物品管理", Order = 10)]
     public bool ItemManager { get; set; } = true;
-    [JsonProperty("物品管理按键", Order = 6)]
+    [JsonProperty("应用修改按键", Order = 11)]
     public Keys ItemManagerKey = Keys.I;
-    [JsonProperty("修改物品", Order = 6)]
+    [JsonProperty("修改物品", Order = 12)]
     public List<ItemData> items = new List<ItemData>();
 
     #region 预设参数方法
@@ -57,6 +62,8 @@ internal class Configuration
         AutoUseInterval = 500;
         ItemManager = true;
         ItemManagerKey = Keys.I;
+        ShowEditPrefixKey = Keys.P;
+        FavoriteKey = Keys.O;
     }
     #endregion
 

@@ -1,7 +1,9 @@
 ﻿using TerraAngel;
 using TerraAngel.UI.ClientWindows.Console;
 using Terraria;
+using Terraria.Audio;
 using Terraria.DataStructures;
+using Terraria.ID;
 using static MyPlugin.MyPlugin;
 
 namespace MyPlugin;
@@ -80,7 +82,7 @@ internal class Commands
     {
         if (!Config.Enabled || !Config.KillOrRESpawn || !key) return;
         var plr = Main.player[Main.myPlayer];
-
+        SoundEngine.PlaySound(SoundID.MenuTick);
         if (!plr.dead)
         {
             plr.KillMe(PlayerDeathReason.ByPlayer(plr.whoAmI), 100, 0);

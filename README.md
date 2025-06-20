@@ -7,6 +7,13 @@
 ## 更新日志
 
 ```
+v1.0.3
+加入了打开物品管理器时的音效播放
+优化了物品管理器的模糊搜索功能
+加入了常见的物品修改参数(渔力/镐斧锤力/放置图格或墙ID等)
+加入了一键修改饰品栏前缀（仅适配大师难度）
+加入了一键收藏背包虚空袋物品
+
 v1.0.2
 加入了自动使用物品功能（将鼠标范围伤害放入其中作为子功能）
 加入了物品管理编辑器，方便于修改物品属性
@@ -45,73 +52,14 @@ v1.0.0
   "自杀复活按键": 75,
   "快速自杀复活": true,
   "鼠标范围伤害NPC": false,
-  "鼠标伤害NPC格数": 44,
+  "鼠标伤害NPC格数": 3,
   "自动使用按键": 74,
   "自动使用物品": false,
   "使用间隔(毫秒)": 500,
-  "物品管理按键": 73,
-  "修改物品": [
-    {
-      "Name": "大师诱饵",
-      "Type": 2676,
-      "Damage": -1,
-      "Defense": 0,
-      "Stack": 9999,
-      "Prefix": 0,
-      "Crit": 0,
-      "KnockBack": 0.0,
-      "UseTime": 100,
-      "UseAnimation": 100,
-      "UseStyle": 0,
-      "Ammo": 0,
-      "bait": 10,
-      "HealLife": 0,
-      "HealMana": 0,
-      "UseAmmo": 0,
-      "AutoReuse": false,
-      "UseTurn": false,
-      "Channel": false,
-      "NoMelee": false,
-      "NoUseGraphic": false,
-      "Shoot": 0,
-      "ShootSpeed": 0.0,
-      "Melee": false,
-      "Magic": false,
-      "Ranged": false,
-      "Summon": false,
-      "Value": 5000
-    },
-    {
-      "Name": "血腥屠刀",
-      "Type": 795,
-      "Damage": 250,
-      "Defense": 0,
-      "Stack": 1,
-      "Prefix": 81,
-      "Crit": 5,
-      "KnockBack": 5.75,
-      "UseTime": 22,
-      "UseAnimation": 22,
-      "UseStyle": 1,
-      "Ammo": 0,
-      "bait": 0,
-      "HealLife": 10,
-      "HealMana": 0,
-      "UseAmmo": 0,
-      "AutoReuse": false,
-      "UseTurn": false,
-      "Channel": false,
-      "NoMelee": false,
-      "NoUseGraphic": false,
-      "Shoot": 0,
-      "ShootSpeed": 0.0,
-      "Melee": true,
-      "Magic": false,
-      "Ranged": false,
-      "Summon": false,
-      "Value": 41829
-    }
-  ],
-  "物品管理": true
+  "修改前缀按键": 80,
+  "快速收藏按键": 79,
+  "物品管理": true,
+  "应用修改按键": 73,
+  "修改物品": []
 }
 ```
