@@ -13,7 +13,7 @@ echo [Plugin Deployment Script] Current path: %cd%
 echo.
 
 set "targetPath=D:\Documents\My Games\Terraria\TerraAngel\Plugins\MyPlugin.TAPlugin.dll"
-set "sourcePath=d:\游戏\Terraria\服务器\插件源码\TerraAngel插件模板\bin\Release\net8.0\MyPlugin.TAPlugin.dll"
+set "sourcePath=D:\游戏\Terraria\服务器\插件源码\TAPlugin\bin\Release\net8.0\MyPlugin.TAPlugin.dll"
 set "pluginDir=D:\Documents\My Games\Terraria\TerraAngel\Plugins"
 set "jsonFile=D:\Documents\My Games\Terraria\TerraAngel\MyPlugin.json"
 

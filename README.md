@@ -7,6 +7,11 @@
 ## 更新日志
 
 ```
+v1.0.2
+加入了自动使用物品功能（将鼠标范围伤害放入其中作为子功能）
+加入了物品管理编辑器，方便于修改物品属性
+UI代码逻辑简化，容易添加自己需要的物品属性
+
 v1.0.1
 新增添加UI方法与自定义按键触发相对功能
 给自杀功能加入了死亡判断，死亡时使用则为立即复活
@@ -26,6 +31,7 @@ v1.0.0
 | heal  | #heal 数值 |  无    |    启用禁用按键回血（可定义回血数值）    |
 | kill  | #kill |  无    |    自杀与复活功能    |
 | snpc  | #snpc |  无    |    启用鼠标范围伤害(可定义范围格数)    |
+| autouse  | #autouse |  无    |    自动使用物品(可定义间隔)    |
 | reload  | #reload |   无    |    重载配置文件    |
 
 ## 配置
@@ -38,7 +44,74 @@ v1.0.0
   "回血值": 100,
   "自杀复活按键": 75,
   "快速自杀复活": true,
-  "鼠标范围伤害NPC": true,
-  "鼠标伤害NPC格数": 10
+  "鼠标范围伤害NPC": false,
+  "鼠标伤害NPC格数": 44,
+  "自动使用按键": 74,
+  "自动使用物品": false,
+  "使用间隔(毫秒)": 500,
+  "物品管理按键": 73,
+  "修改物品": [
+    {
+      "Name": "大师诱饵",
+      "Type": 2676,
+      "Damage": -1,
+      "Defense": 0,
+      "Stack": 9999,
+      "Prefix": 0,
+      "Crit": 0,
+      "KnockBack": 0.0,
+      "UseTime": 100,
+      "UseAnimation": 100,
+      "UseStyle": 0,
+      "Ammo": 0,
+      "bait": 10,
+      "HealLife": 0,
+      "HealMana": 0,
+      "UseAmmo": 0,
+      "AutoReuse": false,
+      "UseTurn": false,
+      "Channel": false,
+      "NoMelee": false,
+      "NoUseGraphic": false,
+      "Shoot": 0,
+      "ShootSpeed": 0.0,
+      "Melee": false,
+      "Magic": false,
+      "Ranged": false,
+      "Summon": false,
+      "Value": 5000
+    },
+    {
+      "Name": "血腥屠刀",
+      "Type": 795,
+      "Damage": 250,
+      "Defense": 0,
+      "Stack": 1,
+      "Prefix": 81,
+      "Crit": 5,
+      "KnockBack": 5.75,
+      "UseTime": 22,
+      "UseAnimation": 22,
+      "UseStyle": 1,
+      "Ammo": 0,
+      "bait": 0,
+      "HealLife": 10,
+      "HealMana": 0,
+      "UseAmmo": 0,
+      "AutoReuse": false,
+      "UseTurn": false,
+      "Channel": false,
+      "NoMelee": false,
+      "NoUseGraphic": false,
+      "Shoot": 0,
+      "ShootSpeed": 0.0,
+      "Melee": true,
+      "Magic": false,
+      "Ranged": false,
+      "Summon": false,
+      "Value": 41829
+    }
+  ],
+  "物品管理": true
 }
 ```
