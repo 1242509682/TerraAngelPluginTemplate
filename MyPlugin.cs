@@ -6,7 +6,6 @@ using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
-using static Terraria.GameContent.Bestiary.BestiaryDatabaseNPCsPopulator.CommonTags.SpawnConditions;
 
 namespace MyPlugin;
 

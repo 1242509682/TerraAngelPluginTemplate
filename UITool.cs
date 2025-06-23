@@ -436,13 +436,13 @@ public class UITool : Tool
         pattern = pattern.ToLower();
         target = target.ToLower();
 
-        int patternIndex = 0;
+        int Index = 0;
         foreach (char c in target)
         {
-            if (c == pattern[patternIndex])
+            if (c == pattern[Index])
             {
-                patternIndex++;
-                if (patternIndex == pattern.Length)
+                Index++;
+                if (Index == pattern.Length)
                 {
                     return true;
                 }
