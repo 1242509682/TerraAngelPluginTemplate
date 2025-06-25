@@ -18,23 +18,13 @@ public class UITool : Tool
     public override ToolTabs Tab => ToolTabs.MainTools;
 
     // 用于临时存储按键编辑状态
-    private bool EditHealKey = false;
-    private bool EditKillKey = false;
-    private bool EditAutoUseKey = false;
-    private bool editShowEditPrefixKey = false;
-    private bool editFavoriteKey = false;
+    private bool EditHealKey = false; // 快速回血按键编辑状态
+    private bool EditKillKey = false; // 快速死亡与复活按键编辑状态
+    private bool EditAutoUseKey = false; // 自动使用物品按键编辑状态
+    private bool EditShowEditPrefixKey = false; // 一键修改前缀按键编辑状态
+    private bool EditFavoriteKey = false; // 快速收藏按键编辑状态
     private bool EditItemManagerKey = false; // 物品管理器按键编辑状态
-
-    private static string SearchFilter = ""; // 物品搜索过滤器
-    private static bool ShowItemManagerWindow = false; // 显示物品管理器窗口
-
-    public static bool ShowEditPrefix = false; // 显示批量修改前缀窗口
-    private static int PrefixId = 0; // 用于存储新前缀ID的变量
-
-    // 分页相关变量
-    private static int NowPage = 0; //当前页码
-    private const int PageLimit = 8; // 每页显示8个物品
-    private static int AllPages = 0; // 总页数
+    private bool EditSocialAccessoriesKey = false; // 社交栏饰品开关按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -58,6 +48,11 @@ public class UITool : Tool
 
         bool itemManager = Config.ItemManager; //物品管理开关
         Keys itemManagerKey = Config.ItemManagerKey; //物品管理按键
+
+        bool socialEnabled = Config.SocialAccessoriesEnabled; // 社交栏饰品开关
+        bool applyPrefix = Config.ApplyPrefix;
+        bool applyArmor = Config.ApplyArmor;
+        bool applyAccessory = Config.ApplyAccessory; // 应用饰品效果开关
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -140,6 +135,24 @@ public class UITool : Tool
                     DrawItemManagerWindow(plr);
                 }
 
+                // 社交栏饰品开关
+                ImGui.Checkbox("社交栏饰品生效", ref socialEnabled);
+                ImGui.SameLine();
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.SocialAccessoriesKey, ref EditSocialAccessoriesKey);
+                if (socialEnabled)
+                {
+                    // 新增：添加应用前缀加成和应用盔甲防御的选项框
+                    ImGui.Indent();
+                    ImGui.Checkbox("前缀加成", ref applyPrefix);
+                    ImGui.SameLine();
+                    ImGui.Checkbox("盔甲防御", ref applyArmor);
+                    ImGui.SameLine();
+                    ImGui.Checkbox("饰品功能", ref applyAccessory);
+                    ImGui.Unindent();
+                }
+
                 // 一键修改饰品前缀按钮
                 if (ImGui.Button("一键前缀"))
                 {
@@ -148,21 +161,8 @@ public class UITool : Tool
                     ShowEditPrefix = true;
                     PrefixId = 0; // 重置为0
                 }
-
-                // 修改前缀窗口热键配置
                 ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref editShowEditPrefixKey);
-
-                // 添加提示文本
-                ImGui.SameLine();
-                ImGui.TextDisabled("(?)");
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.BeginTooltip();
-                    ImGui.Text("一键修改盔甲组的所有饰品前缀");
-                    ImGui.Text("仅适配大师难度");
-                    ImGui.EndTooltip();
-                }
+                DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
 
                 // 显示一键修改前缀窗口
                 if (ShowEditPrefix)
@@ -170,8 +170,7 @@ public class UITool : Tool
                     DrawEditPrefixWindow();
                 }
 
-                // +++ 新增一键收藏按钮 +++
-                ImGui.SameLine();
+                // 一键收藏按钮
                 if (ImGui.Button("一键收藏背包"))
                 {
                     // 播放收藏音效
@@ -183,21 +182,8 @@ public class UITool : Tool
                     // 显示操作结果
                     ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
                 }
-
-                // 一键收藏热键配置
                 ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.FavoriteKey, ref editFavoriteKey);
-
-                // 添加提示文本
-                ImGui.SameLine();
-                ImGui.TextDisabled("(?)");
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.BeginTooltip();
-                    ImGui.Text("收藏所有背包中的物品（主背包+虚空袋）");
-                    ImGui.Text("防止意外丢弃或出售重要物品");
-                    ImGui.EndTooltip();
-                }
+                DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
             }
         }
 
@@ -218,11 +204,18 @@ public class UITool : Tool
         Config.AutoUseInterval = autoUseInterval;
         Config.AutoUseKey = autoUseKey;
 
-        // 更新配置变量
+        // 更新物品管理器配置
         Config.ItemManager = itemManager;
         Config.ItemManagerKey = itemManagerKey;
 
+        // 社交栏饰品开关
+        Config.SocialAccessoriesEnabled = socialEnabled;
+        Config.ApplyPrefix = applyPrefix;
+        Config.ApplyArmor = applyArmor;
+        Config.ApplyAccessory = applyAccessory; // 应用饰品效果开关
+
         // 保存按钮
+        ImGui.Separator();
         if (ImGui.Button("保存设置"))
         {
             SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
@@ -242,30 +235,36 @@ public class UITool : Tool
     #endregion
 
     #region 一键收藏所有物品
+    private static bool isFavoriteMode = true; // 收藏模式开关（true为收藏，false为取消收藏）
     public static int FavoriteAllItems(Player plr)
     {
         int count = 0;
 
-        // 遍历玩家背包（主背包、钱币栏、弹药栏）
-        for (int i = 0; i < 49; i++) // 0-49是主背包，50-53是钱币栏，54-57是弹药栏
+        // 反转收藏模式（每次调用切换模式）
+        isFavoriteMode = !isFavoriteMode;
+
+        // 遍历玩家背包（0-49是主背包）
+        for (int i = 0; i < 49; i++)
         {
             Item item = plr.inventory[i];
 
             if (!item.IsAir)
             {
-                item.favorited = !item.favorited;
+                // 根据当前模式设置收藏状态
+                item.favorited = isFavoriteMode;
                 count++;
             }
         }
 
-        // 虚空袋（plr.bank4.item：40格）
+        // 虚空袋（40格）
         for (int i = 0; i < 40; i++)
         {
             Item item = plr.bank4.item[i];
 
             if (!item.IsAir)
             {
-                item.favorited = !item.favorited;
+                // 根据当前模式设置收藏状态
+                item.favorited = isFavoriteMode;
                 count++;
             }
         }
@@ -275,8 +274,8 @@ public class UITool : Tool
     #endregion
 
     #region 实现物品管理器窗口
-    private static ItemData EditItem = null!; // 当前正在编辑的物品
-    private static bool ShowEditWindow = false; // 是否显示编辑窗口
+    private static bool ShowItemManagerWindow = false; // 显示物品管理器窗口
+    private static string SearchFilter = ""; // 物品搜索过滤器
     internal static void DrawItemManagerWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(500, 400), ImGuiCond.FirstUseEver);
@@ -449,10 +448,13 @@ public class UITool : Tool
             }
         }
         return false;
-    } 
+    }
     #endregion
 
     #region 分页与跳转功能
+    private static int NowPage = 0; //当前页码
+    private const int PageLimit = 8; // 每页显示8个物品
+    private static int AllPages = 0; // 总页数
     private static void ListPage(List<ItemData> AllItems)
     {
         // 显示分页信息和控件
@@ -492,6 +494,8 @@ public class UITool : Tool
     #endregion
 
     #region 物品编辑器窗口
+    private static ItemData EditItem = null!; // 当前正在编辑的物品
+    private static bool ShowEditWindow = false; // 是否显示编辑窗口
     private static void DrawItemEditWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(200, 200), ImGuiCond.FirstUseEver);
@@ -716,6 +720,8 @@ public class UITool : Tool
     #endregion
 
     #region 一键修改前缀窗口
+    public static bool ShowEditPrefix = false; // 显示批量修改前缀窗口
+    private static int PrefixId = 0; // 用于存储新前缀ID的变量
     private static void DrawEditPrefixWindow()
     {
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(300, 150), ImGuiCond.FirstUseEver);

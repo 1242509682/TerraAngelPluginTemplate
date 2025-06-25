@@ -39,6 +39,17 @@ internal class Configuration
     [JsonProperty("快速收藏按键", Order = 6)]
     public Keys FavoriteKey = Keys.O;
 
+    [JsonProperty("社交栏饰品加成开关", Order = 7)]
+    public bool SocialAccessoriesEnabled { get; set; } = false;
+    [JsonProperty("恢复前缀加成", Order = 7)]
+    public bool ApplyPrefix { get; set; } = true;
+    [JsonProperty("恢复盔甲防御", Order = 7)]
+    public bool ApplyArmor { get; set; } = true;
+    [JsonProperty("恢复饰品功能", Order = 7)]
+    public bool ApplyAccessory { get; set; } = true;
+    [JsonProperty("社交栏饰品开关按键", Order = 7)]
+    public Keys SocialAccessoriesKey = Keys.N;
+
     [JsonProperty("物品管理", Order = 10)]
     public bool ItemManager { get; set; } = true;
     [JsonProperty("应用修改按键", Order = 11)]
@@ -64,6 +75,11 @@ internal class Configuration
         ItemManagerKey = Keys.I;
         ShowEditPrefixKey = Keys.P;
         FavoriteKey = Keys.O;
+        SocialAccessoriesEnabled = false;
+        ApplyPrefix = true;
+        ApplyArmor = true;
+        ApplyAccessory = true;
+        SocialAccessoriesKey = Keys.N;
     }
     #endregion
 

@@ -1,4 +1,6 @@
-﻿using Microsoft.Xna.Framework;
+﻿using System.Reflection;
+using Microsoft.Xna.Framework;
+using MonoMod.RuntimeDetour;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
@@ -9,18 +11,21 @@ using Terraria.ID;
 
 namespace MyPlugin;
 
-public class MyPlugin : Plugin
+public class MyPlugin(string path) : Plugin(path)
 {
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 3);
+    public Version Version => new(1, 0, 4);
     #endregion
 
     #region 注册与卸载
-    public MyPlugin(string path) : base(path) { }
     public override void Load()
     {
+        // 使用Mono注册钩子
+        MonoModHooks();
+
+        // 读取配置文件
         ReloadConfig(null!);
 
         // 注册UI
@@ -42,21 +47,47 @@ public class MyPlugin : Plugin
     {
         // 卸载插件时清理UI
         ToolManager.RemoveTool<UITool>();
+
+        // 卸载MonoMod钩子
+        updateEquipsHook?.Dispose();
+        updateEquipsHook = null;
+        // 清理反射引用
+        GrantArmorBenefitsMethod = null;
+        GrantPrefixBenefitsMethod = null;
+    }
+    #endregion
+
+    #region 注册钩子Player类里的方法
+    private static Hook? updateEquipsHook;
+    private static MethodInfo? GrantArmorBenefitsMethod;
+    private static MethodInfo? GrantPrefixBenefitsMethod;
+    private void MonoModHooks()
+    {
+        //修改 UpdateEquips 方法
+        MethodInfo originalUpdateEquips = typeof(Player).GetMethod("UpdateEquips", [typeof(int)])!;
+        MethodInfo modifiedUpdateEquips = typeof(MyPlugin).GetMethod("OnUpdateEquips", BindingFlags.Static | BindingFlags.Public)!;
+        updateEquipsHook = new Hook(originalUpdateEquips, modifiedUpdateEquips);
+
+        // 获取 Player 类的私有方法 GrantArmorBenefits 和 GrantPrefixBenefits
+        GrantArmorBenefitsMethod = typeof(Player).GetMethod("GrantArmorBenefits",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null, [typeof(Item)], null);
+
+        GrantPrefixBenefitsMethod = typeof(Player).GetMethod("GrantPrefixBenefits",
+            BindingFlags.Instance | BindingFlags.NonPublic,
+            null, [typeof(Item)], null);
     }
     #endregion
 
     #region 配置管理
+    internal static Configuration Config = new();
+    public static Color color = new(240, 250, 150);
     private void ReloadConfig(TerraAngel.UI.ClientWindows.Console.ConsoleWindow.CmdStr x)
     {
         Config = Configuration.Read();
         Config.Write();
         ClientLoader.Console.WriteLine($"[{Name}] 配置文件已重载", color);
     }
-    #endregion
-
-    #region 全局变量
-    internal static Configuration Config = new();
-    public static Color color = new(240, 250, 150);
     #endregion
 
     #region 游戏更新事件(每帧刷新)
@@ -88,6 +119,14 @@ public class MyPlugin : Plugin
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
             UITool.FavoriteAllItems(Main.LocalPlayer);
+        }
+
+        // N键切换社交栏饰品生效状态
+        if (InputSystem.IsKeyPressed(Config.SocialAccessoriesKey))
+        {
+            Config.SocialAccessoriesEnabled = !Config.SocialAccessoriesEnabled;
+            string status = Config.SocialAccessoriesEnabled ? "开启" : "关闭";
+            ClientLoader.Chat.WriteLine($"社交栏饰品功能已{status}", color);
         }
 
     }
@@ -203,6 +242,8 @@ public class MyPlugin : Plugin
             else
             {
                 plr.controlUseItem = true;
+                plr.dashDelay = 0; //重置冲刺冷却
+                plr.dashType = 2; // 设置冲刺类型为2（分趾袜距离）
                 plr.ItemCheck();
                 //使用物品时伤害鼠标范围内的NPC
                 UseItemStrikeNPC(plr.controlUseItem);
@@ -258,6 +299,40 @@ public class MyPlugin : Plugin
         if (Main.netMode == 2)
         {
             NetMessage.TrySendData(66, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
+        }
+    }
+    #endregion
+
+    #region 通过反射修改 Player 类的方法实现社交栏饰品生效
+    public static void OnUpdateEquips(Action<Player, int> orig, Player plr, int i)
+    {
+        orig(plr, i); // 调用原始方法
+
+        // 检查社交栏饰品开关
+        if (!Config.SocialAccessoriesEnabled) return;
+
+        // 添加社交栏饰品处理（槽位10-19）
+        for (int slot = 10; slot < plr.armor.Length; slot++)
+        {
+            if (!plr.IsItemSlotUnlockedAndUsable(slot)) continue;
+
+            Item item = plr.armor[slot];
+
+            if (item.IsAir || (item.expertOnly && !Main.expertMode)) continue;
+
+            // 反射调用私有方法 GrantPrefixBenefits 还原前缀加成
+            if (Config.ApplyPrefix)
+                GrantPrefixBenefitsMethod?.Invoke(plr, [item]);
+
+            // 反射调用私有方法 GrantArmorBenefits 还原护甲值加成
+            if (Config.ApplyArmor)
+                GrantArmorBenefitsMethod?.Invoke(plr, [item]);
+
+            // 从泰拉瑞亚抄来 应用社交饰品的功能方法（试过用反射获取,没起作用只好直接抄了）
+            if (Config.ApplyAccessory)
+                MyUtils.ApplyEquipFunctional(plr, item);
+
+
         }
     }
     #endregion
