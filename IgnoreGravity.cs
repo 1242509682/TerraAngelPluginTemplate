@@ -28,45 +28,45 @@ internal class IgnoreGravity
     {
         // DoDraw 方法（处理重力药水不反转屏幕）
         var DoDraw = typeof(Main).GetMethod("DoDraw", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(GameTime)], null)!;
-        var NewDoDraw = typeof(MyPlugin).GetMethod("OnDoDraw", BindingFlags.Static | BindingFlags.Public)!;
+        var NewDoDraw = typeof(IgnoreGravity).GetMethod("OnDoDraw", BindingFlags.Static | BindingFlags.Public)!;
         DoDrawHook = new Hook(DoDraw, NewDoDraw);
 
         // ItemCheck 方法 （处理重力药水不反转屏幕时物品能正常使用）
         MethodInfo originalItemCheck = typeof(Player).GetMethod("ItemCheck", BindingFlags.Instance | BindingFlags.Public)!;
-        MethodInfo modifiedItemCheck = typeof(MyPlugin).GetMethod("OnItemCheck", BindingFlags.Static | BindingFlags.Public)!;
+        MethodInfo modifiedItemCheck = typeof(IgnoreGravity).GetMethod("OnItemCheck", BindingFlags.Static | BindingFlags.Public)!;
         ItemCheckHook = new Hook(originalItemCheck, modifiedItemCheck);
 
         // SmartInteractLookup 方法（处理重力药水不反转屏幕时智能交互）
         MethodInfo SmartInteractLookup = typeof(Player).GetMethod("SmartInteractLookup",
             BindingFlags.Instance | BindingFlags.Public)!;
-        MethodInfo NewSmartInteractLookup = typeof(MyPlugin).GetMethod("OnSmartInteractLookup",
+        MethodInfo NewSmartInteractLookup = typeof(IgnoreGravity).GetMethod("OnSmartInteractLookup",
             BindingFlags.Static | BindingFlags.Public)!;
         SmartInteractLookupHook = new Hook(SmartInteractLookup, NewSmartInteractLookup);
 
         // SmartCursorLookup 方法（处理重力药水不反转屏幕时智能光标）
         MethodInfo SmartCursorLookup = typeof(SmartCursorHelper).GetMethod("SmartCursorLookup",
             BindingFlags.Static | BindingFlags.Public)!;
-        MethodInfo NewSmartCursorLookup = typeof(MyPlugin).GetMethod("OnSmartCursorLookup",
+        MethodInfo NewSmartCursorLookup = typeof(IgnoreGravity).GetMethod("OnSmartCursorLookup",
             BindingFlags.Static | BindingFlags.Public)!;
         SmartCursorLookupHook = new Hook(SmartCursorLookup, NewSmartCursorLookup);
 
         // QuickGrapple 方法（处理重力药水不反转屏幕时快速抓钩）
         MethodInfo QuickGrapple = typeof(Player).GetMethod("QuickGrapple",
             BindingFlags.Instance | BindingFlags.Public)!;
-        MethodInfo NewQuickGrapple = typeof(MyPlugin).GetMethod("OnQuickGrapple",
+        MethodInfo NewQuickGrapple = typeof(IgnoreGravity).GetMethod("OnQuickGrapple",
             BindingFlags.Static | BindingFlags.Public)!;
         QuickGrappleHook = new Hook(QuickGrapple, NewQuickGrapple);
 
         // DrawPlayerFull 方法（处理玩家全身渲染）
         MethodInfo DrawPlayerFull = typeof(LegacyPlayerRenderer).GetMethod("DrawPlayerFull", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        MethodInfo NewDrawPlayerFull = typeof(MyPlugin).GetMethod("OnDrawPlayerFull", BindingFlags.Static | BindingFlags.Public)!;
+        MethodInfo NewDrawPlayerFull = typeof(IgnoreGravity).GetMethod("OnDrawPlayerFull", BindingFlags.Static | BindingFlags.Public)!;
         DrawPlayerFullHook = new Hook(DrawPlayerFull, NewDrawPlayerFull);
 
         // 添加IL钩子来修正方块挖掘位置
-        MethodInfo updateMethod = typeof(Player).GetMethod("Update", BindingFlags.Public | BindingFlags.Instance)!;
-        if (updateMethod != null)
+        MethodInfo UpdateMethod = typeof(Player).GetMethod("Update", BindingFlags.Public | BindingFlags.Instance)!;
+        if (UpdateMethod != null)
         {
-            PlayerUpdateHook = new ILHook(updateMethod, IgnoreGravity.Player_Update);
+            PlayerUpdateHook = new ILHook(UpdateMethod, Player_Update);
         }
     }
     #endregion

@@ -254,8 +254,8 @@ public class UITool : Tool
         // 反转收藏模式（每次调用切换模式）
         isFavoriteMode = !isFavoriteMode;
 
-        // 遍历玩家背包（0-49是主背包）
-        for (int i = 0; i < 49; i++)
+        // 遍历玩家背包（0-50是主背包）
+        for (int i = 0; i < 50; i++)
         {
             Item item = plr.inventory[i];
 
