@@ -284,13 +284,11 @@ public class MyPlugin(string path) : Plugin(path)
             if (npc == null) continue;
 
             npc.StrikeNPC(plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, false, false, false);
-
+            plr.ApplyDamageToNPC(npc, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit > 0); // 应用伤害到NPC
             if (Main.netMode == 2)
             {
                 npc.netUpdate = true; // 更新网络状态
-                NetMessage.SendData(MessageID.SyncNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI);
-                NetMessage.SendData(MessageID.StrikeNPCWithHeldItem, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI);
-                NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI);
+                NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit);
             }
         }
     }
@@ -341,6 +339,7 @@ public class MyPlugin(string path) : Plugin(path)
             if (Config.ApplyAccessory)
                 MyUtils.ApplyEquipFunctional(plr, item);
         }
+
     }
     #endregion
 
