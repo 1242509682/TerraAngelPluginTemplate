@@ -1,7 +1,6 @@
 ﻿using Microsoft.Xna.Framework.Input;
 using Newtonsoft.Json;
 using TerraAngel;
-using Terraria;
 
 namespace MyPlugin;
 
@@ -57,6 +56,11 @@ internal class Configuration
     [JsonProperty("修改物品", Order = 12)]
     public List<ItemData> items = new List<ItemData>();
 
+    [JsonProperty("忽略重力药水", Order = 13)]
+    public bool IgnoreGravity { get; set; } = false;
+    [JsonProperty("忽略重力药水按键", Order = 13)]
+    public Keys IgnoreGravityKey = Keys.T;
+
     #region 预设参数方法
     public void SetDefault()
     {
@@ -80,6 +84,8 @@ internal class Configuration
         ApplyArmor = true;
         ApplyAccessory = true;
         SocialAccessoriesKey = Keys.N;
+        IgnoreGravity = false;
+        IgnoreGravityKey = Keys.T;
     }
     #endregion
 

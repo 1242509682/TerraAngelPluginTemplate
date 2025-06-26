@@ -25,6 +25,7 @@ public class UITool : Tool
     private bool EditFavoriteKey = false; // 快速收藏按键编辑状态
     private bool EditItemManagerKey = false; // 物品管理器按键编辑状态
     private bool EditSocialAccessoriesKey = false; // 社交栏饰品开关按键编辑状态
+    private bool EditIgnoreGravityKey = false; // 忽略重力按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -53,6 +54,8 @@ public class UITool : Tool
         bool applyPrefix = Config.ApplyPrefix;
         bool applyArmor = Config.ApplyArmor;
         bool applyAccessory = Config.ApplyAccessory; // 应用饰品效果开关
+
+        bool applyIgnoreGravity = Config.IgnoreGravity; // 忽略重力药水效果开关
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -184,6 +187,12 @@ public class UITool : Tool
                 }
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
+
+                // 使重力药水、重力球等不会反转屏幕效果
+                ImGui.Separator();
+                ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
             }
         }
 
@@ -213,6 +222,8 @@ public class UITool : Tool
         Config.ApplyPrefix = applyPrefix;
         Config.ApplyArmor = applyArmor;
         Config.ApplyAccessory = applyAccessory; // 应用饰品效果开关
+
+        Config.IgnoreGravity = applyIgnoreGravity; // 忽略重力药水效果开关
 
         // 保存按钮
         ImGui.Separator();

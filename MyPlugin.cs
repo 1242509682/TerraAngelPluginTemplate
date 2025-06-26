@@ -16,7 +16,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 4);
+    public Version Version => new(1, 0, 5);
     #endregion
 
     #region 注册与卸载
@@ -24,6 +24,9 @@ public class MyPlugin(string path) : Plugin(path)
     {
         // 使用Mono注册钩子
         MonoModHooks();
+
+        // 添加反重力药水的Mono钩子
+        IgnoreGravity.AddGravityHooks();
 
         // 读取配置文件
         ReloadConfig(null!);
@@ -39,7 +42,7 @@ public class MyPlugin(string path) : Plugin(path)
         ClientLoader.Console.AddCommand("autouse", Commands.AutoUse, "切换自动使用物品功能");
 
         // 初始化完成提示
-        ClientLoader.Console.WriteLine($"[{Name}] 插件已加载 (v{Version})");
+        ClientLoader.Console.WriteLine($"[{Name}] 插件已加载 (v{Version}) 作者: {Author}");
         ClientLoader.Console.WriteLine($"[{Name}] 配置文件位置: {Configuration.FilePath}");
     }
 
@@ -48,34 +51,31 @@ public class MyPlugin(string path) : Plugin(path)
         // 卸载插件时清理UI
         ToolManager.RemoveTool<UITool>();
 
-        // 卸载MonoMod钩子
-        updateEquipsHook?.Dispose();
-        updateEquipsHook = null;
-        // 清理反射引用
+        // 卸载装饰饰品栏生效钩子
+        UpdateEquipsHook?.Dispose();
+        UpdateEquipsHook = null;
+        // 清理装饰饰品栏生效的反射方法引用
         GrantArmorBenefitsMethod = null;
         GrantPrefixBenefitsMethod = null;
+
+        // 卸载反重力药水的Mono钩子
+        IgnoreGravity.DelGravityHooks();
     }
     #endregion
 
     #region 注册钩子Player类里的方法
-    private static Hook? updateEquipsHook;
+    private static Hook? UpdateEquipsHook; // 处理装饰栏饰品生效的钩子
     private static MethodInfo? GrantArmorBenefitsMethod;
     private static MethodInfo? GrantPrefixBenefitsMethod;
     private void MonoModHooks()
     {
-        //修改 UpdateEquips 方法
-        MethodInfo originalUpdateEquips = typeof(Player).GetMethod("UpdateEquips", [typeof(int)])!;
-        MethodInfo modifiedUpdateEquips = typeof(MyPlugin).GetMethod("OnUpdateEquips", BindingFlags.Static | BindingFlags.Public)!;
-        updateEquipsHook = new Hook(originalUpdateEquips, modifiedUpdateEquips);
-
+        //修改 UpdateEquips 方法（处理装饰栏饰品生效）
+        var UpdateEquips = typeof(Player).GetMethod("UpdateEquips", [typeof(int)])!;
+        var NewUpdateEquips = typeof(MyPlugin).GetMethod("OnUpdateEquips", BindingFlags.Static | BindingFlags.Public)!;
+        UpdateEquipsHook = new Hook(UpdateEquips, NewUpdateEquips);
         // 获取 Player 类的私有方法 GrantArmorBenefits 和 GrantPrefixBenefits
-        GrantArmorBenefitsMethod = typeof(Player).GetMethod("GrantArmorBenefits",
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            null, [typeof(Item)], null);
-
-        GrantPrefixBenefitsMethod = typeof(Player).GetMethod("GrantPrefixBenefits",
-            BindingFlags.Instance | BindingFlags.NonPublic,
-            null, [typeof(Item)], null);
+        GrantArmorBenefitsMethod = typeof(Player).GetMethod("GrantArmorBenefits", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(Item)], null);
+        GrantPrefixBenefitsMethod = typeof(Player).GetMethod("GrantPrefixBenefits", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(Item)], null);
     }
     #endregion
 
@@ -124,11 +124,23 @@ public class MyPlugin(string path) : Plugin(path)
         // N键切换社交栏饰品生效状态
         if (InputSystem.IsKeyPressed(Config.SocialAccessoriesKey))
         {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
             Config.SocialAccessoriesEnabled = !Config.SocialAccessoriesEnabled;
             string status = Config.SocialAccessoriesEnabled ? "开启" : "关闭";
             ClientLoader.Chat.WriteLine($"社交栏饰品功能已{status}", color);
         }
 
+        // 切换重力控制状态
+        if (InputSystem.IsKeyPressed(Config.IgnoreGravityKey))
+        {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
+            Config.IgnoreGravity = !Config.IgnoreGravity;
+            string status = Config.IgnoreGravity ? "启用" : "禁用";
+            ClientLoader.Chat.WriteLine($"重力控制已{status}", Color.Yellow);
+        }
+
+        // 更新重力状态缓存
+        IgnoreGravity.UpdateGravityState();
     }
     #endregion
 
@@ -331,8 +343,6 @@ public class MyPlugin(string path) : Plugin(path)
             // 从泰拉瑞亚抄来 应用社交饰品的功能方法（试过用反射获取,没起作用只好直接抄了）
             if (Config.ApplyAccessory)
                 MyUtils.ApplyEquipFunctional(plr, item);
-
-
         }
     }
     #endregion
