@@ -20,7 +20,6 @@ internal class IgnoreGravity
     public static Hook? SmartCursorLookupHook;
     public static Hook? QuickGrappleHook;
     public static ILHook? PlayerUpdateHook; // 保存IL钩子实例
-    internal static bool buff = false; // 重力药水Buff状态缓存
     internal static float GravDir = 1f;     // 重力方向缓存
 
     #region 添加反重力药水钩子
@@ -98,7 +97,7 @@ internal class IgnoreGravity
     public static void OnDoDraw(Action<Main, GameTime> orig, Main self, GameTime gameTime)
     {
         var plr = Main.LocalPlayer;
-        if (!Config.IgnoreGravity || !buff || plr.gravDir != -1f)
+        if (!Config.IgnoreGravity || plr.gravDir != -1f)
         {
             orig(self, gameTime);
             return;
@@ -122,14 +121,6 @@ internal class IgnoreGravity
         plr.gravDir = GravDir;
         orig.Invoke(self, camera, plr);
         plr.gravDir = 1f;
-    }
-
-    // 更新重力状态缓存
-    public static void UpdateGravityState()
-    {
-        if (!Config.IgnoreGravity) return;
-        GravDir = Main.LocalPlayer.gravDir;
-        buff = Main.LocalPlayer.FindBuffIndex(Terraria.ID.BuffID.Gravitation) != -1;
     }
     #endregion
 

@@ -138,9 +138,6 @@ public class MyPlugin(string path) : Plugin(path)
             string status = Config.IgnoreGravity ? "启用" : "禁用";
             ClientLoader.Chat.WriteLine($"重力控制已{status}", Color.Yellow);
         }
-
-        // 更新重力状态缓存
-        IgnoreGravity.UpdateGravityState();
     }
     #endregion
 
