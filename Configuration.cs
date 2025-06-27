@@ -31,7 +31,7 @@ internal class Configuration
     [JsonProperty("自动使用按键", Order = 5)]
     public Keys AutoUseKey = Keys.J; // 默认按键J
     [JsonProperty("使用间隔(毫秒)", Order = 5)]
-    public int UseItemInterval { get; set; } = 500; // 默认500毫秒
+    public int UseItemInterval { get; set; } = 100; // 默认500毫秒
 
     [JsonProperty("修改前缀按键", Order = 6)]
     public Keys ShowEditPrefixKey = Keys.P;
@@ -97,7 +97,7 @@ internal class Configuration
         IgnoreGravityKey = Keys.T;
         AutoTrash = true;
         AutoTrashKey = Keys.C;
-        TrashSyncInterval = 500;
+        TrashSyncInterval = 100;
         TrashItems = new List<TrashData>();
     }
     #endregion

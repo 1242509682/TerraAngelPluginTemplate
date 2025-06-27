@@ -1,10 +1,14 @@
-﻿using Microsoft.Xna.Framework;
+﻿using System.Numerics;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using TerraAngel;
+using TerraAngel.Graphics;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
 using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
+using Terraria.GameContent;
 using Terraria.ID;
 
 namespace MyPlugin;
@@ -163,9 +167,18 @@ public class MyPlugin(string path) : Plugin(path)
 
         //获取玩家垃圾桶格子
         var trash = plr.trashItem;
+
+        //排除钱币 与 玩家自己指定排除物品
+        if (data.ExcluItem.Contains(trash.type))
+        {
+            return;
+        }
+
+        // 如果垃圾桶格子不是空的 且不在自动垃圾桶物品表中 则添加到自动垃圾桶物品表中
         if (!data.TrashList.ContainsKey(trash.type) && trash.type != 0 && !trash.IsAir)
         {
-            //添加垃圾桶的物品和对应格子数量 到 “自动垃圾桶物品表”
+            //添加垃圾桶的物品与数量 到 “自动垃圾桶物品表”
+            ClientLoader.Chat.WriteLine($"首次将 [c/4C92D8:{Lang.GetItemNameValue(trash.type)}] 放入自动垃圾桶", color);
             data.TrashList.Add(trash.type, trash.stack);
             Config.Write();
             trash.stack = 0;
@@ -174,9 +187,6 @@ public class MyPlugin(string path) : Plugin(path)
 
         for (int i = 0; i < plr.inventory.Length; i++)
         {
-            //排除钱币 与 玩家自己指定排除物品
-            if (data.ExcluItem.Contains(trash.type)) return;
-
             var inv = plr.inventory[i];
 
             if (inv.IsAir || inv.type == 0 || inv == plr.HeldItem) continue;

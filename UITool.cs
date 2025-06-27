@@ -259,7 +259,6 @@ public class UITool : Tool
     private static int NewExclusionId = 0; // 新排除物品ID
     private static int AutoTrashSyncInterval = Config.TrashSyncInterval; // 自动回收同步间隔
     private Dictionary<int, int> returnAmounts = new Dictionary<int, int>(); // 临时存储需要返还的物品数量
-
     private void DrawAutoTrashWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(550, 550), ImGuiCond.FirstUseEver);
@@ -347,8 +346,65 @@ public class UITool : Tool
             // 获取所有垃圾桶物品
             var trashItems = data.TrashList.ToList();
 
-            // 显示物品数量信息
+            // 显示物品数量信息 + 清空按钮
             ImGui.Text($"垃圾桶物品 (共 {trashItems.Count} 个物品)");
+            ImGui.SameLine();
+
+            // 添加全部返还按钮
+            if (ImGui.Button("全部返还"))
+            {
+                if (trashItems.Count > 0)
+                {
+                    int totalItemsReturned = 0;
+
+                    foreach (var item in trashItems)
+                    {
+                        int itemType = item.Key;
+                        int amount = item.Value;
+
+                        // 获取物品的最大堆叠数量
+                        var tempItem = new Item();
+                        tempItem.SetDefaults(itemType);
+                        int maxStack = tempItem.maxStack;
+
+                        // 分批返还物品
+                        while (amount > 0)
+                        {
+                            int stackSize = Math.Min(amount, maxStack);
+
+                            // 创建物品实体
+                            int itemIndex = Item.NewItem(new EntitySource_DebugCommand(),
+                                                        (int)plr.position.X, (int)plr.position.Y,
+                                                        plr.width, plr.height, itemType, stackSize,
+                                                        noBroadcast: true, tempItem.prefix, noGrabDelay: true);
+
+                            // 设置物品归属并同步
+                            Main.item[itemIndex].playerIndexTheItemIsReservedFor = plr.whoAmI;
+                            NetMessage.SendData(MessageID.ItemOwner, plr.whoAmI, -1, null, itemIndex);
+                            NetMessage.SendData(MessageID.SyncItem, plr.whoAmI, -1, null, itemIndex, 1);
+
+                            amount -= stackSize;
+                            totalItemsReturned += stackSize;
+                        }
+                    }
+
+                    // 清空垃圾桶列表
+                    data.TrashList.Clear();
+                    Config.Write();
+
+                    ClientLoader.Chat.WriteLine($"已返还全部 {trashItems.Count} 种物品，共 {totalItemsReturned} 个物品", Color.Yellow);
+                }
+            }
+
+            ImGui.SameLine();
+
+            // 添加垃圾桶清空按钮
+            if (ImGui.Button("清空垃圾桶表"))
+            {
+                data.TrashList.Clear();
+                Config.Write();
+                ClientLoader.Chat.WriteLine("已清空自动垃圾桶表", Color.Yellow);
+            }
 
             // 当前物品列表
             ImGui.BeginChild("TrashItemsList", new Vector2(0, 180), ImGuiChildFlags.Borders);
@@ -442,6 +498,7 @@ public class UITool : Tool
 
                 if (ImGui.Button("删除", new Vector2(50, 0)))
                 {
+                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(item.Key)}] 从自动垃圾桶删除", color);
                     data.TrashList.Remove(item.Key);
                     Config.Write();
                 }
@@ -453,7 +510,7 @@ public class UITool : Tool
             // 如果没有物品显示提示
             if (trashItems.Count == 0)
             {
-                ImGui.Text("垃圾桶列表为空");
+                ImGui.Text("垃圾桶列表为空,请将物品放入垃圾桶格子");
             }
 
             ImGui.EndChild();
@@ -487,6 +544,7 @@ public class UITool : Tool
             {
                 if (NewExclusionId > 0 && !data.ExcluItem.Contains(NewExclusionId))
                 {
+                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(NewExclusionId)}] 添加到排除表", color);
                     data.ExcluItem.Add(NewExclusionId);
                     Config.Write();
                     NewExclusionId = 0;
@@ -498,6 +556,7 @@ public class UITool : Tool
                     int foundId = FindItemIdByName(NewExclusionName);
                     if (foundId > 0 && !data.ExcluItem.Contains(foundId))
                     {
+                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(foundId)}] 添加到排除表", color);
                         data.ExcluItem.Add(foundId);
                         Config.Write();
                         NewExclusionName = "";
@@ -510,8 +569,21 @@ public class UITool : Tool
             // 获取所有排除物品
             var excluItems = data.ExcluItem.ToList();
 
-            // 显示物品数量信息
+            // 显示物品数量信息 + 清空按钮
             ImGui.Text($"排除物品 (共 {excluItems.Count} 个物品)");
+            ImGui.SameLine();
+            // 添加排除表清空按钮
+            if (ImGui.Button("清空排除表"))
+            {
+                data.ExcluItem.Clear();
+                // 添加默认排除的钱币ID
+                data.ExcluItem.Add(71);
+                data.ExcluItem.Add(72);
+                data.ExcluItem.Add(73);
+                data.ExcluItem.Add(74);
+                Config.Write();
+                ClientLoader.Chat.WriteLine("已清空排除表并重置为默认钱币排除", Color.Yellow);
+            }
 
             // 当前排除列表
             ImGui.BeginChild("物品排除表", new Vector2(0, 180), ImGuiChildFlags.Borders);
@@ -543,6 +615,7 @@ public class UITool : Tool
                 // 删除按钮
                 if (ImGui.Button("删除", new Vector2(50, 0)))
                 {
+                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(itemId)}] 从排除表中删除", color);
                     data.ExcluItem.Remove(itemId);
                     Config.Write();
                 }
@@ -567,6 +640,7 @@ public class UITool : Tool
                     int itemId = plr.HeldItem.type;
                     if (!data.TrashList.ContainsKey(itemId))
                     {
+                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(itemId)}] 添加到自动垃圾桶", color);
                         data.TrashList.Add(itemId, 0);
                         Config.Write();
                     }
@@ -582,6 +656,7 @@ public class UITool : Tool
                     int itemId = plr.HeldItem.type;
                     if (!data.ExcluItem.Contains(itemId))
                     {
+                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(itemId)}] 添加到排除表", color);
                         data.ExcluItem.Add(itemId);
                         Config.Write();
                     }
