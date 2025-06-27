@@ -392,6 +392,14 @@ public class UITool : Tool
 
                 // 物品名称
                 ImGui.Text(displayName);
+                // 添加悬停提示
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.DelayNormal | ImGuiHoveredFlags.AllowWhenDisabled))
+                {
+                    Item tempItem = new Item();
+                    tempItem.SetDefaults(item.Id);
+                    tempItem.stack = item.Amount;
+                    TerraAngel.Graphics.ImGuiUtil.ImGuiItemTooltip(tempItem);
+                }
                 ImGui.NextColumn();
 
                 // 物品ID
@@ -632,6 +640,13 @@ public class UITool : Tool
 
             // 物品名称
             ImGui.Text(displayName);
+            // 添加悬停提示
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.DelayNormal | ImGuiHoveredFlags.AllowWhenDisabled))
+            {
+                Item tempItem = new Item();
+                tempItem.SetDefaults(item.Id);
+                TerraAngel.Graphics.ImGuiUtil.ImGuiItemTooltip(tempItem);
+            }
             ImGui.NextColumn();
 
             // 物品ID
