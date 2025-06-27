@@ -8,6 +8,7 @@ using MonoMod.RuntimeDetour;
 using System.Reflection;
 using Terraria.GameContent;
 using static MyPlugin.MyPlugin;
+using System.Numerics;
 
 namespace MyPlugin;
 

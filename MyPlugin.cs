@@ -1,6 +1,4 @@
-﻿using System.Reflection;
-using Microsoft.Xna.Framework;
-using MonoMod.RuntimeDetour;
+﻿using Microsoft.Xna.Framework;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
@@ -16,14 +14,14 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 5);
+    public Version Version => new(1, 0, 6);
     #endregion
 
     #region 注册与卸载
     public override void Load()
     {
-        // 使用Mono注册钩子
-        MonoModHooks();
+        // 添加额外饰品的Mono注册钩子
+        ExtraAccessory.AddAccessoryHooks();
 
         // 添加反重力药水的Mono钩子
         IgnoreGravity.AddGravityHooks();
@@ -51,31 +49,11 @@ public class MyPlugin(string path) : Plugin(path)
         // 卸载插件时清理UI
         ToolManager.RemoveTool<UITool>();
 
-        // 卸载装饰饰品栏生效钩子
-        UpdateEquipsHook?.Dispose();
-        UpdateEquipsHook = null;
-        // 清理装饰饰品栏生效的反射方法引用
-        GrantArmorBenefitsMethod = null;
-        GrantPrefixBenefitsMethod = null;
+        // 卸载额外饰品的Mono注册钩子
+        ExtraAccessory.RemoveExtraAccessory();
 
         // 卸载反重力药水的Mono钩子
         IgnoreGravity.DelGravityHooks();
-    }
-    #endregion
-
-    #region 注册钩子Player类里的方法
-    private static Hook? UpdateEquipsHook; // 处理装饰栏饰品生效的钩子
-    private static MethodInfo? GrantArmorBenefitsMethod;
-    private static MethodInfo? GrantPrefixBenefitsMethod;
-    private void MonoModHooks()
-    {
-        //修改 UpdateEquips 方法（处理装饰栏饰品生效）
-        var UpdateEquips = typeof(Player).GetMethod("UpdateEquips", [typeof(int)])!;
-        var NewUpdateEquips = typeof(MyPlugin).GetMethod("OnUpdateEquips", BindingFlags.Static | BindingFlags.Public)!;
-        UpdateEquipsHook = new Hook(UpdateEquips, NewUpdateEquips);
-        // 获取 Player 类的私有方法 GrantArmorBenefits 和 GrantPrefixBenefits
-        GrantArmorBenefitsMethod = typeof(Player).GetMethod("GrantArmorBenefits", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(Item)], null);
-        GrantPrefixBenefitsMethod = typeof(Player).GetMethod("GrantPrefixBenefits", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(Item)], null);
     }
     #endregion
 
@@ -302,44 +280,10 @@ public class MyPlugin(string path) : Plugin(path)
         SoundEngine.PlaySound(SoundID.MenuTick);
         var plr = Main.player[Main.myPlayer];
         plr.Heal(Config.HealVal);
-
         if (Main.netMode == 2)
         {
             NetMessage.TrySendData(66, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
         }
-    }
-    #endregion
-
-    #region 通过反射修改 Player 类的方法实现社交栏饰品生效
-    public static void OnUpdateEquips(Action<Player, int> orig, Player plr, int i)
-    {
-        orig(plr, i); // 调用原始方法
-
-        // 检查社交栏饰品开关
-        if (!Config.SocialAccessoriesEnabled) return;
-
-        // 添加社交栏饰品处理（槽位10-19）
-        for (int slot = 10; slot < plr.armor.Length; slot++)
-        {
-            if (!plr.IsItemSlotUnlockedAndUsable(slot)) continue;
-
-            Item item = plr.armor[slot];
-
-            if (item.IsAir || (item.expertOnly && !Main.expertMode)) continue;
-
-            // 反射调用私有方法 GrantPrefixBenefits 还原前缀加成
-            if (Config.ApplyPrefix)
-                GrantPrefixBenefitsMethod?.Invoke(plr, [item]);
-
-            // 反射调用私有方法 GrantArmorBenefits 还原护甲值加成
-            if (Config.ApplyArmor)
-                GrantArmorBenefitsMethod?.Invoke(plr, [item]);
-
-            // 从泰拉瑞亚抄来 应用社交饰品的功能方法（试过用反射获取,没起作用只好直接抄了）
-            if (Config.ApplyAccessory)
-                MyUtils.ApplyEquipFunctional(plr, item);
-        }
-
     }
     #endregion
 

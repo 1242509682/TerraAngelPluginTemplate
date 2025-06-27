@@ -39,7 +39,7 @@ internal class Configuration
     public Keys FavoriteKey = Keys.O;
 
     [JsonProperty("社交栏饰品加成开关", Order = 7)]
-    public bool SocialAccessoriesEnabled { get; set; } = false;
+    public bool SocialAccessoriesEnabled { get; set; } = true;
     [JsonProperty("恢复前缀加成", Order = 7)]
     public bool ApplyPrefix { get; set; } = true;
     [JsonProperty("恢复盔甲防御", Order = 7)]
@@ -57,7 +57,7 @@ internal class Configuration
     public List<ItemData> items = new List<ItemData>();
 
     [JsonProperty("忽略重力药水", Order = 13)]
-    public bool IgnoreGravity { get; set; } = false;
+    public bool IgnoreGravity { get; set; } = true;
     [JsonProperty("忽略重力药水按键", Order = 13)]
     public Keys IgnoreGravityKey = Keys.T;
 
@@ -79,12 +79,12 @@ internal class Configuration
         ItemManagerKey = Keys.I;
         ShowEditPrefixKey = Keys.P;
         FavoriteKey = Keys.O;
-        SocialAccessoriesEnabled = false;
+        SocialAccessoriesEnabled = true;
         ApplyPrefix = true;
         ApplyArmor = true;
         ApplyAccessory = true;
         SocialAccessoriesKey = Keys.N;
-        IgnoreGravity = false;
+        IgnoreGravity = true;
         IgnoreGravityKey = Keys.T;
     }
     #endregion

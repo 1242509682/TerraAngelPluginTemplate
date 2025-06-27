@@ -125,6 +125,6 @@ internal class Commands
         }
 
         Config.Write();
-    } 
+    }
     #endregion
 }
