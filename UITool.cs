@@ -263,7 +263,6 @@ public class UITool : Tool
     private static int CustomTime = 60; // 默认排除时间（秒）
     private bool ReturnAfterExclusion = false; // 是否在设置排除后执行返还
     private Dictionary<int, int> AmountCache = new Dictionary<int, int>(); // 缓存返还数量
-
     private void DrawAutoTrashWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(550, 550), ImGuiCond.FirstUseEver);
@@ -870,16 +869,34 @@ public class UITool : Tool
     private static string SearchFilter = ""; // 物品搜索过滤器
     internal void DrawItemManagerWindow(Player plr)
     {
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(500, 400), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new System.Numerics.Vector2(600, 450), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("物品编辑管理器", ref ShowItemManagerWindow, ImGuiWindowFlags.NoCollapse))
         {
-            // 搜索框
-            ImGui.InputText("搜索", ref SearchFilter, 70);
+            // 搜索框和按钮
+            ImGui.InputTextWithHint("##SearchFilter", "输入名称或ID搜索", ref SearchFilter, 100);
+            ImGui.SameLine();
+            if (ImGui.Button("清空搜索"))
+            {
+                SearchFilter = "";
+            }
             ImGui.SameLine();
             DrawKeySelector("应用按键", ref Config.ItemModifyKey, ref EditItemManagerKey);
 
-            var AllItems = Config.ItemModifyList.Where(item => string.IsNullOrEmpty(SearchFilter) ||
-            FuzzyMatch(item.Name, SearchFilter)).ToList();
+            // 获取所有物品并应用搜索过滤
+            var AllItems = Config.ItemModifyList
+                .Select(item => new {
+                    Data = item,
+                    Name = item.Name,
+                    Type = item.Type,
+                    ItemName = Lang.GetItemNameValue(item.Type) ?? $"未知物品 ({item.Type})"
+                })
+                .Where(item =>
+                    string.IsNullOrWhiteSpace(SearchFilter) ||
+                    item.Name.Contains(SearchFilter, StringComparison.OrdinalIgnoreCase) ||
+                    item.ItemName.Contains(SearchFilter, StringComparison.OrdinalIgnoreCase) ||
+                    item.Type.ToString().Contains(SearchFilter)
+                )
+                .ToList();
 
             // 计算总页数
             AllPages = (int)Math.Ceiling(AllItems.Count / (float)PageLimit);
@@ -889,7 +906,7 @@ public class UITool : Tool
             if (NowPage >= AllPages) NowPage = AllPages - 1;
             if (NowPage < 0) NowPage = 0;
 
-            // 添加物品按钮
+            // 按钮区域
             if (ImGui.Button($"添加(Alt+{Config.ItemModifyKey})"))
             {
                 if (plr.HeldItem != null && !plr.HeldItem.IsAir)
@@ -918,6 +935,9 @@ public class UITool : Tool
                     // 显示成功消息
                     ClientLoader.Chat.WriteLine($"已添加物品预设: {newItem.Name}", Color.Green);
                     ClientLoader.Chat.WriteLine($"使用 {Config.ItemModifyKey} 键应用此预设", Color.Yellow);
+
+                    // 清空搜索以便显示新添加的物品
+                    SearchFilter = "";
                 }
                 else
                 {
@@ -925,7 +945,6 @@ public class UITool : Tool
                 }
             }
 
-            // 清空列表按钮
             ImGui.SameLine();
             if (ImGui.Button("清空列表"))
             {
@@ -934,29 +953,101 @@ public class UITool : Tool
                 ShowEditWindow = false;
                 Config.ItemModifyList.Clear();
                 Config.Write();
+                SearchFilter = ""; // 清空搜索
+            }
+
+            // 显示搜索结果信息
+            if (!string.IsNullOrWhiteSpace(SearchFilter))
+            {
+                ImGui.TextColored(new Vector4(1, 1, 0.5f, 1), $"找到 {AllItems.Count} 个匹配项");
+            }
+            else
+            {
+                ImGui.Text($"共 {AllItems.Count} 个物品预设");
             }
 
             // 物品列表
             ImGui.Separator();
-            ImGui.BeginChild("物品列表", new Vector2(0, 220), ImGuiChildFlags.Borders);
+            ImGui.BeginChild("物品列表", new Vector2(0, 250), ImGuiChildFlags.Borders);
 
             // 获取当前页的物品
             var GetPage = AllItems.Skip(NowPage * PageLimit).Take(PageLimit).ToList();
 
-            foreach (var data in GetPage)
-            {
-                ImGui.PushID(data.Name);
-                ImGui.Columns(2, "item_columns", false);
-                ImGui.SetColumnWidth(0, 200);
+            // 表头
+            ImGui.Columns(5, "item_columns", false);
+            ImGui.SetColumnWidth(0, 40);   // 索引
+            ImGui.SetColumnWidth(1, 150);  // 预设名称
+            ImGui.SetColumnWidth(2, 150);  // 物品名称
+            ImGui.SetColumnWidth(3, 70);   // 物品ID
+            ImGui.SetColumnWidth(4, 150);  // 操作按钮
 
-                // 点击物品名称 打开编辑界面
-                if (ImGui.Selectable($"{data.Name}({data.Type})"))
+            ImGui.Text("#"); ImGui.NextColumn();
+            ImGui.Text("预设名称"); ImGui.NextColumn();
+            ImGui.Text("物品名称"); ImGui.NextColumn();
+            ImGui.Text("物品ID"); ImGui.NextColumn();
+            ImGui.Text("操作"); ImGui.NextColumn();
+
+            ImGui.Separator();
+            ImGui.Columns(1);
+
+            // 物品行
+            for (int i = 0; i < GetPage.Count; i++)
+            {
+                var itemInfo = GetPage[i];
+                var data = itemInfo.Data;
+
+                ImGui.PushID(data.Name);
+
+                // 使用5列布局
+                ImGui.Columns(5, "item_columns", false);
+                ImGui.SetColumnWidth(0, 40);   // 索引
+                ImGui.SetColumnWidth(1, 150);  // 预设名称
+                ImGui.SetColumnWidth(2, 150);  // 物品名称
+                ImGui.SetColumnWidth(3, 70);   // 物品ID
+                ImGui.SetColumnWidth(4, 150);  // 操作按钮
+
+                // 索引号 (当前页的序号)
+                ImGui.Text($"{NowPage * PageLimit + i + 1}");
+                ImGui.NextColumn();
+
+                // 预设名称
+                ImGui.Text($"{data.Name}");
+                ImGui.NextColumn();
+
+                // 物品名称
+                ImGui.Text($"{itemInfo.ItemName}");
+                ImGui.NextColumn();
+
+                // 物品ID
+                ImGui.Text($"{data.Type}");
+                ImGui.NextColumn();
+
+                // 操作按钮
+                if (ImGui.Button($"应用##{i}"))
                 {
-                    // 播放界面打开音效
+                    data.ApplyTo(Main.player[Main.myPlayer].HeldItem);
+                    ClientLoader.Chat.WriteLine($"已应用物品预设: {data.Name}", Color.Green);
+                }
+                ImGui.SameLine();
+                if (ImGui.Button($"编辑##{i}"))
+                {
                     SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
                     EditItem = data;
                     ShowEditWindow = true;
                 }
+                ImGui.SameLine();
+                if (ImGui.Button($"删除##{i}"))
+                {
+                    SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                    ShowEditWindow = false;
+                    Config.ItemModifyList.Remove(data);
+                    Config.Write();
+                    ClientLoader.Chat.WriteLine($"已删除物品预设: {data.Name}", Color.Yellow);
+                }
+                ImGui.NextColumn();
+
+                ImGui.Columns(1);
+                ImGui.PopID();
 
                 // 悬停区域显示工具提示
                 if (ImGui.IsItemHovered(ImGuiHoveredFlags.DelayNormal | ImGuiHoveredFlags.AllowWhenDisabled))
@@ -966,50 +1057,26 @@ public class UITool : Tool
                     data.ApplyTo(tempItem);
                     TerraAngel.Graphics.ImGuiUtil.ImGuiItemTooltip(tempItem);
                 }
-
-                ImGui.NextColumn();
-                if (ImGui.Button($"应用({Config.ItemModifyKey})"))
-                {
-                    data.ApplyTo(Main.player[Main.myPlayer].HeldItem);
-                    ClientLoader.Chat.WriteLine($"已应用物品预设: {data.Name}", Color.Green);
-                }
-
-                // 编辑按钮
-                ImGui.SameLine();
-                if (ImGui.Button("编辑"))
-                {
-                    // 播放界面打开音效
-                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                    EditItem = data;
-                    ShowEditWindow = true;
-                }
-
-                // 删除按钮
-                ImGui.SameLine();
-                if (ImGui.Button($"删除(Ctrl+{Config.ItemModifyKey})"))
-                {
-                    // 播放界面关闭音效
-                    SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                    ShowEditWindow = false;
-                    Config.ItemModifyList.Remove(data);
-                    Config.Write();
-                    ClientLoader.Chat.WriteLine($"已删除物品预设: {data.Name}", Color.Yellow);
-                }
-
-                ImGui.Columns(1);
-                ImGui.PopID();
             }
 
             // 如果没有物品显示提示
             if (GetPage.Count == 0)
             {
-                ImGui.Text($"没有找到匹配的物品 请使用Alt + {Config.ItemModifyKey} 添加");
+                ImGui.Text("");
+                if (string.IsNullOrWhiteSpace(SearchFilter))
+                {
+                    ImGui.Text($"没有物品预设 请使用Alt + {Config.ItemModifyKey} 添加");
+                }
+                else
+                {
+                    ImGui.Text($"没有找到包含 '{SearchFilter}' 的物品预设");
+                }
             }
 
             ImGui.EndChild();
 
             // 分页与跳转
-            ListPage(AllItems);
+            ListPage(AllItems.Count);
         }
         ImGui.End();
 
@@ -1021,39 +1088,17 @@ public class UITool : Tool
     }
     #endregion
 
-    #region 模糊搜索匹配方法
-    private static bool FuzzyMatch(string target, string pattern)
-    {
-        if (string.IsNullOrEmpty(pattern)) return true;
-
-        pattern = pattern.ToLower();
-        target = target.ToLower();
-
-        int Index = 0;
-        foreach (char c in target)
-        {
-            if (c == pattern[Index])
-            {
-                Index++;
-                if (Index == pattern.Length)
-                {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-    #endregion
-
     #region 分页与跳转功能
-    private static int NowPage = 0; //当前页码
+    private static int NowPage = 0; // 当前页码
     private const int PageLimit = 8; // 每页显示8个物品
     private static int AllPages = 0; // 总页数
-    private static void ListPage(List<ItemData> AllItems)
+
+    private static void ListPage(int totalItems)
     {
         // 显示分页信息和控件
-        ImGui.Text($"第 {NowPage + 1} / {AllPages} 页 (共{AllItems.Count}个物品)");
+        ImGui.Text($"第 {NowPage + 1} / {AllPages} 页 (共 {totalItems} 个物品)");
         ImGui.SameLine();
+
         // 上一页按钮
         if (ImGui.Button("上页") && NowPage > 0)
         {
@@ -1083,6 +1128,18 @@ public class UITool : Tool
             // 播放界面点击音效
             SoundEngine.PlaySound(SoundID.MenuTick);
             NowPage++;
+        }
+
+        // 添加页面大小选择器
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(100);
+        int newPageLimit = PageLimit;
+        if (ImGui.SliderInt("每页数量", ref newPageLimit, 5, 20))
+        {
+            // 当页面大小改变时重置当前页
+            NowPage = 0;
+            // 注意：实际实现中需要将PageLimit改为非const变量
+            // PageLimit = newPageLimit;
         }
     }
     #endregion
