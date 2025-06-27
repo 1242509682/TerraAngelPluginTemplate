@@ -1,7 +1,7 @@
-﻿using ImGuiNET;
+﻿using System.Numerics;
+using ImGuiNET;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
-using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Tools;
@@ -258,7 +258,13 @@ public class UITool : Tool
     private static string NewExclusionName = ""; // 新排除物品名称
     private static int NewExclusionId = 0; // 新排除物品ID
     private static int AutoTrashSyncInterval = Config.TrashSyncInterval; // 自动回收同步间隔
-    private Dictionary<int, int> returnAmounts = new Dictionary<int, int>(); // 临时存储需要返还的物品数量
+    private Dictionary<int, int> ReturnAmounts = new Dictionary<int, int>(); // 临时存储需要返还的物品数量
+    private int? WaitExcludeType = null; // 待处理的排除物品ID
+    private bool ShowExclusionWindows = false; // 是否显示排除弹窗
+    private int TryExcludeTime = 60; // 临时排除时间（秒）
+    private static int CustomTime = 60; // 默认排除时间（秒）
+    private bool ReturnAfterExclusion = false; // 是否在设置排除后执行返还
+    private Dictionary<int, int> AmountCache = new Dictionary<int, int>(); // 缓存返还数量
     private void DrawAutoTrashWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(550, 550), ImGuiCond.FirstUseEver);
@@ -294,7 +300,13 @@ public class UITool : Tool
             ImGui.SliderInt("##AutoTrashInterval", ref AutoTrashSyncInterval, 100, 5000, "%d ms");
             Config.TrashSyncInterval = AutoTrashSyncInterval;
 
-            // 自动丢弃物品列表
+            // 默认排除时间设置
+            ImGui.Text("默认排除时间(秒):");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(150);
+            ImGui.SliderInt("##DefaultExcludeTime", ref CustomTime, 1, 600, "%d 秒");
+
+            // 自动垃圾桶物品列表
             ImGui.Separator();
             ImGui.TextColored(new Vector4(1, 0.5f, 0.5f, 1), "《自动垃圾桶表》");
 
@@ -356,49 +368,26 @@ public class UITool : Tool
                 if (trashItems.Count > 0)
                 {
                     int totalItemsReturned = 0;
+                    int totalTypesReturned = 0;
 
                     foreach (var item in trashItems)
                     {
-                        int itemType = item.Key;
-                        int amount = item.Value;
-
-                        // 获取物品的最大堆叠数量
-                        var tempItem = new Item();
-                        tempItem.SetDefaults(itemType);
-                        int maxStack = tempItem.maxStack;
-
-                        // 分批返还物品
-                        while (amount > 0)
-                        {
-                            int stackSize = Math.Min(amount, maxStack);
-
-                            // 创建物品实体
-                            int itemIndex = Item.NewItem(new EntitySource_DebugCommand(),
-                                                        (int)plr.position.X, (int)plr.position.Y,
-                                                        plr.width, plr.height, itemType, stackSize,
-                                                        noBroadcast: true, tempItem.prefix, noGrabDelay: true);
-
-                            // 设置物品归属并同步
-                            Main.item[itemIndex].playerIndexTheItemIsReservedFor = plr.whoAmI;
-                            NetMessage.SendData(MessageID.ItemOwner, plr.whoAmI, -1, null, itemIndex);
-                            NetMessage.SendData(MessageID.SyncItem, plr.whoAmI, -1, null, itemIndex, 1);
-
-                            amount -= stackSize;
-                            totalItemsReturned += stackSize;
-                        }
+                        int returned = ReturnItems(plr, item.Key, item.Value);
+                        totalItemsReturned += returned;
+                        totalTypesReturned++;
                     }
 
                     // 清空垃圾桶列表
                     data.TrashList.Clear();
                     Config.Write();
 
-                    ClientLoader.Chat.WriteLine($"已返还全部 {trashItems.Count} 种物品，共 {totalItemsReturned} 个物品", Color.Yellow);
+                    ClientLoader.Chat.WriteLine($"已返还全部 {totalTypesReturned} 种物品，共 {totalItemsReturned} 个物品", Color.Yellow);
                 }
             }
 
             ImGui.SameLine();
 
-            // 添加垃圾桶清空按钮
+            // 垃圾桶清空按钮
             if (ImGui.Button("清空垃圾桶表"))
             {
                 data.TrashList.Clear();
@@ -419,12 +408,13 @@ public class UITool : Tool
 
                 ImGui.PushID($"trash_{item.Key}");
 
-                // 使用紧凑的4列布局
-                ImGui.Columns(4, "trash_item_columns", false);
+                // 使用紧凑的5列布局
+                ImGui.Columns(5, "trash_item_columns", false);
                 ImGui.SetColumnWidth(0, 150); // 物品名称
                 ImGui.SetColumnWidth(1, 80);  // 物品ID
                 ImGui.SetColumnWidth(2, 120); // 返还数量滑块
                 ImGui.SetColumnWidth(3, 100); // 按钮区域
+                ImGui.SetColumnWidth(4, 120); // 临时排除时间（新增列）
 
                 // 物品名称
                 ImGui.Text($"{itemName}");
@@ -435,63 +425,61 @@ public class UITool : Tool
                 ImGui.NextColumn();
 
                 // 初始化返还数量（默认为1）
-                if (!returnAmounts.ContainsKey(item.Key))
+                if (!ReturnAmounts.ContainsKey(item.Key))
                 {
-                    returnAmounts[item.Key] = Math.Max(1, item.Value / 2); // 默认取一半数量
+                    ReturnAmounts[item.Key] = Math.Max(1, item.Value / 2); // 默认取一半数量
                 }
 
                 // 返还数量滑块
-                int currentAmount = returnAmounts[item.Key];
+                int currentAmount = ReturnAmounts[item.Key];
                 ImGui.SetNextItemWidth(110);
                 ImGui.SliderInt($"##return_{item.Key}", ref currentAmount, 1, item.Value, $"{currentAmount}/{item.Value}");
-                returnAmounts[item.Key] = currentAmount;
+                ReturnAmounts[item.Key] = currentAmount;
                 ImGui.NextColumn();
 
-                // 修改返还按钮的处理逻辑
+                // 单个物品的返还按钮处理
                 if (ImGui.Button("返还", new Vector2(40, 0)))
                 {
-                    int returnAmount = Math.Min(currentAmount, item.Value);
-                    int itemType = item.Key;
-
-                    // 获取物品的最大堆叠数量
-                    var tempItem = new Item();
-                    tempItem.SetDefaults(itemType);
-                    int maxStack = tempItem.maxStack;
-
-                    // 分批返还物品
-                    while (returnAmount > 0)
+                    // 首先检查物品是否还在垃圾桶中
+                    if (!data.TrashList.ContainsKey(item.Key))
                     {
-                        int stackSize = Math.Min(returnAmount, maxStack);
+                        // 如果物品已不存在于垃圾桶中，重置所有相关状态
+                        ClientLoader.Chat.WriteLine($"物品 [c/4C92D8:{itemName}] 已不存在于垃圾桶中", Color.Yellow);
 
-                        // 创建物品实体
-                        int itemIndex = Item.NewItem(new EntitySource_DebugCommand(),
-                                                    (int)plr.position.X, (int)plr.position.Y,
-                                                    plr.width, plr.height, itemType, stackSize,
-                                                    noBroadcast: true, tempItem.prefix, noGrabDelay: true);
-
-                        // 设置物品归属并同步
-                        Main.item[itemIndex].playerIndexTheItemIsReservedFor = plr.whoAmI;
-                        NetMessage.SendData(MessageID.ItemOwner, plr.whoAmI, -1, null, itemIndex);
-                        NetMessage.SendData(MessageID.SyncItem, plr.whoAmI, -1, null, itemIndex, 1);
-
-                        returnAmount -= stackSize;
+                        // 重置所有临时状态变量
+                        if (WaitExcludeType == item.Key)
+                        {
+                            WaitExcludeType = 0;
+                            ReturnAfterExclusion = false;
+                            ShowExclusionWindows = false;
+                        }
+                        return;
                     }
 
-                    // 更新垃圾桶中的物品数量
-                    int newAmount = item.Value - currentAmount;
-                    if (newAmount <= 0)
+                    // 检查物品是否在临时排除期内
+                    if (AdventExcluded(item.Key))
                     {
-                        data.TrashList.Remove(item.Key);
-                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(item.Key)}] 从[c/4C92D8:自动垃圾桶]移除", color);
+                        string timeLeft = GetAdventTime(item.Key);
+                        ClientLoader.Chat.WriteLine($"物品 [c/4C92D8:{itemName}] 已被临时排除，剩余时间: {timeLeft}。正在返还...", Color.Yellow);
+                        ExecuteReturn(plr, data, item.Key, item.Value, currentAmount);
+                    }
+                    // 检查物品是否在排除表中
+                    else if (data.ExcluItem.Contains(item.Key))
+                    {
+                        // 永久排除，直接返还
+                        ExecuteReturn(plr, data, item.Key, item.Value, currentAmount);
                     }
                     else
                     {
-                        data.TrashList[item.Key] = newAmount;
-                        data.ExcluItem.Add(item.Key);  // 如果垃圾桶还有这个物品则返还指定数量时自动加入排除表
-                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(item.Key)}] 加入到[c/4C92D8:排除表]", color);
-                    }
+                        // 缓存返还数量
+                        AmountCache[item.Key] = currentAmount;
 
-                    Config.Write();
+                        // 如果不在排除表中，设置待处理状态
+                        WaitExcludeType = item.Key;
+                        TryExcludeTime = CustomTime; // 使用自定义默认时间
+                        ReturnAfterExclusion = true; // 标记需要执行返还
+                        ShowExclusionWindows = true;
+                    }
                 }
 
                 ImGui.SameLine();
@@ -501,6 +489,35 @@ public class UITool : Tool
                     ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(item.Key)}] 从自动垃圾桶删除", color);
                     data.TrashList.Remove(item.Key);
                     Config.Write();
+
+                    // 如果删除的是等待排除的物品，重置状态
+                    if (WaitExcludeType == item.Key)
+                    {
+                        WaitExcludeType = null;
+                        ShowExclusionWindows = false;
+                        ReturnAfterExclusion = false;
+                    }
+
+                    // 清除缓存
+                    AmountCache.Remove(item.Key);
+                    ReturnAmounts.Remove(item.Key);
+                }
+
+                ImGui.NextColumn();
+
+                // 临时排除时间显示
+                if (AdventExclusions != null)
+                {
+                    if (AdventExclusions.ContainsKey(item.Key) && AdventExclusions[item.Key] > DateTime.Now)
+                    {
+                        TimeSpan remaining = AdventExclusions[item.Key] - DateTime.Now;
+                        int secondsLeft = (int)remaining.TotalSeconds;
+                        ImGui.TextColored(new Vector4(1, 1, 0.5f, 1), $"剩余: {secondsLeft}秒");
+                    }
+                    else
+                    {
+                        ImGui.Text(""); // 空文本保持对齐
+                    }
                 }
 
                 ImGui.Columns(1);
@@ -577,12 +594,9 @@ public class UITool : Tool
             {
                 data.ExcluItem.Clear();
                 // 添加默认排除的钱币ID
-                data.ExcluItem.Add(71);
-                data.ExcluItem.Add(72);
-                data.ExcluItem.Add(73);
-                data.ExcluItem.Add(74);
+                data.ExcluItem = new HashSet<int>() { 71, 72, 73, 74 };
                 Config.Write();
-                ClientLoader.Chat.WriteLine("已清空排除表并重置为默认钱币排除", Color.Yellow);
+                ClientLoader.Chat.WriteLine("已清空排除表并默认排除钱币", Color.Yellow);
             }
 
             // 当前排除列表
@@ -671,6 +685,12 @@ public class UITool : Tool
             }
         }
         ImGui.End();
+
+        // 处理排除提示弹窗
+        if (ShowExclusionWindows)
+        {
+            ExclusionWindows(plr);
+        }
     }
     #endregion
 
@@ -686,7 +706,162 @@ public class UITool : Tool
             }
         }
         return 0;
-    } 
+    }
+    #endregion
+
+    #region 临时排除窗口
+    private void ExclusionWindows(Player plr)
+    {
+        if (!WaitExcludeType.HasValue) return;
+
+        int itemId = WaitExcludeType.Value;
+        string itemName = Lang.GetItemNameValue(itemId);
+        if (string.IsNullOrEmpty(itemName)) itemName = $"未知物品 ({itemId})";
+
+        ImGui.OpenPopup("添加排除");
+        if (ImGui.BeginPopupModal("添加排除", ref ShowExclusionWindows, ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            var data = Config.TrashItems.FirstOrDefault(x => x.Name == plr.name);
+            if (data == null)
+            {
+                return;
+            }
+
+            ImGui.Text($"物品 '{itemName}' 不在排除表中，请选择操作：");
+
+            // 时间输入框
+            ImGui.Text("排除时间(秒):");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(100);
+            ImGui.InputInt("##ExcludeTime", ref TryExcludeTime);
+            if (TryExcludeTime < 1) TryExcludeTime = 1;
+            if (TryExcludeTime > 3600) TryExcludeTime = 3600; // 限制最大1小时
+
+            ImGui.Spacing();
+
+            // 按钮行
+            if (ImGui.Button("加入排除表"))
+            {
+                if (!data.ExcluItem.Contains(itemId))
+                {
+                    data.ExcluItem.Add(itemId);
+                    Config.Write();
+                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{itemName}] 添加到排除表", Color.Green);
+                }
+
+                // 如果需要返还，执行返还操作
+                if (ReturnAfterExclusion)
+                {
+                    // 使用缓存的返还数量
+                    int cachedAmount = AmountCache.TryGetValue(itemId, out var amt) ? amt : 1;
+                    ExecuteReturn(plr, data, itemId, data.TrashList[itemId], cachedAmount);
+                    ReturnAfterExclusion = false;
+                }
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button($"临时排除({TryExcludeTime}秒)"))
+            {
+                AdventExclusions[itemId] = DateTime.Now.AddSeconds(TryExcludeTime);
+                ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{itemName}] 临时排除{TryExcludeTime}秒", Color.Yellow);
+
+                // 如果需要返还，执行返还操作
+                if (ReturnAfterExclusion)
+                {
+                    // 使用缓存的返还数量
+                    int cachedAmount = AmountCache.TryGetValue(itemId, out var amt) ? amt : 1;
+                    ExecuteReturn(plr, data, itemId, data.TrashList[itemId], cachedAmount);
+                }
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("取消"))
+            {
+                // 取消时重置返还标志
+                ReturnAfterExclusion = false;
+                ShowExclusionWindows = false;
+                WaitExcludeType = null;
+                AmountCache.Remove(itemId); // 清除该物品的缓存
+            }
+
+            ImGui.EndPopup();
+        }
+    }
+    #endregion
+
+    #region 返还物品并同步服务器的方法
+    private int ReturnItems(Player plr, int type, int amount)
+    {
+        int totalReturned = 0;
+
+        // 获取物品的最大堆叠数量
+        var item = new Item();
+        item.SetDefaults(type);
+        int maxStack = item.maxStack;
+
+        // 分批返还物品
+        while (amount > 0)
+        {
+            int stackSize = Math.Min(amount, maxStack);
+
+            // 创建物品实体
+            int Index = Item.NewItem(new EntitySource_DebugCommand(),
+                                        (int)plr.position.X, (int)plr.position.Y,
+                                        plr.width, plr.height, type, stackSize,
+                                        noBroadcast: true, item.prefix, noGrabDelay: true);
+
+            // 设置物品归属并同步
+            Main.item[Index].playerIndexTheItemIsReservedFor = plr.whoAmI;
+            NetMessage.SendData(MessageID.ItemOwner, plr.whoAmI, -1, null, Index);
+            NetMessage.SendData(MessageID.SyncItem, plr.whoAmI, -1, null, Index, 1);
+
+            amount -= stackSize;
+            totalReturned += stackSize;
+        }
+
+        return totalReturned;
+    }
+    #endregion
+
+    #region 执行返还操作的方法
+    private void ExecuteReturn(Player plr, TrashData data, int itemKey, int itemValue, int currentAmount)
+    {
+        int returnAmount = Math.Min(currentAmount, itemValue);
+        int returned = ReturnItems(plr, itemKey, returnAmount);
+
+        // 更新垃圾桶中的物品数量
+        int newAmount = itemValue - returnAmount;
+        if (newAmount <= 0)
+        {
+            data.TrashList.Remove(itemKey);
+            ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(itemKey)}] 从[c/4C92D8:自动垃圾桶]移除", color);
+        }
+        else
+        {
+            data.TrashList[itemKey] = newAmount;
+        }
+
+        Config.Write();
+
+        // 返还完成后重置相关状态
+        if (WaitExcludeType == itemKey)
+        {
+            WaitExcludeType = null;
+            ReturnAfterExclusion = false;
+        }
+
+        // 清除缓存
+        AmountCache.Remove(itemKey);
+        ReturnAmounts.Remove(itemKey);
+
+        // 如果弹窗显示的是当前物品，关闭弹窗
+        if (ShowExclusionWindows && WaitExcludeType == itemKey)
+        {
+            ShowExclusionWindows = false;
+        }
+    }
     #endregion
 
     #region 一键收藏所有物品
@@ -737,7 +912,7 @@ public class UITool : Tool
         if (ImGui.Begin("物品编辑管理器", ref ShowItemManagerWindow, ImGuiWindowFlags.NoCollapse))
         {
             // 搜索框
-            ImGui.InputText("搜索", ref SearchFilter, 70); 
+            ImGui.InputText("搜索", ref SearchFilter, 70);
             ImGui.SameLine();
             DrawKeySelector("应用按键", ref Config.ItemModifyKey, ref EditItemManagerKey);
 

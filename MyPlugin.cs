@@ -1,14 +1,10 @@
-﻿using System.Numerics;
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
+﻿using Microsoft.Xna.Framework;
 using TerraAngel;
-using TerraAngel.Graphics;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
 using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
-using Terraria.GameContent;
 using Terraria.ID;
 
 namespace MyPlugin;
@@ -137,6 +133,7 @@ public class MyPlugin(string path) : Plugin(path)
 
     #region 触发自动垃圾桶方法
     private static Dictionary<string, long> SyncTrashTime = new Dictionary<string, long>();
+    public static Dictionary<int, DateTime> AdventExclusions = new Dictionary<int, DateTime>();
     private static void AutoTrash()
     {
         if (!Config.AutoTrash) return;
@@ -168,7 +165,7 @@ public class MyPlugin(string path) : Plugin(path)
         //获取玩家垃圾桶格子
         var trash = plr.trashItem;
 
-        //排除钱币 与 玩家自己指定排除物品
+        // 排除钱币、玩家指定排除物品和临时排除物品
         if (data.ExcluItem.Contains(trash.type))
         {
             return;
@@ -191,7 +188,9 @@ public class MyPlugin(string path) : Plugin(path)
 
             if (inv.IsAir || inv.type == 0 || inv == plr.HeldItem) continue;
 
-            if (data.TrashList.ContainsKey(inv.type) && !data.ExcluItem.Contains(inv.type))
+            if (data.TrashList.ContainsKey(inv.type) &&
+                !data.ExcluItem.Contains(inv.type) &&
+                !AdventExcluded(inv.type))
             {
                 //将该格子的物品数量 添加到“自动垃圾桶物品表”
                 data.TrashList[inv.type] += inv.stack;
@@ -203,6 +202,37 @@ public class MyPlugin(string path) : Plugin(path)
 
         SyncTrashTime[plr.name] = now;
     }
+    #endregion
+
+    #region 检查物品是否在临时排除期内
+    public static bool AdventExcluded(int type)
+    {
+        if (AdventExclusions.TryGetValue(type, out var ExclusionEndTime))
+        {
+            if (DateTime.Now < ExclusionEndTime)
+            {
+                return true;
+            }
+            AdventExclusions.Remove(type);
+        }
+        return false;
+    }
+    #endregion
+
+    #region 获取临时排除剩余时间
+    public static string GetAdventTime(int itemType)
+    {
+        if (AdventExclusions.TryGetValue(itemType, out var ExclusionEndTime))
+        {
+            if (DateTime.Now < ExclusionEndTime)
+            {
+                TimeSpan left = ExclusionEndTime - DateTime.Now;
+                return $"{left.TotalSeconds:F0}秒";
+            }
+            AdventExclusions.Remove(itemType);
+        }
+        return "0秒";
+    } 
     #endregion
 
     #region 修改手上物品方法
