@@ -321,7 +321,8 @@ public class UITool : Tool
 
             // 获取所有垃圾桶物品并应用搜索过滤
             var trashItems = data.TrashList
-                .Select(item => new {
+                .Select(item => new
+                {
                     Id = item.Key,
                     Name = Lang.GetItemNameValue(item.Key) ?? $"未知物品 ({item.Key})",
                     Amount = item.Value
@@ -512,98 +513,8 @@ public class UITool : Tool
 
             ImGui.EndChild();
 
-            // 排除物品列表
-            ImGui.Separator();
-            ImGui.TextColored(new Vector4(0.5f, 1, 0.5f, 1), "《排除物品表》");
-
-            // 搜索区域
-            ImGui.Text("搜索物品:");
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(200);
-            ImGui.InputTextWithHint("##ExclusionSearchInput", "输入名称或ID", ref ExclusionSearchInput, 100);
-            ImGui.SameLine();
-            if (ImGui.Button("清空搜索##Exclusion"))
-            {
-                ExclusionSearchInput = "";
-            }
-
-            // 获取所有排除物品并应用搜索过滤
-            var excluItems = data.ExcluItem
-                .Select(id => new {
-                    Id = id,
-                    Name = Lang.GetItemNameValue(id) ?? $"未知物品 ({id})"
-                })
-                .Where(item =>
-                    string.IsNullOrWhiteSpace(ExclusionSearchInput) ||
-                    item.Name.Contains(ExclusionSearchInput, StringComparison.OrdinalIgnoreCase) ||
-                    item.Id.ToString().Contains(ExclusionSearchInput)
-                )
-                .ToList();
-
-            // 显示物品数量信息 + 清空按钮
-            ImGui.Text($"排除物品 (共 {excluItems.Count} 个物品)");
-            ImGui.SameLine();
-            // 添加排除表清空按钮
-            if (ImGui.Button("清空排除表"))
-            {
-                data.ExcluItem.Clear();
-                // 添加默认排除的钱币ID
-                data.ExcluItem = new HashSet<int>() { 71, 72, 73, 74 };
-                Config.Write();
-                ClientLoader.Chat.WriteLine("已清空排除表并默认排除钱币", Color.Yellow);
-            }
-
-            // 当前排除列表
-            ImGui.BeginChild("物品排除表", new Vector2(0, 180), ImGuiChildFlags.Borders);
-
-            // 使用索引显示所有排除物品
-            for (int i = 0; i < excluItems.Count; i++)
-            {
-                var item = excluItems[i];
-                string displayName = $"{i + 1}. {item.Name}"; // 添加连续索引前缀
-
-                ImGui.PushID($"exclu_{item.Id}");
-
-                // 使用紧凑的3列布局
-                ImGui.Columns(3, "exclusion_item_columns", false);
-                ImGui.SetColumnWidth(0, 150); // 物品名称
-                ImGui.SetColumnWidth(1, 80);  // 物品ID
-                ImGui.SetColumnWidth(2, 120); // 删除按钮
-
-                // 物品名称
-                ImGui.Text(displayName);
-                ImGui.NextColumn();
-
-                // 物品ID
-                ImGui.Text($"ID:{item.Id}");
-                ImGui.NextColumn();
-
-                // 删除按钮
-                if (ImGui.Button("删除", new Vector2(50, 0)))
-                {
-                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{item.Name}] 从排除表中删除", color);
-                    data.ExcluItem.Remove(item.Id);
-                    Config.Write();
-                }
-
-                ImGui.Columns(1);
-                ImGui.PopID();
-            }
-
-            // 如果没有物品显示提示
-            if (excluItems.Count == 0)
-            {
-                if (string.IsNullOrWhiteSpace(ExclusionSearchInput))
-                {
-                    ImGui.Text("排除列表为空");
-                }
-                else
-                {
-                    ImGui.Text($"没有找到包含 '{ExclusionSearchInput}' 的排除物品");
-                }
-            }
-
-            ImGui.EndChild();
+            //排除表窗口
+            ExclusionTableWindows(data);
 
             // 添加手持物品按钮
             if (ImGui.Button("添加手持物品到垃圾桶"))
@@ -655,19 +566,105 @@ public class UITool : Tool
     }
     #endregion
 
-    #region 垃圾桶列表查找方法：物品名称找ID
-    private int FindItemIdByName(string itemName)
+    #region 垃圾桶排除表窗口
+    private static void ExclusionTableWindows(TrashData? data)
     {
-        for (int i = 1; i < ItemID.Count; i++)
+        if (data is null) return;
+
+        // 排除物品列表
+        ImGui.Separator();
+        ImGui.TextColored(new Vector4(0.5f, 1, 0.5f, 1), "《排除物品表》");
+
+        // 搜索区域
+        ImGui.Text("搜索物品:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(200);
+        ImGui.InputTextWithHint("##ExclusionSearchInput", "输入名称或ID", ref ExclusionSearchInput, 100);
+        ImGui.SameLine();
+        if (ImGui.Button("清空搜索##Exclusion"))
         {
-            string name = Lang.GetItemNameValue(i);
-            if (!string.IsNullOrEmpty(name) && name.Equals(itemName, StringComparison.OrdinalIgnoreCase))
+            ExclusionSearchInput = "";
+        }
+
+        // 获取所有排除物品并应用搜索过滤
+        var excluItems = data.ExcluItem
+            .Select(id => new
             {
-                return i;
+                Id = id,
+                Name = Lang.GetItemNameValue(id) ?? $"未知物品 ({id})"
+            })
+            .Where(item =>
+                string.IsNullOrWhiteSpace(ExclusionSearchInput) ||
+                item.Name.Contains(ExclusionSearchInput, StringComparison.OrdinalIgnoreCase) ||
+                item.Id.ToString().Contains(ExclusionSearchInput)
+            )
+            .ToList();
+
+        // 显示物品数量信息 + 清空按钮
+        ImGui.Text($"排除物品 (共 {excluItems.Count} 个物品)");
+        ImGui.SameLine();
+        // 添加排除表清空按钮
+        if (ImGui.Button("清空排除表"))
+        {
+            data.ExcluItem.Clear();
+            // 添加默认排除的钱币ID
+            data.ExcluItem = new HashSet<int>() { 71, 72, 73, 74 };
+            Config.Write();
+            ClientLoader.Chat.WriteLine("已清空排除表并默认排除钱币", Color.Yellow);
+        }
+
+        // 当前排除列表
+        ImGui.BeginChild("物品排除表", new Vector2(0, 180), ImGuiChildFlags.Borders);
+
+        // 使用索引显示所有排除物品
+        for (int i = 0; i < excluItems.Count; i++)
+        {
+            var item = excluItems[i];
+            string displayName = $"{i + 1}. {item.Name}"; // 添加连续索引前缀
+
+            ImGui.PushID($"exclu_{item.Id}");
+
+            // 使用紧凑的3列布局
+            ImGui.Columns(3, "exclusion_item_columns", false);
+            ImGui.SetColumnWidth(0, 150); // 物品名称
+            ImGui.SetColumnWidth(1, 80);  // 物品ID
+            ImGui.SetColumnWidth(2, 120); // 删除按钮
+
+            // 物品名称
+            ImGui.Text(displayName);
+            ImGui.NextColumn();
+
+            // 物品ID
+            ImGui.Text($"ID:{item.Id}");
+            ImGui.NextColumn();
+
+            // 删除按钮
+            if (ImGui.Button("删除", new Vector2(50, 0)))
+            {
+                ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{item.Name}] 从排除表中删除", color);
+                data.ExcluItem.Remove(item.Id);
+                Config.Write();
+            }
+
+            ImGui.Columns(1);
+            ImGui.PopID();
+        }
+
+        // 如果没有物品显示提示
+        if (excluItems.Count == 0)
+        {
+            if (string.IsNullOrWhiteSpace(ExclusionSearchInput))
+            {
+                ImGui.Text("排除列表为空");
+            }
+            else
+            {
+                ImGui.Text($"没有找到包含 '{ExclusionSearchInput}' 的排除物品");
             }
         }
-        return 0;
-    }
+
+        ImGui.EndChild();
+    } 
     #endregion
 
     #region 临时排除窗口
