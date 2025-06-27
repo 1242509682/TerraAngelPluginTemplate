@@ -1,67 +1,49 @@
 @echo off
 chcp 65001 >nul
 
-:: Request admin rights
-net session >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo Requesting administrator privileges...
-    powershell start-process "%~f0" -verb runas
-    exit /b
+echo [DeployPlugin] Starting deployment...
+echo Project: %cd%
+echo Target: %1
+
+if "%~1"=="" (
+    echo ❌ Error: Missing target DLL parameter
+    echo Usage: %0 [PathToDLL]
+    exit /b 1
 )
 
-echo [Plugin Deployment Script] Current path: %cd%
-echo.
+:: 使用相对路径参数
+set "TARGET_DIR=%~dp0..\..\..\Documents\My Games\Terraria\TerraAngel\Plugins\"
+set "JSON_FILE=%~dp0..\..\..\Documents\My Games\Terraria\TerraAngel\MyPlugin.json"
 
-set "targetPath=D:\Documents\My Games\Terraria\TerraAngel\Plugins\MyPlugin.TAPlugin.dll"
-set "sourcePath=D:\游戏\Terraria\服务器\插件源码\TAPlugin\bin\Release\net8.0\MyPlugin.TAPlugin.dll"
-set "pluginDir=D:\Documents\My Games\Terraria\TerraAngel\Plugins"
-set "jsonFile=D:\Documents\My Games\Terraria\TerraAngel\MyPlugin.json"
-
-:: Delete old DLL file
-if exist "%targetPath%" (
-    echo Deleting old plugin: "%targetPath%"
-    del /F /Q "%targetPath%"
-    if %ERRORLEVEL% == 0 (
-        echo ✅ Deleted successfully.
+:: 删除旧的 JSON 文件
+if exist "%JSON_FILE%" (
+    echo Deleting JSON file: "%JSON_FILE%"
+    del /F /Q "%JSON_FILE%"
+    if %errorlevel% equ 0 (
+        echo ✅ JSON file deleted
     ) else (
-        echo ❌ Failed to delete, error code: %ERRORLEVEL%
-        goto pause_and_exit
+        echo ❌ Failed to delete JSON file
+        exit /b 1
     )
-) else (
-    echo ⚠️ Old plugin not found, skipping deletion.
 )
 
-:: Delete JSON file if exists
-if exist "%jsonFile%" (
-    echo Deleting JSON file: "%jsonFile%"
-    del /F /Q "%jsonFile%"
-    if %ERRORLEVEL% == 0 (
-        echo ✅ JSON file deleted successfully.
-    ) else (
-        echo ❌ Failed to delete JSON file, error code: %ERRORLEVEL%
-        goto pause_and_exit
-    )
-) else (
-    echo ⚠️ JSON file not found, skipping deletion.
+:: 复制新的 DLL 文件
+echo Copying plugin: "%~1"
+echo To: "%TARGET_DIR%"
+
+if not exist "%TARGET_DIR%" (
+    echo Creating directory: %TARGET_DIR%
+    mkdir "%TARGET_DIR%"
 )
 
-:: Copy new DLL file
-if exist "%sourcePath%" (
-    echo Copying new plugin: "%sourcePath%"
-    copy /Y "%sourcePath%" "%pluginDir%\"
-    if %ERRORLEVEL% == 0 (
-        echo ✅ Copied successfully.
-    ) else (
-        echo ❌ Failed to copy, error code: %ERRORLEVEL%
-        goto pause_and_exit
-    )
+copy /Y "%~1" "%TARGET_DIR%"
+if %errorlevel% equ 0 (
+    echo ✅ Plugin copied successfully
+    exit /b 0
 ) else (
-    echo ❌ Source file does not exist. Please make sure the plugin was built.
-    goto pause_and_exit
+    echo ❌ Failed to copy DLL
+    echo Check:
+    echo  1. Terraria is not running
+    echo  2. Target directory exists
+    exit /b 1
 )
-
-echo.
-echo ✅ Plugin deployed successfully!
-
-:pause_and_exit
-exit /b 1

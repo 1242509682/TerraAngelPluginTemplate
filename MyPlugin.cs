@@ -83,7 +83,7 @@ public class MyPlugin(string path) : Plugin(path)
         //自动使用物品
         AutoUseItem(InputSystem.IsKeyPressed(Config.AutoUseKey));
 
-        SetItem(InputSystem.IsKeyPressed(Config.ItemManagerKey));
+        SetItem(InputSystem.IsKeyPressed(Config.ItemModifyKey));
 
         //快捷键P 开启关闭修改批量前缀窗口
         if (InputSystem.IsKeyPressed(Config.ShowEditPrefixKey))
@@ -103,8 +103,8 @@ public class MyPlugin(string path) : Plugin(path)
         if (InputSystem.IsKeyPressed(Config.SocialAccessoriesKey))
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
-            Config.SocialAccessoriesEnabled = !Config.SocialAccessoriesEnabled;
-            string status = Config.SocialAccessoriesEnabled ? "开启" : "关闭";
+            Config.SocialAccessory = !Config.SocialAccessory;
+            string status = Config.SocialAccessory ? "开启" : "关闭";
             ClientLoader.Chat.WriteLine($"社交栏饰品功能已{status}", color);
         }
 
@@ -116,13 +116,89 @@ public class MyPlugin(string path) : Plugin(path)
             string status = Config.IgnoreGravity ? "启用" : "禁用";
             ClientLoader.Chat.WriteLine($"重力控制已{status}", Color.Yellow);
         }
+
+        // 切换自动垃圾桶状态
+        if (InputSystem.IsKeyPressed(Config.AutoTrashKey))
+        {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
+            Config.AutoTrash = !Config.AutoTrash;
+            string status = Config.AutoTrash ? "启用" : "禁用";
+            ClientLoader.Chat.WriteLine($"自动垃圾桶已{status}", Color.Yellow);
+        }
+
+        // 触发自动垃圾桶方法
+        AutoTrash();
+    }
+    #endregion
+
+    #region 触发自动垃圾桶方法
+    private static Dictionary<string, long> SyncTrashTime = new Dictionary<string, long>();
+    private static void AutoTrash()
+    {
+        if (!Config.AutoTrash) return;
+
+        var plr = Main.player[Main.myPlayer];
+        var data = Config.TrashItems.FirstOrDefault(x => x.Name == plr.name);
+        if (data == null) //如果没有获取到的玩家数据
+        {
+            var newData = new TrashData()
+            {
+                Name = plr.name,
+                TrashList = new Dictionary<int, int>(),
+                ExcluItem = new HashSet<int>() { 71, 72, 73, 74 }
+            };
+            Config.TrashItems.Add(newData);
+            return;
+        }
+
+        //初始化同步时间
+        if (!SyncTrashTime.ContainsKey(plr.name))
+        {
+            SyncTrashTime[plr.name] = 0;
+        }
+
+        // 给自动回收物品增加同步时间
+        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        if (now - SyncTrashTime[plr.name] < Config.TrashSyncInterval) return;
+
+        //获取玩家垃圾桶格子
+        var trash = plr.trashItem;
+        if (!data.TrashList.ContainsKey(trash.type) && trash.type != 0 && !trash.IsAir)
+        {
+            //添加垃圾桶的物品和对应格子数量 到 “自动垃圾桶物品表”
+            data.TrashList.Add(trash.type, trash.stack);
+            Config.Write();
+            trash.stack = 0;
+            trash.TurnToAir();
+        }
+
+        for (int i = 0; i < plr.inventory.Length; i++)
+        {
+            //排除钱币 与 玩家自己指定排除物品
+            if (data.ExcluItem.Contains(trash.type)) return;
+
+            var inv = plr.inventory[i];
+
+            if (inv.IsAir || inv.type == 0 || inv == plr.HeldItem) continue;
+
+            if (data.TrashList.ContainsKey(inv.type) && !data.ExcluItem.Contains(inv.type))
+            {
+                //将该格子的物品数量 添加到“自动垃圾桶物品表”
+                data.TrashList[inv.type] += inv.stack;
+                Config.Write();
+                inv.stack = 0;
+                inv.TurnToAir();
+            }
+        }
+
+        SyncTrashTime[plr.name] = now;
     }
     #endregion
 
     #region 修改手上物品方法
     private void SetItem(bool key)
     {
-        if (!Config.ItemManager || !key) return;
+        if (!Config.ItemModify || !key) return;
 
         var plr = Main.player[Main.myPlayer];
         var item = plr.HeldItem;
@@ -147,14 +223,14 @@ public class MyPlugin(string path) : Plugin(path)
             int prefix = 1;
 
             // 检查名称是否已存在，如果存在则添加后缀
-            while (Config.items.Any(p => p.Name == newName))
+            while (Config.ItemModifyList.Any(p => p.Name == newName))
             {
                 newName = $"{baseName}_{prefix++}";
             }
 
             newItem.Name = newName;
 
-            Config.items.Add(newItem);
+            Config.ItemModifyList.Add(newItem);
             Config.Write();
             return;
         }
@@ -165,11 +241,11 @@ public class MyPlugin(string path) : Plugin(path)
             SoundEngine.PlaySound(SoundID.MenuTick);
 
             // 查找匹配的预设
-            ItemData presetToRemove = Config.items.FirstOrDefault(p => p.Type == item.type)!;
+            ItemData presetToRemove = Config.ItemModifyList.FirstOrDefault(p => p.Type == item.type)!;
 
             if (presetToRemove != null)
             {
-                Config.items.Remove(presetToRemove);
+                Config.ItemModifyList.Remove(presetToRemove);
                 Config.Write();
                 ClientLoader.Chat.WriteLine($"已删除物品预设: {presetToRemove.Name}", Color.Yellow);
             }
@@ -181,7 +257,7 @@ public class MyPlugin(string path) : Plugin(path)
         }
 
         // 普通按键：应用预设到当前物品
-        ItemData matchingPreset = Config.items.FirstOrDefault(p => p.Type == item.type)!;
+        ItemData matchingPreset = Config.ItemModifyList.FirstOrDefault(p => p.Type == item.type)!;
 
         if (matchingPreset != null)
         {
@@ -196,7 +272,7 @@ public class MyPlugin(string path) : Plugin(path)
         else
         {
             ClientLoader.Chat.WriteLine($"未找到类型为 {item.type} 的物品预设", Color.Red);
-            ClientLoader.Chat.WriteLine($"使用 Alt + {Config.ItemManagerKey} 添加当前物品为预设", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"使用 Alt + {Config.ItemModifyKey} 添加当前物品为预设", Color.Yellow);
         }
     }
     #endregion
@@ -216,7 +292,7 @@ public class MyPlugin(string path) : Plugin(path)
         if (Config.AutoUseItem)
         {
             long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-            if (now - AutoUseTime < Config.AutoUseInterval) return;
+            if (now - AutoUseTime < Config.UseItemInterval) return;
 
             var plr = Main.player[Main.myPlayer];
 

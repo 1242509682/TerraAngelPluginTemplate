@@ -111,7 +111,7 @@ internal class Commands
             }
 
             // 更新回血值
-            Config.AutoUseInterval = val;
+            Config.UseItemInterval = val;
             ClientLoader.Chat.WriteLine($"已设置自动使用物品间隔为: [c/4C92D8:{val}] ", color);
         }
         else
@@ -120,7 +120,7 @@ internal class Commands
             Config.AutoUseItem = !Config.AutoUseItem;
 
             string status = Config.AutoUseItem ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"自动使用物品已{status} 当前间隔为:{Config.AutoUseInterval} ms", color);
+            ClientLoader.Chat.WriteLine($"自动使用物品已{status} 当前间隔为:{Config.UseItemInterval} ms", color);
             ClientLoader.Chat.WriteLine($"注意: [c/4C92D8:#autouse 数值] 可修改间隔", color);
         }
 

@@ -1,1 +1,62 @@
-call CopyPlugin.cmd
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+		<!-- 添加输出路径设置 -->
+		<OutputPath>bin\$(Configuration)\</OutputPath>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MonoMod.RuntimeDetour" Version="25.2.3" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="ImGui.NET">
+			<HintPath>using\ImGui.NET.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="ReLogic">
+			<HintPath>using\ReLogic.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="TerraAngel.PluginAPI">
+			<HintPath>using\TerraAngel.PluginAPI.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="Terraria">
+			<HintPath>using\Terraria.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="TNA">
+			<HintPath>using\TNA.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+	</ItemGroup>
+
+	<!-- 添加部署目标 -->
+	<Target Name="DeployPlugin" AfterTargets="Build" Condition="'$(Configuration)' == 'Release'">
+		<Message Text="=== Starting plugin deployment ===" Importance="high" />
+
+		<!-- 删除旧的 JSON 文件 -->
+		<Delete Files="C:\Users\Administrator\Documents\My Games\Terraria\TerraAngel\MyPlugin.json"
+				ContinueOnError="true">
+			<Output TaskParameter="DeletedFiles" ItemName="DeletedFiles" />
+		</Delete>
+		<Message Text="✅ Deleted JSON file: @(DeletedFiles)" Condition="'@(DeletedFiles)' != ''" />
+
+		<!-- 复制新 DLL 文件 -->
+		<Copy SourceFiles="$(TargetPath)"
+			  DestinationFolder="C:\Users\Administrator\Documents\My Games\Terraria\TerraAngel\Plugins\"
+			  SkipUnchangedFiles="false">
+			<Output TaskParameter="CopiedFiles" ItemName="CopiedFiles" />
+		</Copy>
+		<Message Text="✅ Copied plugin: @(CopiedFiles)" Condition="'@(CopiedFiles)' != ''" />
+
+		<Error Text="❌ ERROR: Failed to deploy plugin" Condition="'@(CopiedFiles)' == ''" />
+	</Target>
+
+</Project>

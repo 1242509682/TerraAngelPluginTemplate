@@ -1,12 +1,13 @@
-﻿using System.Numerics;
-using ImGuiNET;
+﻿using ImGuiNET;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
+using Terraria.DataStructures;
 using Terraria.ID;
 using static MyPlugin.MyPlugin;
 
@@ -14,7 +15,7 @@ namespace MyPlugin;
 
 public class UITool : Tool
 {
-    public override string Name => "羽学插件设置";
+    public override string Name => "羽学插件模板";
     public override ToolTabs Tab => ToolTabs.MainTools;
 
     // 用于临时存储按键编辑状态
@@ -26,6 +27,7 @@ public class UITool : Tool
     private bool EditItemManagerKey = false; // 物品管理器按键编辑状态
     private bool EditSocialAccessoriesKey = false; // 社交栏饰品开关按键编辑状态
     private bool EditIgnoreGravityKey = false; // 忽略重力按键编辑状态
+    private bool EditAutoTrashKey = false; // 自动垃圾桶按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -35,27 +37,23 @@ public class UITool : Tool
         bool enabled = Config.Enabled; //插件总开关
         bool Heal = Config.Heal; //回血开关
         int HealVal = Config.HealVal; //回血值
-        Keys healKey = Config.HealKey; //回血按键
 
         bool mouseStrikeNPC = Config.MouseStrikeNPC; //鼠标范围伤害NPC开关
         int mouseStrikeNPCRange = Config.MouseStrikeNPCRange; //伤害范围
 
         bool killOrRESpawn = Config.KillOrRESpawn; //快速死亡与复活开关
-        Keys killKey = Config.KillKey; //自杀与复活按键
 
         bool autoUseItem = Config.AutoUseItem; //自动使用物品开关
-        Keys autoUseKey = Config.AutoUseKey; //自动使用物品按键
-        int autoUseInterval = Config.AutoUseInterval; //自动使用物品间隔
+        int autoUseInterval = Config.UseItemInterval; //自动使用物品间隔
 
-        bool itemManager = Config.ItemManager; //物品管理开关
-        Keys itemManagerKey = Config.ItemManagerKey; //物品管理按键
+        bool itemModify = Config.ItemModify; // 修改手上物品开关
 
-        bool socialEnabled = Config.SocialAccessoriesEnabled; // 社交栏饰品开关
-        bool applyPrefix = Config.ApplyPrefix;
-        bool applyArmor = Config.ApplyArmor;
-        bool applyAccessory = Config.ApplyAccessory; // 应用饰品效果开关
+        bool socialEnabled = Config.SocialAccessory; // 社交栏饰品生效开关
+        bool applyPrefix = Config.ApplyPrefix; // 开启额外饰品的前缀加成
+        bool applyArmor = Config.ApplyArmor; // 开启装饰栏盔甲的护甲加成
+        bool applyAccessory = Config.ApplyAccessory; // 开启额外饰品的原有被动功能
 
-        bool applyIgnoreGravity = Config.IgnoreGravity; // 忽略重力药水效果开关
+        bool applyIgnoreGravity = Config.IgnoreGravity; // 启用忽略重力药水效果
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -69,14 +67,14 @@ public class UITool : Tool
             ImGui.Checkbox("快速死亡/复活", ref killOrRESpawn);
             ImGui.SameLine();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref killKey, ref EditKillKey);
+            DrawKeySelector("按键", ref Config.KillKey, ref EditKillKey);
 
             // 回血设置 （bool + 滑块 + 自定义按键）
             ImGui.Separator();
             ImGui.Checkbox("强制回血", ref Heal);
             ImGui.SameLine(); // 回血按键设置
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref healKey, ref EditHealKey);
+            DrawKeySelector("按键", ref Config.HealKey, ref EditHealKey);
             if (Heal)
             {
                 ImGui.Indent();
@@ -94,7 +92,7 @@ public class UITool : Tool
             ImGui.Checkbox("自动使用物品", ref autoUseItem);
             ImGui.SameLine();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref autoUseKey, ref EditAutoUseKey);
+            DrawKeySelector("按键", ref Config.AutoUseKey, ref EditAutoUseKey);
             if (autoUseItem)
             {
                 ImGui.Indent();
@@ -120,13 +118,11 @@ public class UITool : Tool
 
             // 在 DrawUI 方法中添加物品管理部分
             ImGui.Separator();
-            ImGui.Checkbox("物品管理", ref itemManager);
-            ImGui.SameLine();
-            DrawKeySelector("按键", ref itemManagerKey, ref EditItemManagerKey);
-            if (itemManager)
+            ImGui.Checkbox("物品管理", ref itemModify);
+            if (itemModify)
             {
                 ImGui.SameLine();
-                if (ImGui.Button("打开物品管理器"))
+                if (ImGui.Button("物品编辑器"))
                 {
                     SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
                     ShowItemManagerWindow = true;
@@ -136,6 +132,20 @@ public class UITool : Tool
                 if (ShowItemManagerWindow)
                 {
                     DrawItemManagerWindow(plr);
+                }
+
+                // 添加自动垃圾桶按钮
+                ImGui.SameLine();
+                if (ImGui.Button("自动垃圾桶"))
+                {
+                    SoundEngine.PlaySound(SoundID.MenuOpen);
+                    ShowAutoTrashWindow = true;
+                }
+
+                // 显示自动垃圾桶窗口
+                if (ShowAutoTrashWindow)
+                {
+                    DrawAutoTrashWindow(plr);
                 }
 
                 // 社交栏饰品开关
@@ -200,25 +210,21 @@ public class UITool : Tool
         Config.Enabled = enabled;
         Config.Heal = Heal;
         Config.HealVal = HealVal;
-        Config.HealKey = healKey;
 
         Config.MouseStrikeNPC = mouseStrikeNPC;
         Config.MouseStrikeNPCRange = mouseStrikeNPCRange;
 
         Config.KillOrRESpawn = killOrRESpawn;
-        Config.KillKey = killKey;
 
         //自动使用物品
         Config.AutoUseItem = autoUseItem;
-        Config.AutoUseInterval = autoUseInterval;
-        Config.AutoUseKey = autoUseKey;
+        Config.UseItemInterval = autoUseInterval;
 
         // 更新物品管理器配置
-        Config.ItemManager = itemManager;
-        Config.ItemManagerKey = itemManagerKey;
+        Config.ItemModify = itemModify;
 
         // 社交栏饰品开关
-        Config.SocialAccessoriesEnabled = socialEnabled;
+        Config.SocialAccessory = socialEnabled;
         Config.ApplyPrefix = applyPrefix;
         Config.ApplyArmor = applyArmor;
         Config.ApplyAccessory = applyAccessory; // 应用饰品效果开关
@@ -243,6 +249,369 @@ public class UITool : Tool
             ClientLoader.Chat.WriteLine("已重置为默认设置", color);
         }
     }
+    #endregion
+
+    #region 自动垃圾桶管理窗口
+    private static bool ShowAutoTrashWindow = false; // 显示自动垃圾桶窗口
+    private static string NewItemName = ""; // 新物品名称
+    private static int NewItemId = 0; // 新物品ID
+    private static string NewExclusionName = ""; // 新排除物品名称
+    private static int NewExclusionId = 0; // 新排除物品ID
+    private static int AutoTrashSyncInterval = Config.TrashSyncInterval; // 自动回收同步间隔
+    private Dictionary<int, int> returnAmounts = new Dictionary<int, int>(); // 临时存储需要返还的物品数量
+
+    private void DrawAutoTrashWindow(Player plr)
+    {
+        ImGui.SetNextWindowSize(new Vector2(550, 550), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("自动垃圾桶编辑器", ref ShowAutoTrashWindow, ImGuiWindowFlags.NoCollapse))
+        {
+            var data = Config.TrashItems.FirstOrDefault(x => x.Name == plr.name);
+
+            // 如果没有找到配置，创建一个新的
+            if (data == null)
+            {
+                data = new TrashData
+                {
+                    Name = plr.name,
+                    TrashList = new Dictionary<int, int>(),
+                    ExcluItem = new HashSet<int>() { 71, 72, 73, 74 } // 默认排除钱币
+                };
+                Config.TrashItems.Add(data);
+                Config.Write();
+            }
+
+            // 总开关
+            bool autoTrash = Config.AutoTrash;
+            ImGui.Checkbox("启用自动垃圾桶", ref autoTrash);
+            Config.AutoTrash = autoTrash; // 更新配置值
+            ImGui.SameLine();
+            DrawKeySelector("开关按键", ref Config.AutoTrashKey, ref EditAutoTrashKey);
+
+            // 同步间隔设置
+            ImGui.SameLine();
+            ImGui.Text("回收间隔(毫秒):");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(150);
+            ImGui.SliderInt("##AutoTrashInterval", ref AutoTrashSyncInterval, 100, 5000, "%d ms");
+            Config.TrashSyncInterval = AutoTrashSyncInterval;
+
+            // 自动丢弃物品列表
+            ImGui.Separator();
+            ImGui.TextColored(new Vector4(1, 0.5f, 0.5f, 1), "《自动垃圾桶表》");
+
+            // 添加新物品区域
+            ImGui.Columns(3, "add_trash_columns", false);
+            ImGui.SetColumnWidth(0, 200);
+
+            // 物品名称输入
+            ImGui.Text("物品名称:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(120);
+            ImGui.InputText("##NewTrashItemName", ref NewItemName, 100);
+
+            ImGui.NextColumn();
+
+            // 物品ID输入
+            ImGui.Text("物品ID:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(80);
+            ImGui.InputInt("##NewTrashItemId", ref NewItemId);
+
+            ImGui.NextColumn();
+
+            // 添加按钮
+            if (ImGui.Button("添加物品"))
+            {
+                if (NewItemId > 0 && !data.TrashList.ContainsKey(NewItemId))
+                {
+                    data.TrashList.Add(NewItemId, 0);
+                    Config.Write();
+                    NewItemId = 0;
+                    NewItemName = "";
+                }
+                else if (!string.IsNullOrEmpty(NewItemName))
+                {
+                    // 尝试通过名称查找物品
+                    int foundId = FindItemIdByName(NewItemName);
+                    if (foundId > 0 && !data.TrashList.ContainsKey(foundId))
+                    {
+                        data.TrashList.Add(foundId, 0);
+                        Config.Write();
+                        NewItemName = "";
+                    }
+                }
+            }
+
+            ImGui.Columns(1);
+
+            // 获取所有垃圾桶物品
+            var trashItems = data.TrashList.ToList();
+
+            // 显示物品数量信息
+            ImGui.Text($"垃圾桶物品 (共 {trashItems.Count} 个物品)");
+
+            // 当前物品列表
+            ImGui.BeginChild("TrashItemsList", new Vector2(0, 180), ImGuiChildFlags.Borders);
+
+            // 使用索引显示所有物品
+            for (int i = 0; i < trashItems.Count; i++)
+            {
+                var item = trashItems[i];
+                string itemName = Lang.GetItemNameValue(item.Key);
+                if (string.IsNullOrEmpty(itemName)) itemName = $"未知物品 ({item.Key})";
+                itemName = $"{i + 1}. {itemName}"; // 添加连续索引前缀
+
+                ImGui.PushID($"trash_{item.Key}");
+
+                // 使用紧凑的4列布局
+                ImGui.Columns(4, "trash_item_columns", false);
+                ImGui.SetColumnWidth(0, 150); // 物品名称
+                ImGui.SetColumnWidth(1, 80);  // 物品ID
+                ImGui.SetColumnWidth(2, 120); // 返还数量滑块
+                ImGui.SetColumnWidth(3, 100); // 按钮区域
+
+                // 物品名称
+                ImGui.Text($"{itemName}");
+                ImGui.NextColumn();
+
+                // 物品数量
+                ImGui.Text($"ID:{item.Key}");
+                ImGui.NextColumn();
+
+                // 初始化返还数量（默认为1）
+                if (!returnAmounts.ContainsKey(item.Key))
+                {
+                    returnAmounts[item.Key] = Math.Max(1, item.Value / 2); // 默认取一半数量
+                }
+
+                // 返还数量滑块
+                int currentAmount = returnAmounts[item.Key];
+                ImGui.SetNextItemWidth(110);
+                ImGui.SliderInt($"##return_{item.Key}", ref currentAmount, 1, item.Value, $"{currentAmount}/{item.Value}");
+                returnAmounts[item.Key] = currentAmount;
+                ImGui.NextColumn();
+
+                // 修改返还按钮的处理逻辑
+                if (ImGui.Button("返还", new Vector2(40, 0)))
+                {
+                    int returnAmount = Math.Min(currentAmount, item.Value);
+                    int itemType = item.Key;
+
+                    // 获取物品的最大堆叠数量
+                    var tempItem = new Item();
+                    tempItem.SetDefaults(itemType);
+                    int maxStack = tempItem.maxStack;
+
+                    // 分批返还物品
+                    while (returnAmount > 0)
+                    {
+                        int stackSize = Math.Min(returnAmount, maxStack);
+
+                        // 创建物品实体
+                        int itemIndex = Item.NewItem(new EntitySource_DebugCommand(),
+                                                    (int)plr.position.X, (int)plr.position.Y,
+                                                    plr.width, plr.height, itemType, stackSize,
+                                                    noBroadcast: true, tempItem.prefix, noGrabDelay: true);
+
+                        // 设置物品归属并同步
+                        Main.item[itemIndex].playerIndexTheItemIsReservedFor = plr.whoAmI;
+                        NetMessage.SendData(MessageID.ItemOwner, plr.whoAmI, -1, null, itemIndex);
+                        NetMessage.SendData(MessageID.SyncItem, plr.whoAmI, -1, null, itemIndex, 1);
+
+                        returnAmount -= stackSize;
+                    }
+
+                    // 更新垃圾桶中的物品数量
+                    int newAmount = item.Value - currentAmount;
+                    if (newAmount <= 0)
+                    {
+                        data.TrashList.Remove(item.Key);
+                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(item.Key)}] 从[c/4C92D8:自动垃圾桶]移除", color);
+                    }
+                    else
+                    {
+                        data.TrashList[item.Key] = newAmount;
+                        data.ExcluItem.Add(item.Key);  // 如果垃圾桶还有这个物品则返还指定数量时自动加入排除表
+                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(item.Key)}] 加入到[c/4C92D8:排除表]", color);
+                    }
+
+                    Config.Write();
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button("删除", new Vector2(50, 0)))
+                {
+                    data.TrashList.Remove(item.Key);
+                    Config.Write();
+                }
+
+                ImGui.Columns(1);
+                ImGui.PopID();
+            }
+
+            // 如果没有物品显示提示
+            if (trashItems.Count == 0)
+            {
+                ImGui.Text("垃圾桶列表为空");
+            }
+
+            ImGui.EndChild();
+
+            // 排除物品列表
+            ImGui.Separator();
+            ImGui.TextColored(new Vector4(0.5f, 1, 0.5f, 1), "《排除物品表》");
+
+            // 添加新排除物品区域
+            ImGui.Columns(3, "add_exclusion_columns", false);
+            ImGui.SetColumnWidth(0, 200);
+
+            // 排除物品名称输入
+            ImGui.Text("物品名称:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(120);
+            ImGui.InputText("##NewExclusionName", ref NewExclusionName, 100);
+
+            ImGui.NextColumn();
+
+            // 排除物品ID输入
+            ImGui.Text("物品ID:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(80);
+            ImGui.InputInt("##NewExclusionId", ref NewExclusionId);
+
+            ImGui.NextColumn();
+
+            // 添加按钮
+            if (ImGui.Button("添加排除"))
+            {
+                if (NewExclusionId > 0 && !data.ExcluItem.Contains(NewExclusionId))
+                {
+                    data.ExcluItem.Add(NewExclusionId);
+                    Config.Write();
+                    NewExclusionId = 0;
+                    NewExclusionName = "";
+                }
+                else if (!string.IsNullOrEmpty(NewExclusionName))
+                {
+                    // 尝试通过名称查找物品
+                    int foundId = FindItemIdByName(NewExclusionName);
+                    if (foundId > 0 && !data.ExcluItem.Contains(foundId))
+                    {
+                        data.ExcluItem.Add(foundId);
+                        Config.Write();
+                        NewExclusionName = "";
+                    }
+                }
+            }
+
+            ImGui.Columns(1);
+
+            // 获取所有排除物品
+            var excluItems = data.ExcluItem.ToList();
+
+            // 显示物品数量信息
+            ImGui.Text($"排除物品 (共 {excluItems.Count} 个物品)");
+
+            // 当前排除列表
+            ImGui.BeginChild("物品排除表", new Vector2(0, 180), ImGuiChildFlags.Borders);
+
+            // 使用索引显示所有排除物品
+            for (int i = 0; i < excluItems.Count; i++)
+            {
+                int itemId = excluItems[i];
+                string itemName = Lang.GetItemNameValue(itemId);
+                if (string.IsNullOrEmpty(itemName)) itemName = $"未知物品 ({itemId})";
+                itemName = $"{i + 1}. {itemName}"; // 添加连续索引前缀
+
+                ImGui.PushID($"exclu_{itemId}");
+
+                // 使用紧凑的3列布局
+                ImGui.Columns(3, "exclusion_item_columns", false);
+                ImGui.SetColumnWidth(0, 150); // 物品名称
+                ImGui.SetColumnWidth(1, 80);  // 物品ID
+                ImGui.SetColumnWidth(2, 120); // 删除按钮
+
+                // 物品名称
+                ImGui.Text($"{itemName}");
+                ImGui.NextColumn();
+
+                // 物品ID
+                ImGui.Text($"ID:{itemId}");
+                ImGui.NextColumn();
+
+                // 删除按钮
+                if (ImGui.Button("删除", new Vector2(50, 0)))
+                {
+                    data.ExcluItem.Remove(itemId);
+                    Config.Write();
+                }
+
+                ImGui.Columns(1);
+                ImGui.PopID();
+            }
+
+            // 如果没有物品显示提示
+            if (excluItems.Count == 0)
+            {
+                ImGui.Text("排除列表为空");
+            }
+
+            ImGui.EndChild();
+
+            // 添加手持物品按钮
+            if (ImGui.Button("添加手持物品到垃圾桶"))
+            {
+                if (!plr.HeldItem.IsAir)
+                {
+                    int itemId = plr.HeldItem.type;
+                    if (!data.TrashList.ContainsKey(itemId))
+                    {
+                        data.TrashList.Add(itemId, 0);
+                        Config.Write();
+                    }
+                }
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("添加手持物品到排除表"))
+            {
+                if (!plr.HeldItem.IsAir)
+                {
+                    int itemId = plr.HeldItem.type;
+                    if (!data.ExcluItem.Contains(itemId))
+                    {
+                        data.ExcluItem.Add(itemId);
+                        Config.Write();
+                    }
+                }
+            }
+
+            // 保存按钮
+            if (ImGui.Button("保存设置"))
+            {
+                Config.Write();
+                ClientLoader.Chat.WriteLine("自动垃圾桶设置已保存", Color.Green);
+            }
+        }
+        ImGui.End();
+    }
+    #endregion
+
+    #region 垃圾桶列表查找方法：物品名称找ID
+    private int FindItemIdByName(string itemName)
+    {
+        for (int i = 1; i < ItemID.Count; i++)
+        {
+            string name = Lang.GetItemNameValue(i);
+            if (!string.IsNullOrEmpty(name) && name.Equals(itemName, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+        return 0;
+    } 
     #endregion
 
     #region 一键收藏所有物品
@@ -284,18 +653,20 @@ public class UITool : Tool
     }
     #endregion
 
-    #region 实现物品管理器窗口
+    #region 物品编辑管理器窗口
     private static bool ShowItemManagerWindow = false; // 显示物品管理器窗口
     private static string SearchFilter = ""; // 物品搜索过滤器
-    internal static void DrawItemManagerWindow(Player plr)
+    internal void DrawItemManagerWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(500, 400), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin("物品管理器", ref ShowItemManagerWindow, ImGuiWindowFlags.NoCollapse))
+        if (ImGui.Begin("物品编辑管理器", ref ShowItemManagerWindow, ImGuiWindowFlags.NoCollapse))
         {
             // 搜索框
-            ImGui.InputText("搜索", ref SearchFilter, 100);
+            ImGui.InputText("搜索", ref SearchFilter, 70); 
+            ImGui.SameLine();
+            DrawKeySelector("应用按键", ref Config.ItemModifyKey, ref EditItemManagerKey);
 
-            var AllItems = Config.items.Where(item => string.IsNullOrEmpty(SearchFilter) ||
+            var AllItems = Config.ItemModifyList.Where(item => string.IsNullOrEmpty(SearchFilter) ||
             FuzzyMatch(item.Name, SearchFilter)).ToList();
 
             // 计算总页数
@@ -307,7 +678,7 @@ public class UITool : Tool
             if (NowPage < 0) NowPage = 0;
 
             // 添加物品按钮
-            if (ImGui.Button($"添加(Alt+{Config.ItemManagerKey})"))
+            if (ImGui.Button($"添加(Alt+{Config.ItemModifyKey})"))
             {
                 if (plr.HeldItem != null && !plr.HeldItem.IsAir)
                 {
@@ -323,22 +694,22 @@ public class UITool : Tool
                     int prefix = 1;
 
                     // 检查名称是否已存在，如果存在则添加后缀
-                    while (Config.items.Any(p => p.Name == newName))
+                    while (Config.ItemModifyList.Any(p => p.Name == newName))
                     {
                         newName = $"{baseName}_{prefix++}";
                     }
 
                     newItem.Name = newName;
-                    Config.items.Add(newItem);
+                    Config.ItemModifyList.Add(newItem);
                     Config.Write();
 
                     // 显示成功消息
                     ClientLoader.Chat.WriteLine($"已添加物品预设: {newItem.Name}", Color.Green);
-                    ClientLoader.Chat.WriteLine($"使用 {Config.ItemManagerKey} 键应用此预设", Color.Yellow);
+                    ClientLoader.Chat.WriteLine($"使用 {Config.ItemModifyKey} 键应用此预设", Color.Yellow);
                 }
                 else
                 {
-                    ClientLoader.Chat.WriteLine($"请手持一个物品 使用{Config.ItemManagerKey}", Color.Red);
+                    ClientLoader.Chat.WriteLine($"请手持一个物品 使用{Config.ItemModifyKey}", Color.Red);
                 }
             }
 
@@ -349,7 +720,7 @@ public class UITool : Tool
                 // 播放界面关闭音效
                 SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
                 ShowEditWindow = false;
-                Config.items.Clear();
+                Config.ItemModifyList.Clear();
                 Config.Write();
             }
 
@@ -385,7 +756,7 @@ public class UITool : Tool
                 }
 
                 ImGui.NextColumn();
-                if (ImGui.Button($"应用({Config.ItemManagerKey})"))
+                if (ImGui.Button($"应用({Config.ItemModifyKey})"))
                 {
                     data.ApplyTo(Main.player[Main.myPlayer].HeldItem);
                     ClientLoader.Chat.WriteLine($"已应用物品预设: {data.Name}", Color.Green);
@@ -403,12 +774,12 @@ public class UITool : Tool
 
                 // 删除按钮
                 ImGui.SameLine();
-                if (ImGui.Button($"删除(Ctrl+{Config.ItemManagerKey})"))
+                if (ImGui.Button($"删除(Ctrl+{Config.ItemModifyKey})"))
                 {
                     // 播放界面关闭音效
                     SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
                     ShowEditWindow = false;
-                    Config.items.Remove(data);
+                    Config.ItemModifyList.Remove(data);
                     Config.Write();
                     ClientLoader.Chat.WriteLine($"已删除物品预设: {data.Name}", Color.Yellow);
                 }
@@ -420,7 +791,7 @@ public class UITool : Tool
             // 如果没有物品显示提示
             if (GetPage.Count == 0)
             {
-                ImGui.Text($"没有找到匹配的物品 请使用Alt + {Config.ItemManagerKey} 添加");
+                ImGui.Text($"没有找到匹配的物品 请使用Alt + {Config.ItemModifyKey} 添加");
             }
 
             ImGui.EndChild();

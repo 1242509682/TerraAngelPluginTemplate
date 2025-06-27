@@ -63,7 +63,7 @@ internal class ExtraAccessory
         orig(plr, i); // 调用原始方法
 
         // 检查社交栏饰品开关
-        if (!Config.SocialAccessoriesEnabled) return;
+        if (!Config.SocialAccessory) return;
 
         // 添加社交栏饰品处理（槽位10-19）
         for (int slot = 10; slot < plr.armor.Length; slot++)

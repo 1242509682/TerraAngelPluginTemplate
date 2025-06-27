@@ -31,7 +31,7 @@ internal class Configuration
     [JsonProperty("自动使用按键", Order = 5)]
     public Keys AutoUseKey = Keys.J; // 默认按键J
     [JsonProperty("使用间隔(毫秒)", Order = 5)]
-    public int AutoUseInterval { get; set; } = 500; // 默认500毫秒
+    public int UseItemInterval { get; set; } = 500; // 默认500毫秒
 
     [JsonProperty("修改前缀按键", Order = 6)]
     public Keys ShowEditPrefixKey = Keys.P;
@@ -39,7 +39,7 @@ internal class Configuration
     public Keys FavoriteKey = Keys.O;
 
     [JsonProperty("社交栏饰品加成开关", Order = 7)]
-    public bool SocialAccessoriesEnabled { get; set; } = true;
+    public bool SocialAccessory { get; set; } = true;
     [JsonProperty("恢复前缀加成", Order = 7)]
     public bool ApplyPrefix { get; set; } = true;
     [JsonProperty("恢复盔甲防御", Order = 7)]
@@ -49,17 +49,26 @@ internal class Configuration
     [JsonProperty("社交栏饰品开关按键", Order = 7)]
     public Keys SocialAccessoriesKey = Keys.N;
 
-    [JsonProperty("物品管理", Order = 10)]
-    public bool ItemManager { get; set; } = true;
+    [JsonProperty("物品修改", Order = 10)]
+    public bool ItemModify { get; set; } = true;
     [JsonProperty("应用修改按键", Order = 11)]
-    public Keys ItemManagerKey = Keys.I;
+    public Keys ItemModifyKey = Keys.I;
     [JsonProperty("修改物品", Order = 12)]
-    public List<ItemData> items = new List<ItemData>();
+    public List<ItemData> ItemModifyList = new List<ItemData>();
 
     [JsonProperty("忽略重力药水", Order = 13)]
     public bool IgnoreGravity { get; set; } = true;
     [JsonProperty("忽略重力药水按键", Order = 13)]
     public Keys IgnoreGravityKey = Keys.T;
+
+    [JsonProperty("自动垃圾桶", Order = 14)]
+    public bool AutoTrash { get; set; } = true;
+    [JsonProperty("自动垃圾桶按键", Order = 14)]
+    public Keys AutoTrashKey = Keys.C;
+    [JsonProperty("自动垃圾桶同步间隔", Order = 14)]
+    public int TrashSyncInterval { get; set; } = 500; // 默认1秒
+    [JsonProperty("自动垃圾桶表", Order = 14)]
+    public List<TrashData> TrashItems { get; set; } = new List<TrashData>();
 
     #region 预设参数方法
     public void SetDefault()
@@ -74,18 +83,22 @@ internal class Configuration
         KillKey = Keys.K;
         AutoUseItem = false;
         AutoUseKey = Keys.J;
-        AutoUseInterval = 500;
-        ItemManager = true;
-        ItemManagerKey = Keys.I;
+        UseItemInterval = 500;
+        ItemModify = true;
+        ItemModifyKey = Keys.I;
         ShowEditPrefixKey = Keys.P;
         FavoriteKey = Keys.O;
-        SocialAccessoriesEnabled = true;
+        SocialAccessory = true;
         ApplyPrefix = true;
         ApplyArmor = true;
         ApplyAccessory = true;
         SocialAccessoriesKey = Keys.N;
         IgnoreGravity = true;
         IgnoreGravityKey = Keys.T;
+        AutoTrash = true;
+        AutoTrashKey = Keys.C;
+        TrashSyncInterval = 500;
+        TrashItems = new List<TrashData>();
     }
     #endregion
 
