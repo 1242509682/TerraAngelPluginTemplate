@@ -253,10 +253,8 @@ public class UITool : Tool
 
     #region 自动垃圾桶管理窗口
     private static bool ShowAutoTrashWindow = false; // 显示自动垃圾桶窗口
-    private static string NewItemName = ""; // 新物品名称
-    private static int NewItemId = 0; // 新物品ID
-    private static string NewExclusionName = ""; // 新排除物品名称
-    private static int NewExclusionId = 0; // 新排除物品ID
+    private static string TrashSearchInput = ""; // 垃圾桶表搜索输入
+    private static string ExclusionSearchInput = ""; // 排除表搜索输入
     private static int AutoTrashSyncInterval = Config.TrashSyncInterval; // 自动回收同步间隔
     private Dictionary<int, int> ReturnAmounts = new Dictionary<int, int>(); // 临时存储需要返还的物品数量
     private int? WaitExcludeType = null; // 待处理的排除物品ID
@@ -265,6 +263,7 @@ public class UITool : Tool
     private static int CustomTime = 60; // 默认排除时间（秒）
     private bool ReturnAfterExclusion = false; // 是否在设置排除后执行返还
     private Dictionary<int, int> AmountCache = new Dictionary<int, int>(); // 缓存返还数量
+
     private void DrawAutoTrashWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(550, 550), ImGuiCond.FirstUseEver);
@@ -310,53 +309,30 @@ public class UITool : Tool
             ImGui.Separator();
             ImGui.TextColored(new Vector4(1, 0.5f, 0.5f, 1), "《自动垃圾桶表》");
 
-            // 添加新物品区域
-            ImGui.Columns(3, "add_trash_columns", false);
-            ImGui.SetColumnWidth(0, 200);
-
-            // 物品名称输入
-            ImGui.Text("物品名称:");
+            // 搜索区域
+            ImGui.Text("搜索物品:");
             ImGui.SameLine();
-            ImGui.SetNextItemWidth(120);
-            ImGui.InputText("##NewTrashItemName", ref NewItemName, 100);
-
-            ImGui.NextColumn();
-
-            // 物品ID输入
-            ImGui.Text("物品ID:");
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputTextWithHint("##TrashSearchInput", "输入名称或ID", ref TrashSearchInput, 100);
             ImGui.SameLine();
-            ImGui.SetNextItemWidth(80);
-            ImGui.InputInt("##NewTrashItemId", ref NewItemId);
-
-            ImGui.NextColumn();
-
-            // 添加按钮
-            if (ImGui.Button("添加物品"))
+            if (ImGui.Button("清空搜索"))
             {
-                if (NewItemId > 0 && !data.TrashList.ContainsKey(NewItemId))
-                {
-                    data.TrashList.Add(NewItemId, 0);
-                    Config.Write();
-                    NewItemId = 0;
-                    NewItemName = "";
-                }
-                else if (!string.IsNullOrEmpty(NewItemName))
-                {
-                    // 尝试通过名称查找物品
-                    int foundId = FindItemIdByName(NewItemName);
-                    if (foundId > 0 && !data.TrashList.ContainsKey(foundId))
-                    {
-                        data.TrashList.Add(foundId, 0);
-                        Config.Write();
-                        NewItemName = "";
-                    }
-                }
+                TrashSearchInput = "";
             }
 
-            ImGui.Columns(1);
-
-            // 获取所有垃圾桶物品
-            var trashItems = data.TrashList.ToList();
+            // 获取所有垃圾桶物品并应用搜索过滤
+            var trashItems = data.TrashList
+                .Select(item => new {
+                    Id = item.Key,
+                    Name = Lang.GetItemNameValue(item.Key) ?? $"未知物品 ({item.Key})",
+                    Amount = item.Value
+                })
+                .Where(item =>
+                    string.IsNullOrWhiteSpace(TrashSearchInput) ||
+                    item.Name.Contains(TrashSearchInput, StringComparison.OrdinalIgnoreCase) ||
+                    item.Id.ToString().Contains(TrashSearchInput)
+                )
+                .ToList();
 
             // 显示物品数量信息 + 清空按钮
             ImGui.Text($"垃圾桶物品 (共 {trashItems.Count} 个物品)");
@@ -372,7 +348,7 @@ public class UITool : Tool
 
                     foreach (var item in trashItems)
                     {
-                        int returned = ReturnItems(plr, item.Key, item.Value);
+                        int returned = ReturnItems(plr, item.Id, item.Amount);
                         totalItemsReturned += returned;
                         totalTypesReturned++;
                     }
@@ -402,11 +378,9 @@ public class UITool : Tool
             for (int i = 0; i < trashItems.Count; i++)
             {
                 var item = trashItems[i];
-                string itemName = Lang.GetItemNameValue(item.Key);
-                if (string.IsNullOrEmpty(itemName)) itemName = $"未知物品 ({item.Key})";
-                itemName = $"{i + 1}. {itemName}"; // 添加连续索引前缀
+                string displayName = $"{i + 1}. {item.Name}"; // 添加连续索引前缀
 
-                ImGui.PushID($"trash_{item.Key}");
+                ImGui.PushID($"trash_{item.Id}");
 
                 // 使用紧凑的5列布局
                 ImGui.Columns(5, "trash_item_columns", false);
@@ -417,37 +391,37 @@ public class UITool : Tool
                 ImGui.SetColumnWidth(4, 120); // 临时排除时间（新增列）
 
                 // 物品名称
-                ImGui.Text($"{itemName}");
+                ImGui.Text(displayName);
                 ImGui.NextColumn();
 
-                // 物品数量
-                ImGui.Text($"ID:{item.Key}");
+                // 物品ID
+                ImGui.Text($"ID:{item.Id}");
                 ImGui.NextColumn();
 
                 // 初始化返还数量（默认为1）
-                if (!ReturnAmounts.ContainsKey(item.Key))
+                if (!ReturnAmounts.ContainsKey(item.Id))
                 {
-                    ReturnAmounts[item.Key] = Math.Max(1, item.Value / 2); // 默认取一半数量
+                    ReturnAmounts[item.Id] = Math.Max(1, item.Amount / 2); // 默认取一半数量
                 }
 
                 // 返还数量滑块
-                int currentAmount = ReturnAmounts[item.Key];
+                int currentAmount = ReturnAmounts[item.Id];
                 ImGui.SetNextItemWidth(110);
-                ImGui.SliderInt($"##return_{item.Key}", ref currentAmount, 1, item.Value, $"{currentAmount}/{item.Value}");
-                ReturnAmounts[item.Key] = currentAmount;
+                ImGui.SliderInt($"##return_{item.Id}", ref currentAmount, 1, item.Amount, $"{currentAmount}/{item.Amount}");
+                ReturnAmounts[item.Id] = currentAmount;
                 ImGui.NextColumn();
 
                 // 单个物品的返还按钮处理
                 if (ImGui.Button("返还", new Vector2(40, 0)))
                 {
                     // 首先检查物品是否还在垃圾桶中
-                    if (!data.TrashList.ContainsKey(item.Key))
+                    if (!data.TrashList.ContainsKey(item.Id))
                     {
                         // 如果物品已不存在于垃圾桶中，重置所有相关状态
-                        ClientLoader.Chat.WriteLine($"物品 [c/4C92D8:{itemName}] 已不存在于垃圾桶中", Color.Yellow);
+                        ClientLoader.Chat.WriteLine($"物品 [c/4C92D8:{item.Name}] 已不存在于垃圾桶中", Color.Yellow);
 
                         // 重置所有临时状态变量
-                        if (WaitExcludeType == item.Key)
+                        if (WaitExcludeType == item.Id)
                         {
                             WaitExcludeType = 0;
                             ReturnAfterExclusion = false;
@@ -457,25 +431,25 @@ public class UITool : Tool
                     }
 
                     // 检查物品是否在临时排除期内
-                    if (AdventExcluded(item.Key))
+                    if (AdventExcluded(item.Id))
                     {
-                        string timeLeft = GetAdventTime(item.Key);
-                        ClientLoader.Chat.WriteLine($"物品 [c/4C92D8:{itemName}] 已被临时排除，剩余时间: {timeLeft}。正在返还...", Color.Yellow);
-                        ExecuteReturn(plr, data, item.Key, item.Value, currentAmount);
+                        string timeLeft = GetAdventTime(item.Id);
+                        ClientLoader.Chat.WriteLine($"物品 [c/4C92D8:{item.Name}] 已被临时排除，剩余时间: {timeLeft}。正在返还...", Color.Yellow);
+                        ExecuteReturn(plr, data, item.Id, item.Amount, currentAmount);
                     }
                     // 检查物品是否在排除表中
-                    else if (data.ExcluItem.Contains(item.Key))
+                    else if (data.ExcluItem.Contains(item.Id))
                     {
                         // 永久排除，直接返还
-                        ExecuteReturn(plr, data, item.Key, item.Value, currentAmount);
+                        ExecuteReturn(plr, data, item.Id, item.Amount, currentAmount);
                     }
                     else
                     {
                         // 缓存返还数量
-                        AmountCache[item.Key] = currentAmount;
+                        AmountCache[item.Id] = currentAmount;
 
                         // 如果不在排除表中，设置待处理状态
-                        WaitExcludeType = item.Key;
+                        WaitExcludeType = item.Id;
                         TryExcludeTime = CustomTime; // 使用自定义默认时间
                         ReturnAfterExclusion = true; // 标记需要执行返还
                         ShowExclusionWindows = true;
@@ -486,12 +460,12 @@ public class UITool : Tool
 
                 if (ImGui.Button("删除", new Vector2(50, 0)))
                 {
-                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(item.Key)}] 从自动垃圾桶删除", color);
-                    data.TrashList.Remove(item.Key);
+                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{item.Name}] 从自动垃圾桶删除", color);
+                    data.TrashList.Remove(item.Id);
                     Config.Write();
 
                     // 如果删除的是等待排除的物品，重置状态
-                    if (WaitExcludeType == item.Key)
+                    if (WaitExcludeType == item.Id)
                     {
                         WaitExcludeType = null;
                         ShowExclusionWindows = false;
@@ -499,8 +473,8 @@ public class UITool : Tool
                     }
 
                     // 清除缓存
-                    AmountCache.Remove(item.Key);
-                    ReturnAmounts.Remove(item.Key);
+                    AmountCache.Remove(item.Id);
+                    ReturnAmounts.Remove(item.Id);
                 }
 
                 ImGui.NextColumn();
@@ -508,9 +482,9 @@ public class UITool : Tool
                 // 临时排除时间显示
                 if (AdventExclusions != null)
                 {
-                    if (AdventExclusions.ContainsKey(item.Key) && AdventExclusions[item.Key] > DateTime.Now)
+                    if (AdventExclusions.ContainsKey(item.Id) && AdventExclusions[item.Id] > DateTime.Now)
                     {
-                        TimeSpan remaining = AdventExclusions[item.Key] - DateTime.Now;
+                        TimeSpan remaining = AdventExclusions[item.Id] - DateTime.Now;
                         int secondsLeft = (int)remaining.TotalSeconds;
                         ImGui.TextColored(new Vector4(1, 1, 0.5f, 1), $"剩余: {secondsLeft}秒");
                     }
@@ -527,7 +501,14 @@ public class UITool : Tool
             // 如果没有物品显示提示
             if (trashItems.Count == 0)
             {
-                ImGui.Text("垃圾桶列表为空,请将物品放入垃圾桶格子");
+                if (string.IsNullOrWhiteSpace(TrashSearchInput))
+                {
+                    ImGui.Text("垃圾桶列表为空,请将物品放入垃圾桶格子");
+                }
+                else
+                {
+                    ImGui.Text($"没有找到包含 '{TrashSearchInput}' 的物品");
+                }
             }
 
             ImGui.EndChild();
@@ -536,55 +517,29 @@ public class UITool : Tool
             ImGui.Separator();
             ImGui.TextColored(new Vector4(0.5f, 1, 0.5f, 1), "《排除物品表》");
 
-            // 添加新排除物品区域
-            ImGui.Columns(3, "add_exclusion_columns", false);
-            ImGui.SetColumnWidth(0, 200);
-
-            // 排除物品名称输入
-            ImGui.Text("物品名称:");
+            // 搜索区域
+            ImGui.Text("搜索物品:");
             ImGui.SameLine();
-            ImGui.SetNextItemWidth(120);
-            ImGui.InputText("##NewExclusionName", ref NewExclusionName, 100);
-
-            ImGui.NextColumn();
-
-            // 排除物品ID输入
-            ImGui.Text("物品ID:");
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputTextWithHint("##ExclusionSearchInput", "输入名称或ID", ref ExclusionSearchInput, 100);
             ImGui.SameLine();
-            ImGui.SetNextItemWidth(80);
-            ImGui.InputInt("##NewExclusionId", ref NewExclusionId);
-
-            ImGui.NextColumn();
-
-            // 添加按钮
-            if (ImGui.Button("添加排除"))
+            if (ImGui.Button("清空搜索##Exclusion"))
             {
-                if (NewExclusionId > 0 && !data.ExcluItem.Contains(NewExclusionId))
-                {
-                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(NewExclusionId)}] 添加到排除表", color);
-                    data.ExcluItem.Add(NewExclusionId);
-                    Config.Write();
-                    NewExclusionId = 0;
-                    NewExclusionName = "";
-                }
-                else if (!string.IsNullOrEmpty(NewExclusionName))
-                {
-                    // 尝试通过名称查找物品
-                    int foundId = FindItemIdByName(NewExclusionName);
-                    if (foundId > 0 && !data.ExcluItem.Contains(foundId))
-                    {
-                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(foundId)}] 添加到排除表", color);
-                        data.ExcluItem.Add(foundId);
-                        Config.Write();
-                        NewExclusionName = "";
-                    }
-                }
+                ExclusionSearchInput = "";
             }
 
-            ImGui.Columns(1);
-
-            // 获取所有排除物品
-            var excluItems = data.ExcluItem.ToList();
+            // 获取所有排除物品并应用搜索过滤
+            var excluItems = data.ExcluItem
+                .Select(id => new {
+                    Id = id,
+                    Name = Lang.GetItemNameValue(id) ?? $"未知物品 ({id})"
+                })
+                .Where(item =>
+                    string.IsNullOrWhiteSpace(ExclusionSearchInput) ||
+                    item.Name.Contains(ExclusionSearchInput, StringComparison.OrdinalIgnoreCase) ||
+                    item.Id.ToString().Contains(ExclusionSearchInput)
+                )
+                .ToList();
 
             // 显示物品数量信息 + 清空按钮
             ImGui.Text($"排除物品 (共 {excluItems.Count} 个物品)");
@@ -605,12 +560,10 @@ public class UITool : Tool
             // 使用索引显示所有排除物品
             for (int i = 0; i < excluItems.Count; i++)
             {
-                int itemId = excluItems[i];
-                string itemName = Lang.GetItemNameValue(itemId);
-                if (string.IsNullOrEmpty(itemName)) itemName = $"未知物品 ({itemId})";
-                itemName = $"{i + 1}. {itemName}"; // 添加连续索引前缀
+                var item = excluItems[i];
+                string displayName = $"{i + 1}. {item.Name}"; // 添加连续索引前缀
 
-                ImGui.PushID($"exclu_{itemId}");
+                ImGui.PushID($"exclu_{item.Id}");
 
                 // 使用紧凑的3列布局
                 ImGui.Columns(3, "exclusion_item_columns", false);
@@ -619,18 +572,18 @@ public class UITool : Tool
                 ImGui.SetColumnWidth(2, 120); // 删除按钮
 
                 // 物品名称
-                ImGui.Text($"{itemName}");
+                ImGui.Text(displayName);
                 ImGui.NextColumn();
 
                 // 物品ID
-                ImGui.Text($"ID:{itemId}");
+                ImGui.Text($"ID:{item.Id}");
                 ImGui.NextColumn();
 
                 // 删除按钮
                 if (ImGui.Button("删除", new Vector2(50, 0)))
                 {
-                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(itemId)}] 从排除表中删除", color);
-                    data.ExcluItem.Remove(itemId);
+                    ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{item.Name}] 从排除表中删除", color);
+                    data.ExcluItem.Remove(item.Id);
                     Config.Write();
                 }
 
@@ -641,7 +594,14 @@ public class UITool : Tool
             // 如果没有物品显示提示
             if (excluItems.Count == 0)
             {
-                ImGui.Text("排除列表为空");
+                if (string.IsNullOrWhiteSpace(ExclusionSearchInput))
+                {
+                    ImGui.Text("排除列表为空");
+                }
+                else
+                {
+                    ImGui.Text($"没有找到包含 '{ExclusionSearchInput}' 的排除物品");
+                }
             }
 
             ImGui.EndChild();
@@ -654,7 +614,8 @@ public class UITool : Tool
                     int itemId = plr.HeldItem.type;
                     if (!data.TrashList.ContainsKey(itemId))
                     {
-                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(itemId)}] 添加到自动垃圾桶", color);
+                        string itemName = Lang.GetItemNameValue(itemId) ?? $"未知物品 ({itemId})";
+                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{itemName}] 添加到自动垃圾桶", color);
                         data.TrashList.Add(itemId, 0);
                         Config.Write();
                     }
@@ -670,7 +631,8 @@ public class UITool : Tool
                     int itemId = plr.HeldItem.type;
                     if (!data.ExcluItem.Contains(itemId))
                     {
-                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{Lang.GetItemNameValue(itemId)}] 添加到排除表", color);
+                        string itemName = Lang.GetItemNameValue(itemId) ?? $"未知物品 ({itemId})";
+                        ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{itemName}] 添加到排除表", color);
                         data.ExcluItem.Add(itemId);
                         Config.Write();
                     }
