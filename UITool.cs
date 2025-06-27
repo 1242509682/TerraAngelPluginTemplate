@@ -956,14 +956,13 @@ public class UITool : Tool
                 SearchFilter = ""; // 清空搜索
             }
 
+            ImGui.SameLine();
+            ListPage(AllItems.Count); // 分页
+
             // 显示搜索结果信息
             if (!string.IsNullOrWhiteSpace(SearchFilter))
             {
                 ImGui.TextColored(new Vector4(1, 1, 0.5f, 1), $"找到 {AllItems.Count} 个匹配项");
-            }
-            else
-            {
-                ImGui.Text($"共 {AllItems.Count} 个物品预设");
             }
 
             // 物品列表
@@ -1074,9 +1073,6 @@ public class UITool : Tool
             }
 
             ImGui.EndChild();
-
-            // 分页与跳转
-            ListPage(AllItems.Count);
         }
         ImGui.End();
 
@@ -1107,20 +1103,6 @@ public class UITool : Tool
             NowPage--;
         }
 
-        // 添加页面跳转输入框
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(80);
-        int GotoPage = NowPage + 1;
-        if (ImGui.InputInt("跳转", ref GotoPage, 1, 10))
-        {
-            if (GotoPage > 0 && GotoPage <= AllPages)
-            {
-                // 播放界面点击音效
-                SoundEngine.PlaySound(SoundID.MenuTick);
-                NowPage = GotoPage - 1;
-            }
-        }
-
         // 下一页按钮
         ImGui.SameLine();
         if (ImGui.Button("下页") && NowPage < AllPages - 1)
@@ -1128,18 +1110,6 @@ public class UITool : Tool
             // 播放界面点击音效
             SoundEngine.PlaySound(SoundID.MenuTick);
             NowPage++;
-        }
-
-        // 添加页面大小选择器
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(100);
-        int newPageLimit = PageLimit;
-        if (ImGui.SliderInt("每页数量", ref newPageLimit, 5, 20))
-        {
-            // 当页面大小改变时重置当前页
-            NowPage = 0;
-            // 注意：实际实现中需要将PageLimit改为非const变量
-            // PageLimit = newPageLimit;
         }
     }
     #endregion
