@@ -78,6 +78,13 @@ internal class Configuration
     [JsonProperty("自定义传送点", Order = 15)]
     public Dictionary<string, Vector2> CustomTeleportPoints = new Dictionary<string, Vector2>();
 
+    [JsonProperty("清除钓鱼任务", Order = 16)]
+    public bool ClearAnglerQuests { get; set; } = true;
+    [JsonProperty("清除钓鱼任务按键", Order = 16)]
+    public Keys ClearQuestsKey = Keys.V;
+    [JsonProperty("清除钓鱼任务间隔(毫秒)", Order = 16)]
+    internal int ClearQuestsInterval = 2000;
+
     #region 预设参数方法
     public void SetDefault()
     {
@@ -110,6 +117,9 @@ internal class Configuration
         TrashSyncInterval = 100;
         TrashItems = new List<TrashData>();
         CustomTeleportPoints = new Dictionary<string, Vector2>();
+        ClearAnglerQuests = true;
+        ClearQuestsKey = Keys.V;
+        ClearQuestsInterval = 2000;
     }
     #endregion
 

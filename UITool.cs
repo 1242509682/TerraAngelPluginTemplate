@@ -1,13 +1,14 @@
-﻿using ImGuiNET;
+﻿using System.Numerics;
+using ImGuiNET;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
-using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
+using Terraria.GameContent.Events;
 using Terraria.ID;
 using static MyPlugin.MyPlugin;
 
@@ -28,6 +29,7 @@ public class UITool : Tool
     private bool EditSocialAccessoriesKey = false; // 社交栏饰品开关按键编辑状态
     private bool EditIgnoreGravityKey = false; // 忽略重力按键编辑状态
     private bool EditAutoTrashKey = false; // 自动垃圾桶按键编辑状态
+    private bool EditClearAnglerQuestsKey = false; // 清除钓鱼任务按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -48,14 +50,15 @@ public class UITool : Tool
         int mouseStrikeNPCInterval = Config.MouseStrikeInterval; // 伤害NPC间隔
         int StrikeVel = Config.MouseStrikeNPCVel; // 伤害值
 
-        bool itemModify = Config.ItemModify; // 修改手上物品开关
-
         bool socialEnabled = Config.SocialAccessory; // 社交栏饰品生效开关
         bool applyPrefix = Config.ApplyPrefix; // 开启额外饰品的前缀加成
         bool applyArmor = Config.ApplyArmor; // 开启装饰栏盔甲的护甲加成
         bool applyAccessory = Config.ApplyAccessory; // 开启额外饰品的原有被动功能
 
         bool applyIgnoreGravity = Config.IgnoreGravity; // 启用忽略重力药水效果
+
+        bool AutoClearAngel = Config.ClearAnglerQuests; // 清除钓鱼任务开关
+        int ClearAngelInterval = Config.ClearQuestsInterval; // 清除钓鱼任务按键
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -66,7 +69,7 @@ public class UITool : Tool
 
             // 定位传送区域
             ImGui.Separator();
-            if (ImGui.TreeNodeEx("定位传送", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Framed))
+            if (ImGui.TreeNodeEx("传送管理", ImGuiTreeNodeFlags.Framed))
             {
                 DrawTeleportUI(plr);
                 ImGui.TreePop();
@@ -90,72 +93,84 @@ public class UITool : Tool
                 }
             }
 
-            // 快速死亡复活开关（单bool + 自定义按键）
             ImGui.Separator();
-            ImGui.Checkbox("快速死亡/复活", ref killOrRESpawn);
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref Config.KillKey, ref EditKillKey);
-
-            // 回血设置 （bool + 滑块 + 自定义按键）
-            ImGui.SameLine();
-            ImGui.Checkbox("强制回血", ref Heal);
-            ImGui.SameLine(); // 回血按键设置
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref Config.HealKey, ref EditHealKey);
-            if (Heal)
+            if (ImGui.TreeNodeEx("辅助功能", ImGuiTreeNodeFlags.Framed))
             {
-                ImGui.Text("回血量:");
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(150);
-                ImGui.SliderInt("##HealAmount", ref HealVal, 1, 500, "%d HP");
-                ImGui.SameLine();
-                ImGui.Text($"{HealVal} HP");
-            }
+                ImGui.Checkbox("强制回血", ref Heal);
+                ImGui.SameLine(); // 回血按键设置
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                DrawKeySelector("按键", ref Config.HealKey, ref EditHealKey);
+                if (Heal)
+                {
+                    ImGui.Text("回血量:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    ImGui.SliderInt("##HealAmount", ref HealVal, 1, 500, "%d HP");
+                    ImGui.SameLine();
+                    ImGui.Text($"{HealVal} HP");
+                }
 
-            // 自动使用物品
-            ImGui.Separator();
-            ImGui.Checkbox("自动使用物品", ref autoUseItem);
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            DrawKeySelector("按键", ref Config.AutoUseKey, ref EditAutoUseKey);
-            if (autoUseItem)
-            {
-                ImGui.Text("使用间隔(毫秒):");
+                // 快速死亡复活开关（单bool + 自定义按键）
+                ImGui.Checkbox("快速死亡/复活", ref killOrRESpawn);
                 ImGui.SameLine();
-                ImGui.SetNextItemWidth(200);
-                ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 20000, "%d ms");
-            }
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                DrawKeySelector("按键", ref Config.KillKey, ref EditKillKey);
 
-            ImGui.Checkbox("启用鼠标范围伤害NPC", ref mouseStrikeNPC);
-            if (mouseStrikeNPC)
-            {
-                ImGui.Text("伤害范围:");
+                // 自动清理渔夫任务
+                ImGui.Checkbox("清渔夫任务", ref AutoClearAngel);
                 ImGui.SameLine();
-                ImGui.SetNextItemWidth(150);
-                ImGui.SliderInt("##StrikeRange", ref mouseStrikeNPCRange, 0, 85, "%d 格");
-                ImGui.SameLine();
-                ImGui.Text($"{mouseStrikeNPCRange} 格");
+                DrawKeySelector("按键", ref Config.ClearQuestsKey, ref EditClearAnglerQuestsKey);
+                if (AutoClearAngel)
+                {
+                    ImGui.Text("清理间隔(毫秒):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##AnglerQuestsInterval", ref ClearAngelInterval, 1, 50000, "%d ms");
+                }
 
-                ImGui.Text("伤害间隔(毫秒):");
+                // 自动使用物品
+                ImGui.Checkbox("自动使用物品", ref autoUseItem);
                 ImGui.SameLine();
-                ImGui.SetNextItemWidth(200);
-                ImGui.SliderInt("##StrikeInterval", ref mouseStrikeNPCInterval, 1, 20000, "%d ms");
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                DrawKeySelector("按键", ref Config.AutoUseKey, ref EditAutoUseKey);
+                if (autoUseItem)
+                {
+                    ImGui.Text("使用间隔(毫秒):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 20000, "%d ms");
+                }
 
-                ImGui.Text("伤害值:");
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(200);
-                ImGui.SliderInt("##StrikeVel", ref StrikeVel, 0, 20000, "%d 点");
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("不设置数值时使用手上物品伤害");
+                ImGui.Checkbox("启用鼠标范围伤害NPC", ref mouseStrikeNPC);
+                if (mouseStrikeNPC)
+                {
+                    ImGui.Text("伤害范围:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    ImGui.SliderInt("##StrikeRange", ref mouseStrikeNPCRange, 0, 85, "%d 格");
+                    ImGui.SameLine();
+                    ImGui.Text($"{mouseStrikeNPCRange} 格");
+
+                    ImGui.Text("伤害间隔(毫秒):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##StrikeInterval", ref mouseStrikeNPCInterval, 1, 20000, "%d ms");
+
+                    ImGui.Text("伤害值:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##StrikeVel", ref StrikeVel, 0, 20000, "%d 点");
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip("不设置数值时使用手上物品伤害");
+                }
+
+                ImGui.TreePop();
             }
 
             // 在 DrawUI 方法中添加物品管理部分
             ImGui.Separator();
-            ImGui.Checkbox("物品管理", ref itemModify);
-            if (itemModify)
+            if (ImGui.TreeNodeEx("物品管理", ImGuiTreeNodeFlags.Framed))
             {
-                ImGui.SameLine();
                 if (ImGui.Button("物品编辑器"))
                 {
                     SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
@@ -168,8 +183,6 @@ public class UITool : Tool
                     DrawItemManagerWindow(plr);
                 }
 
-                // 添加自动垃圾桶按钮
-                ImGui.SameLine();
                 if (ImGui.Button("自动垃圾桶"))
                 {
                     SoundEngine.PlaySound(SoundID.MenuOpen);
@@ -181,61 +194,142 @@ public class UITool : Tool
                 {
                     DrawAutoTrashWindow(plr);
                 }
-            }
 
-            // 使重力药水、重力球等不会反转屏幕效果
-            ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
-            ImGui.SameLine();
-            DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
-
-            // 社交栏饰品开关
-            ImGui.SameLine();
-            ImGui.Checkbox("社交栏饰品生效", ref socialEnabled);
-            ImGui.SameLine();
-            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-            ImGui.SameLine();
-            DrawKeySelector("按键", ref Config.SocialAccessoriesKey, ref EditSocialAccessoriesKey);
-            if (socialEnabled)
-            {
-                ImGui.Checkbox("前缀加成", ref applyPrefix);
+                // 一键修改饰品前缀按钮
+                if (ImGui.Button("一键前缀"))
+                {
+                    // 播放界面打开音效
+                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                    ShowEditPrefix = true;
+                    PrefixId = 0; // 重置为0
+                }
                 ImGui.SameLine();
-                ImGui.Checkbox("盔甲防御", ref applyArmor);
+                DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
+
+                // 显示一键修改前缀窗口
+                if (ShowEditPrefix)
+                {
+                    DrawEditPrefixWindow();
+                }
+
+                // 一键收藏按钮
+                if (ImGui.Button("一键收藏背包"))
+                {
+                    // 播放收藏音效
+                    SoundEngine.PlaySound(SoundID.MenuTick);
+
+                    // 收藏所有格子物品（包括虚空袋）
+                    int favoritedItems = FavoriteAllItems(plr);
+
+                    // 显示操作结果
+                    ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
+                }
                 ImGui.SameLine();
-                ImGui.Checkbox("饰品功能", ref applyAccessory);
+                DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
+
+                // 使重力药水、重力球等不会反转屏幕效果
+                ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
+
+                // 社交栏饰品开关
+                ImGui.Checkbox("社交栏饰品生效", ref socialEnabled);
+                ImGui.SameLine();
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.SocialAccessoriesKey, ref EditSocialAccessoriesKey);
+                if (socialEnabled)
+                {
+                    ImGui.Checkbox("前缀加成", ref applyPrefix);
+                    ImGui.SameLine();
+                    ImGui.Checkbox("盔甲防御", ref applyArmor);
+                    ImGui.SameLine();
+                    ImGui.Checkbox("饰品功能", ref applyAccessory);
+                }
+
+                ImGui.TreePop();
             }
 
-            // 一键修改饰品前缀按钮
-            if (ImGui.Button("一键前缀"))
+            // 在已有的UI结构中添加事件控制区域
+            ImGui.Separator();
+            if (ImGui.TreeNodeEx("事件管理", ImGuiTreeNodeFlags.Framed))
             {
-                // 播放界面打开音效
-                SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                ShowEditPrefix = true;
-                PrefixId = 0; // 重置为0
+                // 血月按钮
+                if (ImGui.Button("血月"))
+                {
+                    ToggleBloodMoon();
+                }
+
+                // 日食按钮
+                ImGui.SameLine();
+                if (ImGui.Button("日食"))
+                {
+                    ToggleEclipse();
+                }
+
+                // 满月按钮
+                ImGui.SameLine();
+                if (ImGui.Button("满月"))
+                {
+                    ToggleFullMoon();
+                }
+
+                // 下雨按钮
+                ImGui.SameLine();
+                if (ImGui.Button("下雨"))
+                {
+                    ToggleRain();
+                }
+
+                // 史莱姆雨按钮
+                ImGui.SameLine();
+                if (ImGui.Button("史莱姆雨"))
+                {
+                    ToggleSlimeRain();
+                }
+
+                // 时间按钮
+                if (ImGui.Button("时间"))
+                {
+                    ToggleTime();
+                }
+
+                // 沙尘暴按钮
+                ImGui.SameLine();
+                if (ImGui.Button("沙尘暴"))
+                {
+                    ToggleSandstorm();
+                }
+
+                // 灯笼夜按钮
+                ImGui.SameLine();
+                if (ImGui.Button("灯笼夜"))
+                {
+                    ToggleLanternNight();
+                }
+
+                // 陨石按钮
+                ImGui.SameLine();
+                if (ImGui.Button("陨石"))
+                {
+                    TriggerMeteor();
+                }
+
+                // 入侵按钮
+                ImGui.SameLine();
+                if (ImGui.Button("入侵事件"))
+                {
+                    ShowInvasionWindow = true;
+                }
+
+                // 显示入侵选择窗口
+                if (ShowInvasionWindow)
+                {
+                    DrawInvasionWindow();
+                }
+
+                ImGui.TreePop();
             }
-            ImGui.SameLine();
-            DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
-
-            // 显示一键修改前缀窗口
-            if (ShowEditPrefix)
-            {
-                DrawEditPrefixWindow();
-            }
-
-            // 一键收藏按钮
-            ImGui.SameLine();
-            if (ImGui.Button("一键收藏背包"))
-            {
-                // 播放收藏音效
-                SoundEngine.PlaySound(SoundID.MenuTick);
-
-                // 收藏所有格子物品（包括虚空袋）
-                int favoritedItems = FavoriteAllItems(plr);
-
-                // 显示操作结果
-                ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
-            }
-            ImGui.SameLine();
-            DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
         }
 
         // 更新配置值
@@ -248,9 +342,6 @@ public class UITool : Tool
         //自动使用物品
         Config.AutoUseItem = autoUseItem;
         Config.UseItemInterval = autoUseInterval;
-
-        // 更新物品管理器配置
-        Config.ItemModify = itemModify;
 
         // 鼠标位置伤害NPC
         Config.MouseStrikeNPC = mouseStrikeNPC;
@@ -265,6 +356,9 @@ public class UITool : Tool
         Config.ApplyAccessory = applyAccessory; // 应用饰品效果开关
 
         Config.IgnoreGravity = applyIgnoreGravity; // 忽略重力药水效果开关
+
+        Config.ClearAnglerQuests = AutoClearAngel; // 清除钓鱼任务开关
+        Config.ClearQuestsInterval = ClearAngelInterval; // 清除钓鱼任务间隔
 
         // 保存按钮
         ImGui.Separator();
@@ -284,6 +378,381 @@ public class UITool : Tool
             Config.Write();
             ClientLoader.Chat.WriteLine("已重置为默认设置", color);
         }
+    }
+    #endregion
+
+    #region 世界事件控制方法
+    private void ToggleTime() // 切换时间状态
+    {
+        if (Main.dayTime)
+        {
+            Main.dayTime = false; // 如果是日食则切换到晚上
+            Main.time = 0.0;
+        }
+        else
+        {
+            Main.dayTime = true;
+            Main.time = 9000.0;
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.SetTime);
+
+        ClientLoader.Chat.WriteLine($"时间已修改为{(Main.dayTime ? "白天" : "晚上")}", Color.Yellow);
+    }
+
+    // 切换血月状态
+    private void ToggleBloodMoon()
+    {
+        Main.bloodMoon = !Main.bloodMoon;
+
+        if (Main.netMode == 2)
+        {
+            if (Main.bloodMoon)
+            {
+                Main.bloodMoon = false;
+            }
+            else
+            {
+                Main.dayTime = false;
+                Main.bloodMoon = true;
+                Main.time = 0.0;
+            }
+
+            // 发送世界数据更新
+            NetMessage.SendData(MessageID.WorldData);
+        }
+
+        ClientLoader.Chat.WriteLine($"血月事件已{(Main.bloodMoon ? "开始" : "停止")}", Color.Yellow);
+    }
+
+    // 切换日食
+    private void ToggleEclipse()
+    {
+        if (Main.dayTime)
+        {
+            Main.eclipse = !Main.eclipse; // 切换日食状态
+        }
+        else
+        {
+            Main.dayTime = true;
+            Main.eclipse = true; // 切换日食状态
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+
+        ClientLoader.Chat.WriteLine($"日食事件已{(Main.eclipse ? "开始" : "停止")}", Color.Yellow);
+    }
+
+    // 切换满月事件
+    private void ToggleFullMoon()
+    {
+        if (Main.dayTime)
+        {
+            Main.SkipToTime(0, true); // 跳到晚上
+            Main.dayTime = false;
+            Main.moonPhase = 0;
+            Main.time = 0.0;
+        }
+        else if(Main.moonPhase != 0)
+        {
+            Main.moonPhase = 0; // 如果不是满月则设置为满月
+        }
+        else
+        {
+            Main.moonPhase = Main.rand.Next(1, 8); // 如果是满月则随机设置为其他月相
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+
+        ClientLoader.Chat.WriteLine("已触发满月", Color.Yellow);
+    }
+
+    // 切换下雨状态
+    private void ToggleRain()
+    {
+        if (Main.raining)
+        {
+            Main.StopRain();
+        }
+        else
+        {
+            Main.StartRain();
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+
+        ClientLoader.Chat.WriteLine($"下雨已{(Main.raining ? "开始" : "停止")}", Color.Yellow);
+    }
+
+    // 切换史莱姆雨状态
+    private void ToggleSlimeRain()
+    {
+        if (Main.slimeRain)
+        {
+            Main.slimeRain = false;
+            Main.StopSlimeRain(false);
+        }
+        else
+        {
+            Main.slimeRain = true;
+            Main.StartSlimeRain(true);
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+
+        ClientLoader.Chat.WriteLine($"史莱姆雨已{(Main.slimeRain ? "开始" : "停止")}", Color.Yellow);
+    }
+
+    // 切换沙尘暴状态
+    private void ToggleSandstorm()
+    {
+        if (Sandstorm.Happening)
+        {
+            Sandstorm.Happening = false;
+            Sandstorm.TimeLeft = 0;
+            ChangeSeverityIntentions();
+        }
+        else
+        {
+            Sandstorm.Happening = true;
+            Sandstorm.TimeLeft = Main.rand.Next(28800, 86401);
+            ChangeSeverityIntentions();
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+
+        ClientLoader.Chat.WriteLine($"沙尘暴已{(Sandstorm.Happening ? "开始" : "停止")}", Color.Yellow);
+    }
+
+    // 更改沙尘暴的严重程度
+    public static void ChangeSeverityIntentions()
+    {
+        if (Sandstorm.Happening)
+        {
+            Sandstorm.IntendedSeverity = 0.4f + Main.rand.NextFloat();
+        }
+        else if (Main.rand.Next(3) == 0)
+        {
+            Sandstorm.IntendedSeverity = 0f;
+        }
+        else
+        {
+            Sandstorm.IntendedSeverity = Main.rand.NextFloat() * 0.3f;
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+    }
+
+    // 切换灯笼夜状态
+    private void ToggleLanternNight()
+    {
+        LanternNight.ToggleManualLanterns();
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+        ClientLoader.Chat.WriteLine($"灯笼夜已{(LanternNight.LanternsUp ? "开始" : "停止")}", Color.Yellow);
+    }
+
+    // 触发陨石事件
+    private void TriggerMeteor()
+    {
+        WorldGen.spawnMeteor = false;
+        WorldGen.dropMeteor();
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+
+        ClientLoader.Chat.WriteLine("已触发陨石事件", Color.Yellow);
+    }
+    #endregion
+
+    #region 入侵事件管理器
+    private bool ShowInvasionWindow = false; // 显示入侵选择窗口
+    private void DrawInvasionWindow()
+    {
+        ImGui.SetNextWindowSize(new Vector2(350, 300), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("选择入侵类型", ref ShowInvasionWindow, ImGuiWindowFlags.NoCollapse))
+        {
+            ImGui.Text("选择入侵类型:");
+            ImGui.Separator();
+
+            if (ImGui.Button("哥布林入侵"))
+            {
+                StartInvasion(1);
+                ShowInvasionWindow = false;
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("雪人军团"))
+            {
+                StartInvasion(2);
+                ShowInvasionWindow = false;
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("海盗入侵"))
+            {
+                StartInvasion(3);
+                ShowInvasionWindow = false;
+            }
+
+            if (ImGui.Button("火星人入侵"))
+            {
+                StartInvasion(4);
+                ShowInvasionWindow = false;
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("南瓜月"))
+            {
+                StartMoonEvent(1);
+                ShowInvasionWindow = false;
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("霜月"))
+            {
+                StartMoonEvent(2);
+                ShowInvasionWindow = false;
+            }
+
+            ImGui.Separator();
+            ImGui.Text("当前入侵状态:");
+
+            if (Main.invasionSize > 0)
+            {
+                string invasionName = GetInvasionName(Main.invasionType);
+                ImGui.Text($"{invasionName}进行中 ({Main.invasionSize} 剩余)");
+
+                if (ImGui.Button("停止入侵"))
+                {
+                    StopInvasion();
+                    ShowInvasionWindow = false;
+                }
+            }
+            else if (DD2Event.Ongoing)
+            {
+                ImGui.Text("撒旦军队进行中");
+
+                if (ImGui.Button("停止入侵"))
+                {
+                    StopInvasion();
+                    ShowInvasionWindow = false;
+                }
+            }
+            else
+            {
+                ImGui.Text("没有进行中的入侵");
+            }
+        }
+        ImGui.End();
+    }
+
+    // 开始入侵事件
+    private void StartInvasion(int type)
+    {
+        Main.StartInvasion(type);
+
+        string invasionName = GetInvasionName(type);
+        ClientLoader.Chat.WriteLine($"已开始{invasionName}", Color.Yellow);
+    }
+
+    // 开始月亮事件
+    private void StartMoonEvent(int moonType)
+    {
+        if (moonType == 1) // 南瓜月
+        {
+            SetPumpkinMoon(true);
+            NPC.waveKills = 0f;
+            NPC.waveNumber = 1;
+            ClientLoader.Chat.WriteLine("已开始南瓜月事件", Color.Yellow);
+        }
+        else if (moonType == 2) // 霜月
+        {
+            SetFrostMoon(true);
+            NPC.waveKills = 0f;
+            NPC.waveNumber = 1;
+            ClientLoader.Chat.WriteLine("已开始霜月事件", Color.Yellow);
+        }
+
+        Main.bloodMoon = false;
+    }
+
+    // 设置南瓜月事件
+    public void SetPumpkinMoon(bool pumpkinMoon)
+    {
+        if (pumpkinMoon)
+        {
+            Main.dayTime = false;
+            Main.pumpkinMoon = true;
+            Main.time = 0.0;
+        }
+        else
+        {
+            Main.dayTime = true;
+            Main.pumpkinMoon = false;
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+    }
+
+    // 设置霜月事件
+    public void SetFrostMoon(bool snowMoon)
+    {
+        if (snowMoon)
+        {
+            Main.dayTime = false;
+            Main.snowMoon = true;
+            Main.time = 0.0;
+        }
+        else
+        {
+            Main.dayTime = true;
+            Main.snowMoon = false;
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+    }
+
+    // 停止入侵事件
+    private void StopInvasion()
+    {
+        if (DD2Event.Ongoing)
+        {
+            DD2Event.StopInvasion();
+        }
+        else
+        {
+            Main.invasionSize = 0;
+        }
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+
+        ClientLoader.Chat.WriteLine("已停止当前入侵", Color.Yellow);
+    }
+    #endregion
+
+    #region 获取入侵名称
+    private string GetInvasionName(int invasionType)
+    {
+        return invasionType switch
+        {
+            1 => "哥布林入侵",
+            2 => "雪人军团",
+            3 => "海盗入侵",
+            4 => "火星人入侵",
+            _ => "未知入侵"
+        };
     }
     #endregion
 
@@ -431,6 +900,16 @@ public class UITool : Tool
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到地牢入口");
+
+        ImGui.SameLine();
+
+        // 陨石按钮
+        if (ImGui.Button("陨石", new Vector2(buttonWidth, 40)))
+        {
+            TPMeteor(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到陨石附近");
     }
     #endregion
 
@@ -485,6 +964,7 @@ public class UITool : Tool
         ClientLoader.Chat.WriteLine($"已传送到死亡地点 ({(int)position.X / 16}, {(int)position.Y / 16})", Color.Yellow);
     }
 
+    #region 传送到NPC
     //  NPC传送方法
     private void TPNPC(Player plr, int npcType)
     {
@@ -517,8 +997,10 @@ public class UITool : Tool
             }
         }
         return null!;
-    }
+    } 
+    #endregion
 
+    #region 微光
     // 传送微光湖
     private void TPShimmerLake(Player plr)
     {
@@ -554,8 +1036,10 @@ public class UITool : Tool
             }
         }
         return Vector2.Zero;
-    }
+    } 
+    #endregion
 
+    #region 神庙
     // 传送神庙
     private void TPJungleTemple(Player plr)
     {
@@ -591,8 +1075,10 @@ public class UITool : Tool
             }
         }
         return Vector2.Zero;
-    }
+    } 
+    #endregion
 
+    #region 花苞
     // 传送到花苞
     private void TPPlanteraBulb(Player plr)
     {
@@ -627,7 +1113,9 @@ public class UITool : Tool
         }
         return Vector2.Zero;
     }
+    #endregion
 
+    #region 地牢
     // 传送到地牢
     private void TPDungeon(Player plr)
     {
@@ -656,7 +1144,9 @@ public class UITool : Tool
 
         return Vector2.Zero;
     }
+    #endregion
 
+    #region 宝藏袋
     //传送到宝藏袋
     private void TPBossBag(Player plr)
     {
@@ -690,7 +1180,126 @@ public class UITool : Tool
 
         return Vector2.Zero;
     }
+    #endregion
 
+    #region 陨石
+    // 传送到陨石坑安全位置
+    private void TPMeteor(Player plr)
+    {
+        StartTeleport("正在定位陨石位置...", new Vector4(0.6f, 0.8f, 1f, 1f));
+
+        // 查找安全位置
+        Vector2? safePos = FindSafeMeteorPosition();
+
+        if (safePos.HasValue)
+        {
+            plr.Teleport(safePos.Value, 10);
+            ClientLoader.Chat.WriteLine($"已传送到陨石坑安全位置 ({(int)safePos.Value.X / 16}, {(int)safePos.Value.Y / 16})", Color.Yellow);
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine("未找到安全的陨石坑位置，无法传送", Color.Red);
+        }
+    }
+
+    // 查找陨石并返回安全位置
+    private Vector2? FindSafeMeteorPosition()
+    {
+        int meteorCount = 0; // 统计陨石方块数量
+
+        for (int x = 0; x < Main.maxTilesX; x++)
+        {
+            for (int y = 0; y < Main.maxTilesY; y++)
+            {
+                Tile tile = Main.tile[x, y];
+                if (tile == null! || !tile.active() || tile.type != TileID.Meteorite)
+                {
+                    continue;
+                }
+
+                meteorCount++; // 统计陨石方块
+
+                // 在陨石上方寻找安全位置
+                Vector2? safePos = FindSafePositionAbove(x, y - 3);
+                if (safePos.HasValue)
+                {
+                    // 只有陨石数量超过100时才返回位置
+                    if (meteorCount > 100)
+                    {
+                        return safePos.Value;
+                    }
+                }
+            }
+        }
+
+        // 如果陨石数量不足，显示信息
+        if (meteorCount > 0 && meteorCount <= 100)
+        {
+            ClientLoader.Chat.WriteLine($"陨石数量不足 ({meteorCount}/100)，无法安全传送", Color.Yellow);
+        }
+
+        return null;
+    }
+
+    // 在指定位置上方寻找安全站立点
+    private Vector2? FindSafePositionAbove(int tileX, int tileY)
+    {
+        // 从陨石位置向上搜索安全站立点
+        for (int yOffset = -5; yOffset > -50; yOffset--)
+        {
+            int checkY = tileY + yOffset;
+
+            // 检查当前位置是否安全
+            if (IsPositionSafe(tileX, checkY))
+            {
+                return new Vector2(tileX * 16, (checkY - 3) * 16);
+            }
+        }
+        return null;
+    }
+
+    // 检查位置是否安全（没有方块阻挡）
+    private bool IsPositionSafe(int tileX, int tileY)
+    {
+        // 检查玩家站立区域（2x3区域）是否有方块
+        for (int x = tileX - 1; x <= tileX + 1; x++)
+        {
+            for (int y = tileY - 2; y <= tileY; y++)
+            {
+                // 跳过无效坐标
+                if (x < 0 || x >= Main.maxTilesX || y < 0 || y >= Main.maxTilesY)
+                    return false;
+
+                Tile tile = Main.tile[x, y];
+                if (tile != null! && tile.active() && Main.tileSolid[tile.type])
+                {
+                    return false;
+                }
+            }
+        }
+
+        // 检查脚下是否有支撑物
+        int groundY = tileY + 1;
+        if (groundY >= Main.maxTilesY) return false;
+
+        bool hasGround = false;
+        for (int x = tileX - 1; x <= tileX + 1; x++)
+        {
+            if (x < 0 || x >= Main.maxTilesX) continue;
+
+            Tile groundTile = Main.tile[x, groundY];
+            if (groundTile != null! && groundTile.active() && Main.tileSolid[groundTile.type])
+            {
+                hasGround = true;
+                break;
+            }
+        }
+
+        return hasGround;
+    }
+    #endregion
+
+    #region 自定义
     // 传送到自定义点
     private void TPCustomPoint(Player plr, Vector2 pos, string pointName)
     {
@@ -711,7 +1320,9 @@ public class UITool : Tool
 
         // 重置表单
         NewPointName = "";
-    }
+    } 
+    #endregion
+
     #endregion
 
     #region 死亡地点选择窗口

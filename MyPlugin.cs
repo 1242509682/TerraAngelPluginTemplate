@@ -16,7 +16,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 7);
+    public Version Version => new(1, 0, 8);
     #endregion
 
     #region 注册与卸载
@@ -85,7 +85,11 @@ public class MyPlugin(string path) : Plugin(path)
         //自动使用物品
         AutoUseItem(InputSystem.IsKeyPressed(Config.AutoUseKey));
 
-        SetItem(InputSystem.IsKeyPressed(Config.ItemModifyKey));
+        //使用物品时伤害鼠标范围内的NPC
+        UseItemStrikeNPC(Config.MouseStrikeNPC);
+
+        //快捷键I 自动应用修改物品
+        ModifyItem(InputSystem.IsKeyPressed(Config.ItemModifyKey));
 
         //快捷键P 开启关闭修改批量前缀窗口
         if (InputSystem.IsKeyPressed(Config.ShowEditPrefixKey))
@@ -134,12 +138,37 @@ public class MyPlugin(string path) : Plugin(path)
         // 更新传送进度
         UpdateTeleportProgress();
 
-        //使用物品时伤害鼠标范围内的NPC
-        UseItemStrikeNPC(Config.MouseStrikeNPC);
-
         // 记录死亡坐标
         RecordDeathPoint(Main.LocalPlayer);
+
+        // 切换清除钓鱼任务状态
+        if (InputSystem.IsKeyPressed(Config.ClearQuestsKey))
+        {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
+            Config.ClearAnglerQuests = !Config.ClearAnglerQuests;
+            string status = Config.ClearAnglerQuests ? "启用" : "禁用";
+            ClientLoader.Chat.WriteLine($"清理渔夫任务已{status}", Color.Yellow);
+        }
+
+        // 更新清除钓鱼任务状态
+        ClearAnglerQuests(Config.ClearAnglerQuests);
     }
+    #endregion
+
+    #region 清理钓鱼任务方法
+    public static long LastQuestsTime = 0;
+    public static void ClearAnglerQuests(bool clear)
+    {
+        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        if (!clear || now - LastQuestsTime < Config.ClearQuestsInterval) return;
+
+        Main.anglerWhoFinishedToday.Clear();
+        Main.anglerQuestFinished = false;
+        if (Main.netMode == 2)
+            NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
+
+        LastQuestsTime = now;
+    } 
     #endregion
 
     #region 记录死亡位置（在玩家死亡时调用）
@@ -292,7 +321,7 @@ public class MyPlugin(string path) : Plugin(path)
     #endregion
 
     #region 修改手上物品方法
-    private void SetItem(bool key)
+    private void ModifyItem(bool key)
     {
         if (!Config.ItemModify || !key) return;
 
