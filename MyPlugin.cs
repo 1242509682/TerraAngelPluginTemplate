@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using System.Numerics;
+using Microsoft.Xna.Framework;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
@@ -6,6 +7,7 @@ using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
+using static MyPlugin.UITool;
 
 namespace MyPlugin;
 
@@ -14,7 +16,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 6);
+    public Version Version => new(1, 0, 7);
     #endregion
 
     #region 注册与卸载
@@ -128,6 +130,60 @@ public class MyPlugin(string path) : Plugin(path)
 
         // 触发自动垃圾桶方法
         AutoTrash();
+
+        // 更新传送进度
+        UpdateTeleportProgress();
+
+        //使用物品时伤害鼠标范围内的NPC
+        UseItemStrikeNPC(Config.MouseStrikeNPC);
+
+        // 记录死亡坐标
+        RecordDeathPoint(Main.LocalPlayer);
+    }
+    #endregion
+
+    #region 记录死亡位置（在玩家死亡时调用）
+    public static void RecordDeathPoint(Player plr)
+    {
+        // 只在死亡状态下 复活时间为0秒时记录
+        if (!plr.dead || plr.respawnTimer != 0) return;
+
+        Vector2 point = plr.position;
+
+        // 检查是否已经存在相同或非常接近的位置
+        bool Exists = DeathPositions.Any(pos =>
+            Math.Abs(pos.X - point.X) < 16 &&
+            Math.Abs(pos.Y - point.Y) < 16);
+
+        // 如果不重复，则添加新位置
+        if (!Exists)
+        {
+            // 添加当前死亡位置
+            DeathPositions.Add(point);
+            ClientLoader.Chat.WriteLine($"已记录死亡位置 ({(int)point.X / 16}, {(int)point.Y / 16})", Color.Yellow);
+        }
+    }
+    #endregion
+
+    #region 更新传送程序
+    public static void UpdateTeleportProgress()
+    {
+        if (TP)
+        {
+            TPProgress += 0.05f;
+            if (TPProgress >= 1f)
+            {
+                TP = false;
+                ClientLoader.Chat.WriteLine("传送完成!", Color.Yellow);
+                SoundEngine.PlaySound(SoundID.Item6); // 传送完成音效
+            }
+        }
+
+        // 检查冷却时间结束
+        if (TPCooldown && (Main.GameUpdateCount - LastTPTime) > 180)
+        {
+            TPCooldown = false;
+        }
     }
     #endregion
 
@@ -232,7 +288,7 @@ public class MyPlugin(string path) : Plugin(path)
             AdventExclusions.Remove(itemType);
         }
         return "0秒";
-    } 
+    }
     #endregion
 
     #region 修改手上物品方法
@@ -318,9 +374,11 @@ public class MyPlugin(string path) : Plugin(path)
     #endregion
 
     #region 自动使用物品方法
-    private static long AutoUseTime = 0;
-    private static void AutoUseItem(bool key)
+    public static long AutoUseTime = 0;
+    private void AutoUseItem(bool key)
     {
+        var plr = Main.player[Main.myPlayer];
+
         if (key)
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
@@ -329,45 +387,42 @@ public class MyPlugin(string path) : Plugin(path)
             ClientLoader.Chat.WriteLine($"自动使用物品已{status}", Color.Yellow);
         }
 
-        if (Config.AutoUseItem)
+        if (!Config.AutoUseItem) return;
+
+        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        if (now - AutoUseTime < Config.UseItemInterval) return;
+
+        // 使用当前手持物品
+        if (plr.HeldItem.IsAir || plr.HeldItem.type == 0)
         {
-            long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-            if (now - AutoUseTime < Config.UseItemInterval) return;
-
-            var plr = Main.player[Main.myPlayer];
-
-            // 使用当前手持物品
-            if (plr.HeldItem.IsAir || plr.HeldItem.type == 0)
-            {
-                plr.controlUseItem = false;
-                plr.ItemCheck();
-            }
-            else
-            {
-                plr.controlUseItem = true;
-                plr.dashDelay = 0; //重置冲刺冷却
-                plr.dashType = 2; // 设置冲刺类型为2（分趾袜距离）
-                plr.ItemCheck();
-                //使用物品时伤害鼠标范围内的NPC
-                UseItemStrikeNPC(plr.controlUseItem);
-            }
-
-            // 发送网络同步消息
-            if (Main.netMode == 2)
-            {
-                NetMessage.SendData(MessageID.PlayerControls, -1, -1, null, plr.whoAmI);
-            }
-
-            // 重置冷却时间
-            AutoUseTime = now;
+            plr.controlUseItem = false;
+            plr.ItemCheck();
         }
+        else
+        {
+            plr.controlUseItem = true;
+            plr.dashDelay = 0; // 重置冲刺冷却
+            plr.dashType = 2; // 设置冲刺类型
+            plr.ItemCheck();
+        }
+
+        // 发送网络同步消息
+        if (Main.netMode == 2)
+        {
+            NetMessage.SendData(MessageID.PlayerControls, -1, -1, null, plr.whoAmI);
+        }
+
+        // 重置冷却时间
+        AutoUseTime = now;
     }
     #endregion
 
     #region 使用物品时伤害鼠标范围内的NPC
+    private static long MouseStrikeTime = 0;
     private static void UseItemStrikeNPC(bool key)
     {
-        if (!Config.MouseStrikeNPC || !key) return;
+        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        if (!key || now - MouseStrikeTime < Config.MouseStrikeInterval) return;
 
         var plr = Main.player[Main.myPlayer];
         var pos = InputSystem.MousePosition + Main.screenPosition;
@@ -377,14 +432,30 @@ public class MyPlugin(string path) : Plugin(path)
         {
             if (npc == null) continue;
 
-            npc.StrikeNPC(plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, false, false, false);
-            plr.ApplyDamageToNPC(npc, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit > 0); // 应用伤害到NPC
-            if (Main.netMode == 2)
+            if (Config.MouseStrikeNPCVel > 0)
             {
-                npc.netUpdate = true; // 更新网络状态
-                NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit);
+                npc.StrikeNPC(Config.MouseStrikeNPCVel, 0, 0, false, false, false);
+                plr.ApplyDamageToNPC(npc, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit > 0); // 应用伤害到NPC
+                if (Main.netMode == 2)
+                {
+                    npc.netUpdate = true; // 更新网络状态
+                    NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit);
+                }
+            }
+            else
+            {
+                npc.StrikeNPC(plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, false, false, false);
+                plr.ApplyDamageToNPC(npc, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit > 0); // 应用伤害到NPC
+                if (Main.netMode == 2)
+                {
+                    npc.netUpdate = true; // 更新网络状态
+                    NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit);
+                }
             }
         }
+
+        // 重置冷却时间
+        MouseStrikeTime = now;
     }
     #endregion
 

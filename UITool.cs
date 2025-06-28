@@ -1,7 +1,7 @@
-﻿using System.Numerics;
-using ImGuiNET;
+﻿using ImGuiNET;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Tools;
@@ -38,13 +38,15 @@ public class UITool : Tool
         bool Heal = Config.Heal; //回血开关
         int HealVal = Config.HealVal; //回血值
 
-        bool mouseStrikeNPC = Config.MouseStrikeNPC; //鼠标范围伤害NPC开关
-        int mouseStrikeNPCRange = Config.MouseStrikeNPCRange; //伤害范围
-
         bool killOrRESpawn = Config.KillOrRESpawn; //快速死亡与复活开关
 
         bool autoUseItem = Config.AutoUseItem; //自动使用物品开关
         int autoUseInterval = Config.UseItemInterval; //自动使用物品间隔
+
+        bool mouseStrikeNPC = Config.MouseStrikeNPC; //鼠标范围伤害NPC开关
+        int mouseStrikeNPCRange = Config.MouseStrikeNPCRange; //伤害范围
+        int mouseStrikeNPCInterval = Config.MouseStrikeInterval; // 伤害NPC间隔
+        int StrikeVel = Config.MouseStrikeNPCVel; // 伤害值
 
         bool itemModify = Config.ItemModify; // 修改手上物品开关
 
@@ -62,6 +64,32 @@ public class UITool : Tool
             // 播放界面点击音效
             SoundEngine.PlaySound(SoundID.MenuTick);
 
+            // 定位传送区域
+            ImGui.Separator();
+            if (ImGui.TreeNodeEx("定位传送", ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.Framed))
+            {
+                DrawTeleportUI(plr);
+                ImGui.TreePop();
+            }
+
+            // 显示NPC传送窗口
+            if (ShowNPCTeleportWindow)
+            {
+                DrawNPCTeleportWindow(plr);
+            }
+
+            // 显示自定义传送点窗口
+            if (ShowCustomTeleportWindow)
+            {
+                DrawCustomTeleportWindow(plr);
+            }
+
+            // 显示死亡地点选择窗口
+            if (ShowDeathTeleportWindow)
+            {
+                DrawDeathTeleportWindow(plr);
+            }
+
             // 快速死亡复活开关（单bool + 自定义按键）
             ImGui.Separator();
             ImGui.Checkbox("快速死亡/复活", ref killOrRESpawn);
@@ -70,21 +98,19 @@ public class UITool : Tool
             DrawKeySelector("按键", ref Config.KillKey, ref EditKillKey);
 
             // 回血设置 （bool + 滑块 + 自定义按键）
-            ImGui.Separator();
+            ImGui.SameLine();
             ImGui.Checkbox("强制回血", ref Heal);
             ImGui.SameLine(); // 回血按键设置
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
             DrawKeySelector("按键", ref Config.HealKey, ref EditHealKey);
             if (Heal)
             {
-                ImGui.Indent();
                 ImGui.Text("回血量:");
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(150);
                 ImGui.SliderInt("##HealAmount", ref HealVal, 1, 500, "%d HP");
                 ImGui.SameLine();
                 ImGui.Text($"{HealVal} HP");
-                ImGui.Unindent();
             }
 
             // 自动使用物品
@@ -95,25 +121,33 @@ public class UITool : Tool
             DrawKeySelector("按键", ref Config.AutoUseKey, ref EditAutoUseKey);
             if (autoUseItem)
             {
-                ImGui.Indent();
                 ImGui.Text("使用间隔(毫秒):");
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(200);
                 ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 20000, "%d ms");
-                ImGui.Unindent();
+            }
 
-                ImGui.Checkbox("启用鼠标范围伤害NPC", ref mouseStrikeNPC);
-                if (mouseStrikeNPC)
-                {
-                    ImGui.Indent();
-                    ImGui.Text("伤害范围:");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(150);
-                    ImGui.SliderInt("##StrikeRange", ref mouseStrikeNPCRange, 1, 85, "%d 格");
-                    ImGui.SameLine();
-                    ImGui.Text($"{mouseStrikeNPCRange} 格");
-                    ImGui.Unindent();
-                }
+            ImGui.Checkbox("启用鼠标范围伤害NPC", ref mouseStrikeNPC);
+            if (mouseStrikeNPC)
+            {
+                ImGui.Text("伤害范围:");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(150);
+                ImGui.SliderInt("##StrikeRange", ref mouseStrikeNPCRange, 0, 85, "%d 格");
+                ImGui.SameLine();
+                ImGui.Text($"{mouseStrikeNPCRange} 格");
+
+                ImGui.Text("伤害间隔(毫秒):");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(200);
+                ImGui.SliderInt("##StrikeInterval", ref mouseStrikeNPCInterval, 1, 20000, "%d ms");
+
+                ImGui.Text("伤害值:");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(200);
+                ImGui.SliderInt("##StrikeVel", ref StrikeVel, 0, 20000, "%d 点");
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("不设置数值时使用手上物品伤害");
             }
 
             // 在 DrawUI 方法中添加物品管理部分
@@ -147,72 +181,67 @@ public class UITool : Tool
                 {
                     DrawAutoTrashWindow(plr);
                 }
-
-                // 社交栏饰品开关
-                ImGui.Checkbox("社交栏饰品生效", ref socialEnabled);
-                ImGui.SameLine();
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.SocialAccessoriesKey, ref EditSocialAccessoriesKey);
-                if (socialEnabled)
-                {
-                    // 新增：添加应用前缀加成和应用盔甲防御的选项框
-                    ImGui.Indent();
-                    ImGui.Checkbox("前缀加成", ref applyPrefix);
-                    ImGui.SameLine();
-                    ImGui.Checkbox("盔甲防御", ref applyArmor);
-                    ImGui.SameLine();
-                    ImGui.Checkbox("饰品功能", ref applyAccessory);
-                    ImGui.Unindent();
-                }
-
-                // 一键修改饰品前缀按钮
-                if (ImGui.Button("一键前缀"))
-                {
-                    // 播放界面打开音效
-                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                    ShowEditPrefix = true;
-                    PrefixId = 0; // 重置为0
-                }
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
-
-                // 显示一键修改前缀窗口
-                if (ShowEditPrefix)
-                {
-                    DrawEditPrefixWindow();
-                }
-
-                // 一键收藏按钮
-                if (ImGui.Button("一键收藏背包"))
-                {
-                    // 播放收藏音效
-                    SoundEngine.PlaySound(SoundID.MenuTick);
-
-                    // 收藏所有格子物品（包括虚空袋）
-                    int favoritedItems = FavoriteAllItems(plr);
-
-                    // 显示操作结果
-                    ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
-                }
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
-
-                // 使重力药水、重力球等不会反转屏幕效果
-                ImGui.Separator();
-                ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
             }
+
+            // 使重力药水、重力球等不会反转屏幕效果
+            ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
+            ImGui.SameLine();
+            DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
+
+            // 社交栏饰品开关
+            ImGui.SameLine();
+            ImGui.Checkbox("社交栏饰品生效", ref socialEnabled);
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+            ImGui.SameLine();
+            DrawKeySelector("按键", ref Config.SocialAccessoriesKey, ref EditSocialAccessoriesKey);
+            if (socialEnabled)
+            {
+                ImGui.Checkbox("前缀加成", ref applyPrefix);
+                ImGui.SameLine();
+                ImGui.Checkbox("盔甲防御", ref applyArmor);
+                ImGui.SameLine();
+                ImGui.Checkbox("饰品功能", ref applyAccessory);
+            }
+
+            // 一键修改饰品前缀按钮
+            if (ImGui.Button("一键前缀"))
+            {
+                // 播放界面打开音效
+                SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                ShowEditPrefix = true;
+                PrefixId = 0; // 重置为0
+            }
+            ImGui.SameLine();
+            DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
+
+            // 显示一键修改前缀窗口
+            if (ShowEditPrefix)
+            {
+                DrawEditPrefixWindow();
+            }
+
+            // 一键收藏按钮
+            ImGui.SameLine();
+            if (ImGui.Button("一键收藏背包"))
+            {
+                // 播放收藏音效
+                SoundEngine.PlaySound(SoundID.MenuTick);
+
+                // 收藏所有格子物品（包括虚空袋）
+                int favoritedItems = FavoriteAllItems(plr);
+
+                // 显示操作结果
+                ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
+            }
+            ImGui.SameLine();
+            DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
         }
 
         // 更新配置值
         Config.Enabled = enabled;
         Config.Heal = Heal;
         Config.HealVal = HealVal;
-
-        Config.MouseStrikeNPC = mouseStrikeNPC;
-        Config.MouseStrikeNPCRange = mouseStrikeNPCRange;
 
         Config.KillOrRESpawn = killOrRESpawn;
 
@@ -222,6 +251,12 @@ public class UITool : Tool
 
         // 更新物品管理器配置
         Config.ItemModify = itemModify;
+
+        // 鼠标位置伤害NPC
+        Config.MouseStrikeNPC = mouseStrikeNPC;
+        Config.MouseStrikeNPCRange = mouseStrikeNPCRange;
+        Config.MouseStrikeInterval = mouseStrikeNPCInterval;
+        Config.MouseStrikeNPCVel = StrikeVel;
 
         // 社交栏饰品开关
         Config.SocialAccessory = socialEnabled;
@@ -246,8 +281,771 @@ public class UITool : Tool
         {
             SoundEngine.PlaySound(SoundID.MenuClose); // 播放界面关闭音效
             Config.SetDefault();
+            Config.Write();
             ClientLoader.Chat.WriteLine("已重置为默认设置", color);
         }
+    }
+    #endregion
+
+    #region 定位传送UI
+    public static bool TP = false;
+    public static Vector4 TPColor = new Vector4(1f, 1f, 1f, 1f);
+    public static float TPProgress = 0f;
+    public static int LastTPTime = 0;
+    public static bool TPCooldown = false;
+    private bool ShowNPCTeleportWindow = false; // 显示NPC传送窗口
+    public static List<Vector2> DeathPositions = new List<Vector2>(); // 存储多个死亡位置
+    private bool ShowDeathTeleportWindow = false; // 显示死亡地点选择窗口
+    private bool ShowCustomTeleportWindow = false; // 显示自定义传送点窗口
+    private string CustomPointSearch = ""; // 自定义点搜索文本
+    private string NewPointName = ""; // 新传送点名称
+    private void DrawTeleportUI(Player plr)
+    {
+        // 状态显示
+        if (TP)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, TPColor);
+            ImGui.PopStyleColor();
+
+            // 进度条
+            ImGui.ProgressBar(TPProgress, new Vector2(ImGui.GetContentRegionAvail().X, 20));
+
+            // 冷却提示
+            if (TPCooldown)
+            {
+                int cooldown = Math.Max(0, 3 - (int)((Main.GameUpdateCount - LastTPTime) / 60f));
+                ImGui.TextColored(new Vector4(1f, 0.5f, 0.5f, 1f), $"传送冷却中: {cooldown}秒");
+            }
+        }
+        else
+        {
+            ImGui.Text("选择传送目的地:");
+
+            // 位置信息
+            ImGui.SameLine();
+            ImGui.Text("当前位置:");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(1f, 1f, 0.5f, 1f), $"{(int)plr.position.X / 16}, {(int)plr.position.Y / 16}");
+        }
+
+        // 按钮区域
+        float buttonWidth = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X * 7) / 8f;
+
+        // 出生点按钮
+        if (ImGui.Button("出生点", new Vector2(buttonWidth, 40)))
+        {
+            TPSpawnPoint(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到世界出生点");
+
+        // 床按钮
+        ImGui.SameLine();
+        if (ImGui.Button("床", new Vector2(buttonWidth, 40)))
+        {
+            TPBed(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到床的位置");
+
+        // 死亡地点按钮（修改为打开选择窗口）
+        ImGui.SameLine();
+        if (DeathPositions.Count > 0)
+        {
+            if (ImGui.Button("死亡", new Vector2(buttonWidth, 40)))
+            {
+                ShowDeathTeleportWindow = true;
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip($"传送到死亡地点 ({DeathPositions.Count}个记录)");
+        }
+        else
+        {
+            // 没有死亡位置时，按钮不可用
+            ImGui.BeginDisabled();
+            ImGui.Button("死亡", new Vector2(buttonWidth, 40));
+            ImGui.EndDisabled();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("没有死亡记录");
+        }
+
+        // 自定义按钮
+        ImGui.SameLine();
+        if (ImGui.Button("自定义", new Vector2(buttonWidth, 40)))
+        {
+            ShowCustomTeleportWindow = true;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("管理自定义传送点");
+
+        // NPC按钮
+        ImGui.SameLine();
+        if (ImGui.Button("NPC", new Vector2(buttonWidth, 40)))
+        {
+            ShowNPCTeleportWindow = true;
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到活跃NPC位置,排除傀儡与雕像怪,排列优先级:城镇npc→boss→其他怪");
+
+        ImGui.Spacing(); //换行
+
+        // 宝藏袋按钮
+        if (ImGui.Button("宝藏袋", new Vector2(buttonWidth, 40)))
+        {
+            TPBossBag(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到最近的宝藏袋位置");
+
+        // 微光湖按钮
+        ImGui.SameLine();
+        if (ImGui.Button("微光湖", new Vector2(buttonWidth, 40)))
+        {
+            TPShimmerLake(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到最近的微光湖");
+
+        // 神庙按钮
+        ImGui.SameLine();
+        if (ImGui.Button("神庙", new Vector2(buttonWidth, 40)))
+        {
+            TPJungleTemple(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到丛林神庙入口");
+
+        ImGui.SameLine();
+
+        // 花苞按钮
+        if (ImGui.Button("花苞", new Vector2(buttonWidth, 40)))
+        {
+            TPPlanteraBulb(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到最近的世纪之花苞");
+
+        ImGui.SameLine();
+
+        // 地牢按钮
+        if (ImGui.Button("地牢", new Vector2(buttonWidth, 40)))
+        {
+            TPDungeon(plr);
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("传送到地牢入口");
+    }
+    #endregion
+
+    #region 定位传送方法实现
+    private void StartTeleport(string message, Vector4 color)
+    {
+        // 检查冷却时间
+        if (TPCooldown)
+        {
+            int cooldown = Math.Max(0, 3 - (int)((Main.GameUpdateCount - LastTPTime) / 60f));
+            ClientLoader.Chat.WriteLine($"传送冷却中，请等待 {cooldown} 秒", Color.Yellow);
+            TPColor = new Vector4(1f, 0.5f, 0.5f, 1f);
+            return;
+        }
+
+        TP = true;
+        TPColor = color;
+        TPProgress = 0f;
+        LastTPTime = (int)Main.GameUpdateCount;
+        TPCooldown = true;
+    }
+
+    // 传送出生点
+    private void TPSpawnPoint(Player plr)
+    {
+        StartTeleport("正在传送至世界出生点...", new Vector4(0.8f, 1f, 0.8f, 1f));
+
+        Vector2 pos = new Vector2(Main.spawnTileX * 16, (Main.spawnTileY - 3) * 16);
+        plr.Teleport(pos, 10);
+        ClientLoader.Chat.WriteLine($"已传送到世界出生点 ({Main.spawnTileX}, {Main.spawnTileY - 3})", Color.Yellow);
+    }
+
+    // 传送到床位置
+    private void TPBed(Player plr)
+    {
+        if (plr.SpawnX == -1 || plr.SpawnY == -1)
+        {
+            ClientLoader.Chat.WriteLine("未设置床位置! 请先放置并右键点击床", Color.Red);
+            return;
+        }
+
+        StartTeleport("正在传送至床位置...", new Vector4(1f, 0.8f, 1f, 1f));
+        plr.Spawn(new PlayerSpawnContext());
+        ClientLoader.Chat.WriteLine($"已传送到床位置 ({plr.SpawnX}, {plr.SpawnY})", Color.Yellow);
+    }
+
+    // 传送到特定死亡地点
+    private void TPDeathPoint(Player plr, Vector2 position)
+    {
+        StartTeleport("正在传送至死亡地点...", new Vector4(0.5f, 0.5f, 0.5f, 1f));
+        plr.Teleport(position, 10);
+        ClientLoader.Chat.WriteLine($"已传送到死亡地点 ({(int)position.X / 16}, {(int)position.Y / 16})", Color.Yellow);
+    }
+
+    //  NPC传送方法
+    private void TPNPC(Player plr, int npcType)
+    {
+        NPC npc = FindNPC(npcType);
+        if (npc == null || !npc.active)
+        {
+            ClientLoader.Chat.WriteLine($"未找到 {Lang.GetNPCNameValue(npcType)}", Color.Red);
+            return;
+        }
+
+        StartTeleport($"正在传送至{Lang.GetNPCNameValue(npcType)}...", new Vector4(0.8f, 0.8f, 1f, 1f));
+
+        // 传送到NPC上方一点的位置
+        Vector2 pos = npc.position - new Vector2(0, 48);
+        plr.Teleport(pos, 10);
+
+        ClientLoader.Chat.WriteLine($"已传送到 {Lang.GetNPCNameValue(npcType)} 附近", Color.Yellow);
+    }
+
+    // 查找指定类型的NPC
+    private NPC FindNPC(int npcType)
+    {
+        for (int i = 0; i < Main.maxNPCs; i++)
+        {
+            NPC npc = Main.npc[i];
+            if (npc.active && npc.type == npcType &&
+                !npc.SpawnedFromStatue && npc.type != 488) //排除假人 雕像怪
+            {
+                return npc;
+            }
+        }
+        return null!;
+    }
+
+    // 传送微光湖
+    private void TPShimmerLake(Player plr)
+    {
+        StartTeleport("正在定位微光湖位置...", new Vector4(0.6f, 0.8f, 1f, 1f));
+
+        Vector2 pos = FindShimmerLake();
+        if (pos != Vector2.Zero)
+        {
+            plr.Teleport(pos * 16, 10);
+            ClientLoader.Chat.WriteLine($"已传送到微光湖附近 ({pos.X}, {pos.Y})", Color.Yellow);
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine("未找到微光湖!", Color.Yellow);
+            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
+        }
+    }
+
+    // 查找微光
+    private Vector2 FindShimmerLake()
+    {
+        for (int x = 0; x < Main.maxTilesX; x++)
+        {
+            for (int y = 0; y < Main.maxTilesY; y++)
+            {
+                Tile tile = Main.tile[x, y];
+                if (tile == null! || tile.liquidType() != LiquidID.Shimmer)
+                {
+                    continue;
+                }
+
+                return new Vector2(x, y - 3);
+            }
+        }
+        return Vector2.Zero;
+    }
+
+    // 传送神庙
+    private void TPJungleTemple(Player plr)
+    {
+        StartTeleport("正在定位神庙入口...", new Vector4(0.8f, 0.6f, 0.3f, 1f));
+
+        Vector2 pos = FindJungleTemple();
+        if (pos != Vector2.Zero)
+        {
+            plr.Teleport(pos * 16, 10);
+            ClientLoader.Chat.WriteLine($"已传送到神庙附近 ({pos.X}, {pos.Y})", Color.Yellow);
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine("未找到神庙!", Color.Yellow);
+            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
+        }
+    }
+
+    // 查找神庙
+    private Vector2 FindJungleTemple()
+    {
+        for (int x = 0; x < Main.maxTilesX; x++)
+        {
+            for (int y = 0; y < Main.maxTilesY; y++)
+            {
+                Tile tile = Main.tile[x, y];
+                if (tile == null!) continue;
+
+                if (tile.type == 237)
+                {
+                    return new Vector2(x, y - 3);
+                }
+            }
+        }
+        return Vector2.Zero;
+    }
+
+    // 传送到花苞
+    private void TPPlanteraBulb(Player plr)
+    {
+        StartTeleport("正在定位世纪之花苞...", new Vector4(0.6f, 1f, 0.6f, 1f));
+
+        Vector2 pos = FindPlanteraBulb();
+        if (pos != Vector2.Zero)
+        {
+            plr.Teleport(pos * 16, 10);
+            ClientLoader.Chat.WriteLine($"已传送到花苞附近 ({pos.X}, {pos.Y})", Color.Yellow);
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine("未找到花苞!", Color.Yellow);
+            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
+        }
+    }
+
+    // 在丛林地下寻找花苞
+    private Vector2 FindPlanteraBulb()
+    {
+        for (int x = 0; x < Main.maxTilesX; x++)
+        {
+            for (int y = 0; y < Main.maxTilesY; y++)
+            {
+                Tile tile = Main.tile[x, y];
+                if (tile.type == TileID.PlanteraBulb)
+                {
+                    return new Vector2(x, y - 3);
+                }
+            }
+        }
+        return Vector2.Zero;
+    }
+
+    // 传送到地牢
+    private void TPDungeon(Player plr)
+    {
+        StartTeleport("正在定位地牢入口...", new Vector4(0.7f, 0.6f, 1f, 1f));
+
+        Vector2 pos = FindDungeon();
+        if (pos != Vector2.Zero)
+        {
+            plr.Teleport(pos * 16, 10);
+            ClientLoader.Chat.WriteLine($"已传送到地牢附近 ({pos.X}, {pos.Y})", Color.Yellow);
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine("未找到地牢!", Color.Yellow);
+            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
+        }
+    }
+
+    // 查找地牢位置
+    private Vector2 FindDungeon()
+    {
+        if (Main.dungeonX > 0 && Main.dungeonY > 0)
+        {
+            return new Vector2(Main.dungeonX, Main.dungeonY - 3);
+        }
+
+        return Vector2.Zero;
+    }
+
+    //传送到宝藏袋
+    private void TPBossBag(Player plr)
+    {
+        StartTeleport("正在定位宝藏袋...", new Vector4(1f, 0.8f, 0.3f, 1f));
+
+        Vector2 pos = FindBossBag();
+        if (pos != Vector2.Zero)
+        {
+            plr.Teleport(pos, 10);
+            ClientLoader.Chat.WriteLine($"已传送到宝藏袋附近 ({pos.X / 16}, {pos.Y / 16})", Color.Yellow);
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine("未找到宝藏袋!", Color.Yellow);
+            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
+        }
+    }
+
+    // 查找宝藏袋
+    private Vector2 FindBossBag()
+    {
+        for (int i = 0; i < Main.maxItems; i++)
+        {
+            Item item = Main.item[i];
+
+            // 检查物品是否活跃且是宝藏袋
+            if (!item.active || !ItemID.Sets.BossBag[item.type]) continue;
+
+            return item.position;
+        }
+
+        return Vector2.Zero;
+    }
+
+    // 传送到自定义点
+    private void TPCustomPoint(Player plr, Vector2 pos, string pointName)
+    {
+        StartTeleport($"正在传送到 {pointName}...", new Vector4(0.8f, 0.6f, 0.9f, 1f));
+        plr.Teleport(pos, 10);
+        ClientLoader.Chat.WriteLine($"已传送到 {pointName} ({(int)pos.X / 16}, {(int)pos.Y / 16})", Color.Yellow);
+    }
+
+    // 添加自定义传送点
+    private void AddCustomPoint()
+    {
+        Config.CustomTeleportPoints[NewPointName] = Main.LocalPlayer.position;
+        Config.Write();
+
+        // 播放添加成功音效
+        SoundEngine.PlaySound(SoundID.Item29);
+        ClientLoader.Chat.WriteLine($"已添加传送点: {NewPointName}", Color.Green);
+
+        // 重置表单
+        NewPointName = "";
+    }
+    #endregion
+
+    #region 死亡地点选择窗口
+    private void DrawDeathTeleportWindow(Player plr)
+    {
+        ImGui.SetNextWindowSize(new Vector2(400, 400), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("选择死亡地点", ref ShowDeathTeleportWindow, ImGuiWindowFlags.NoCollapse))
+        {
+            ImGui.Text($"已记录 {DeathPositions.Count} 个死亡地点");
+            ImGui.Separator();
+
+            // 按时间倒序（最近的在前）
+            var reversedPositions = new List<Vector2>(DeathPositions);
+            reversedPositions.Reverse();
+            var Index = -1;
+            for (int i = 0; i < reversedPositions.Count; i++)
+            {
+                Vector2 pos = reversedPositions[i];
+                int x = (int)pos.X / 16;
+                int y = (int)pos.Y / 16;
+
+                if (ImGui.Button($"死亡地点 {i + 1} ({x}, {y})##{i}"))
+                {
+                    TPDeathPoint(plr, pos);
+                    ShowDeathTeleportWindow = false;
+                }
+
+                Index = i;
+            }
+
+            // 删除按钮
+            ImGui.SameLine();
+            if (ImGui.Button($"删除##del_{Index}"))
+            {
+                DeathPositions.RemoveAt(DeathPositions.Count - 1 - Index);
+            }
+
+            ImGui.Separator();
+            if (ImGui.Button("清空列表"))
+            {
+                DeathPositions.Clear();
+                ClientLoader.Chat.WriteLine("已清空所有死亡地点记录", Color.Yellow);
+            }
+        }
+        ImGui.End();
+    }
+    #endregion
+
+    #region 自定义传送点窗口
+    private void DrawCustomTeleportWindow(Player plr)
+    {
+        ImGui.SetNextWindowSize(new Vector2(450, 500), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("自定义传送点管理", ref ShowCustomTeleportWindow, ImGuiWindowFlags.NoCollapse))
+        {
+            // 添加新传送点区域
+            ImGui.Text("添加新传送点:");
+            ImGui.Separator();
+
+            // 名称输入
+            ImGui.Text("名称:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(80);
+            ImGui.InputText("##NewPointName", ref NewPointName, 100);
+
+            // 位置显示
+            ImGui.SameLine();
+            ImGui.Text("位置:");
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(1f, 1f, 0.5f, 1f), $"{(int)plr.position.X / 16}, {(int)plr.position.Y / 16}");
+
+            // 添加按钮
+            ImGui.SameLine();
+            if (ImGui.Button("添加传送点"))
+            {
+                if (string.IsNullOrWhiteSpace(NewPointName))
+                {
+                    ClientLoader.Chat.WriteLine("传送点名称不能为空!", Color.Red);
+                }
+                else
+                {
+                    AddCustomPoint();
+                }
+            }
+
+            // 搜索区域
+            ImGui.Separator();
+            ImGui.Text("搜索传送点:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputTextWithHint("##CustomPointSearch", "输入名称搜索", ref CustomPointSearch, 100);
+            ImGui.SameLine();
+            if (ImGui.Button("清空搜索"))
+            {
+                CustomPointSearch = "";
+            }
+
+            // 获取过滤后的传送点
+            var filteredPoints = Config.CustomTeleportPoints
+                .Where(p => string.IsNullOrWhiteSpace(CustomPointSearch) ||
+                            p.Key.Contains(CustomPointSearch, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(p => p.Key)
+                .ToList();
+
+            // 显示传送点数量
+            ImGui.Text($"找到 {filteredPoints.Count} 个自定义传送点");
+
+            ImGui.SameLine();
+            if (ImGui.Button("清空列表"))
+            {
+                Config.CustomTeleportPoints.Clear();
+                Config.Write();
+                ClientLoader.Chat.WriteLine("已清空所有传送点", Color.Yellow);
+            }
+
+            // 传送点列表
+            ImGui.BeginChild("CustomPointsList", new Vector2(0, 0), ImGuiChildFlags.Borders);
+
+            if (filteredPoints.Count > 0)
+            {
+                // 使用表格布局
+                ImGui.Columns(4, "custom_point_columns", true);
+                ImGui.SetColumnWidth(0, 150); // 名称
+                ImGui.SetColumnWidth(1, 100); // X坐标
+                ImGui.SetColumnWidth(2, 100); // Y坐标
+                ImGui.SetColumnWidth(3, 120); // 操作
+
+                // 表头
+                ImGui.Text("名称"); ImGui.NextColumn();
+                ImGui.Text("X坐标"); ImGui.NextColumn();
+                ImGui.Text("Y坐标"); ImGui.NextColumn();
+                ImGui.Text("操作"); ImGui.NextColumn();
+                ImGui.Separator();
+
+                foreach (var point in filteredPoints)
+                {
+                    ImGui.Text(point.Key); ImGui.NextColumn();
+                    ImGui.Text($"{(int)point.Value.X / 16}"); ImGui.NextColumn();
+                    ImGui.Text($"{(int)point.Value.Y / 16}"); ImGui.NextColumn();
+
+                    // 操作按钮
+                    if (ImGui.Button($"传送##{point.Key}"))
+                    {
+                        TPCustomPoint(plr, point.Value, point.Key);
+                    }
+
+                    ImGui.SameLine();
+
+                    if (ImGui.Button($"删除##{point.Key}"))
+                    {
+                        Config.CustomTeleportPoints.Remove(point.Key);
+                        Config.Write();
+                        ClientLoader.Chat.WriteLine($"已删除传送点: {point.Key}", Color.Yellow);
+                    }
+
+                    ImGui.NextColumn();
+                }
+
+                ImGui.Columns(1);
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(CustomPointSearch))
+                {
+                    ImGui.Text("没有自定义传送点，请添加新的传送点");
+                }
+                else
+                {
+                    ImGui.Text($"没有找到包含 '{CustomPointSearch}' 的传送点");
+                }
+            }
+
+            ImGui.EndChild();
+        }
+        ImGui.End();
+    }
+    #endregion
+
+    #region NPC传送窗口
+    private void DrawNPCTeleportWindow(Player plr)
+    {
+        ImGui.SetNextWindowSize(new Vector2(500, 600), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("传送到NPC", ref ShowNPCTeleportWindow, ImGuiWindowFlags.NoCollapse))
+        {
+            ImGui.Text("选择要传送的NPC:");
+            ImGui.Separator();
+
+            // 搜索框
+            string npcSearch = "";
+            ImGui.InputTextWithHint("##NPCSearch", "输入NPC名称搜索", ref npcSearch, 100);
+            ImGui.SameLine();
+            if (ImGui.Button("清空搜索"))
+            {
+                npcSearch = "";
+            }
+
+            // 获取所有NPC
+            var newNPCs = new List<NPC>();
+            for (int i = 0; i < Main.maxNPCs; i++)
+            {
+                NPC npc = Main.npc[i];
+                if (npc.active && !npc.SpawnedFromStatue && npc.type != 488)
+                {
+                    string npcName = Lang.GetNPCNameValue(npc.type);
+                    if (string.IsNullOrWhiteSpace(npcSearch) ||
+                        npcName.Contains(npcSearch, StringComparison.OrdinalIgnoreCase))
+                    {
+                        newNPCs.Add(npc);
+                    }
+                }
+            }
+
+            // 按NPC类型分组（显示唯一的NPC类型）
+            var groupedNPCs = newNPCs
+                .GroupBy(n => n.type)
+                .Select(g => g.First())
+                .ToList();
+
+            // 将NPC分为三类：城镇NPC、BOSS、其他NPC
+            var townNPCs = new List<NPC>();
+            var bossNPCs = new List<NPC>();
+            var otherNPCs = new List<NPC>();
+
+            foreach (var npc in groupedNPCs)
+            {
+                string npcName = Lang.GetNPCNameValue(npc.type);
+
+                if (npc.townNPC)
+                {
+                    townNPCs.Add(npc);
+                }
+                else if (npc.boss || npcName.Contains("boss", StringComparison.OrdinalIgnoreCase))
+                {
+                    bossNPCs.Add(npc);
+                }
+                else
+                {
+                    otherNPCs.Add(npc);
+                }
+            }
+
+            // 每类按名称排序
+            townNPCs = townNPCs.OrderBy(n => Lang.GetNPCNameValue(n.type)).ToList();
+            bossNPCs = bossNPCs.OrderBy(n => Lang.GetNPCNameValue(n.type)).ToList();
+            otherNPCs = otherNPCs.OrderBy(n => Lang.GetNPCNameValue(n.type)).ToList();
+
+            // 合并列表（城镇NPC → BOSS → 其他NPC）
+            var allNpc = new List<NPC>();
+            allNpc.AddRange(townNPCs);
+            allNpc.AddRange(bossNPCs);
+            allNpc.AddRange(otherNPCs);
+
+            // 显示NPC数量信息（包括分类统计）
+            ImGui.Text($"找到 {allNpc.Count} 个NPC (城镇:{townNPCs.Count} BOSS:{bossNPCs.Count} 其他:{otherNPCs.Count})");
+
+            // 使用网格布局
+            ImGui.BeginChild("NPCList", new Vector2(0, 0), ImGuiChildFlags.Borders);
+
+            // 动态计算列数 - 根据窗口宽度
+            float windowWidth = ImGui.GetContentRegionAvail().X;
+            int columns = (int)Math.Max(1, Math.Floor(windowWidth / 120)); // 每列至少120px宽
+
+            int count = allNpc.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                if (i % columns != 0)
+                    ImGui.SameLine();
+
+                NPC npc = allNpc[i];
+                string npcName = Lang.GetNPCNameValue(npc.type);
+                string displayName = npcName;
+
+                // 名称超过5个字时截断并添加省略号
+                if (npcName.Length > 5)
+                {
+                    displayName = npcName.Substring(0, 5) + "...";
+                }
+
+                // 设置不同类别按钮颜色
+                Vector4 buttonColor;
+                string category;
+
+                if (npc.townNPC)
+                {
+                    buttonColor = new Vector4(0.2f, 0.7f, 0.2f, 0.5f); // 城镇NPC - 绿色
+                    category = "城镇NPC";
+                }
+                else if (npc.boss || npcName.Contains("boss", StringComparison.OrdinalIgnoreCase))
+                {
+                    buttonColor = new Vector4(0.8f, 0.2f, 0.2f, 0.5f); // BOSS - 红色
+                    category = "BOSS";
+                }
+                else
+                {
+                    buttonColor = new Vector4(0.2f, 0.5f, 0.8f, 0.5f); // 其他NPC - 蓝色
+                    category = "其他NPC";
+                }
+
+                ImGui.PushStyleColor(ImGuiCol.Button, buttonColor);
+
+                // 固定按钮高度
+                Vector2 buttonSize = new Vector2(ImGui.GetContentRegionAvail().X / columns - 5, 30);
+
+                // 创建按钮
+                if (ImGui.Button($"{displayName}##{npc.type}", buttonSize))
+                {
+                    TPNPC(plr, npc.type);
+                }
+
+                ImGui.PopStyleColor();
+
+                // 悬停显示NPC完整信息
+                if (ImGui.IsItemHovered())
+                {
+                    Vector2 pos = npc.position / 16f;
+
+                    // 如果显示的是缩写名称，在工具提示中显示完整名称
+                    if (displayName != npcName)
+                    {
+                        ImGui.SetTooltip($"名称: {npcName}\n位置: {pos.X:F0}, {pos.Y:F0}\n类别: {category}");
+                    }
+                    else
+                    {
+                        ImGui.SetTooltip($"位置: {pos.X:F0}, {pos.Y:F0}\n类别: {category}");
+                    }
+                }
+            }
+
+            ImGui.EndChild();
+        }
+        ImGui.End();
     }
     #endregion
 
@@ -679,7 +1477,7 @@ public class UITool : Tool
         }
 
         ImGui.EndChild();
-    } 
+    }
     #endregion
 
     #region 临时排除窗口
@@ -838,7 +1636,7 @@ public class UITool : Tool
     #endregion
 
     #region 一键收藏所有物品
-    private static bool isFavoriteMode = true; // 收藏模式开关（true为收藏，false为取消收藏）
+    private static bool isFavoriteMode = false; // 收藏模式开关（true为收藏，false为取消收藏）
     public static int FavoriteAllItems(Player plr)
     {
         int count = 0;
@@ -896,7 +1694,8 @@ public class UITool : Tool
 
             // 获取所有物品并应用搜索过滤
             var AllItems = Config.ItemModifyList
-                .Select(item => new {
+                .Select(item => new
+                {
                     Data = item,
                     Name = item.Name,
                     Type = item.Type,

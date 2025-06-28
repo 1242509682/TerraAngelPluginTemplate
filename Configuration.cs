@@ -1,5 +1,6 @@
 ﻿using Microsoft.Xna.Framework.Input;
 using Newtonsoft.Json;
+using System.Numerics;
 using TerraAngel;
 
 namespace MyPlugin;
@@ -21,17 +22,21 @@ internal class Configuration
     [JsonProperty("自杀复活按键", Order = 3)]
     public Keys KillKey = Keys.K;
 
-    [JsonProperty("鼠标范围伤害NPC", Order = 4)]
-    public bool MouseStrikeNPC { get; set; } = true;
-    [JsonProperty("鼠标伤害NPC格数", Order = 4)]
-    public int MouseStrikeNPCRange { get; set; } = 10;
-
-    [JsonProperty("自动使用物品", Order = 5)]
+    [JsonProperty("自动使用物品", Order = 4)]
     public bool AutoUseItem { get; set; } = true;
-    [JsonProperty("自动使用按键", Order = 5)]
+    [JsonProperty("自动使用按键", Order = 4)]
     public Keys AutoUseKey = Keys.J; // 默认按键J
-    [JsonProperty("使用间隔(毫秒)", Order = 5)]
+    [JsonProperty("使用间隔(毫秒)", Order = 4)]
     public int UseItemInterval { get; set; } = 100; // 默认500毫秒
+
+    [JsonProperty("鼠标范围伤害NPC", Order = 5)]
+    public bool MouseStrikeNPC { get; set; } = true;
+    [JsonProperty("鼠标范围伤害值", Order = 5)]
+    public int MouseStrikeNPCVel { get; set; } = 0;
+    [JsonProperty("鼠标伤害NPC格数", Order = 5)]
+    public int MouseStrikeNPCRange { get; set; } = 10;
+    [JsonProperty("鼠标伤害间隔(毫秒)", Order = 4)]
+    public int MouseStrikeInterval { get; set; } = 500; // 默认500毫秒
 
     [JsonProperty("修改前缀按键", Order = 6)]
     public Keys ShowEditPrefixKey = Keys.P;
@@ -70,6 +75,9 @@ internal class Configuration
     [JsonProperty("自动垃圾桶表", Order = 14)]
     public List<TrashData> TrashItems { get; set; } = new List<TrashData>();
 
+    [JsonProperty("自定义传送点", Order = 15)]
+    public Dictionary<string, Vector2> CustomTeleportPoints = new Dictionary<string, Vector2>();
+
     #region 预设参数方法
     public void SetDefault()
     {
@@ -77,12 +85,14 @@ internal class Configuration
         Heal = true;
         HealVal = 100;
         HealKey = Keys.H;
-        MouseStrikeNPC = false;
-        MouseStrikeNPCRange = 3;
         KillOrRESpawn = true;
         KillKey = Keys.K;
         AutoUseItem = false;
         AutoUseKey = Keys.J;
+        MouseStrikeNPC = false;
+        MouseStrikeNPCVel = 0;
+        MouseStrikeNPCRange = 3;
+        MouseStrikeInterval = 500;
         UseItemInterval = 500;
         ItemModify = true;
         ItemModifyKey = Keys.I;
@@ -99,6 +109,7 @@ internal class Configuration
         AutoTrashKey = Keys.C;
         TrashSyncInterval = 100;
         TrashItems = new List<TrashData>();
+        CustomTeleportPoints = new Dictionary<string, Vector2>();
     }
     #endregion
 
