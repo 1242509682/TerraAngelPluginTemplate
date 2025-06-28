@@ -44,7 +44,7 @@ internal class Configuration
     public Keys FavoriteKey = Keys.O;
 
     [JsonProperty("社交栏饰品加成开关", Order = 7)]
-    public bool SocialAccessory { get; set; } = true;
+    public bool SocialAccessory { get; set; } = false;
     [JsonProperty("恢复前缀加成", Order = 7)]
     public bool ApplyPrefix { get; set; } = true;
     [JsonProperty("恢复盔甲防御", Order = 7)]
@@ -98,7 +98,7 @@ internal class Configuration
         ItemModifyKey = Keys.I;
         ShowEditPrefixKey = Keys.P;
         FavoriteKey = Keys.O;
-        SocialAccessory = true;
+        SocialAccessory = false;
         ApplyPrefix = true;
         ApplyArmor = true;
         ApplyAccessory = true;

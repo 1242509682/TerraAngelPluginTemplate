@@ -146,7 +146,7 @@ public class MyPlugin(string path) : Plugin(path)
     public static void RecordDeathPoint(Player plr)
     {
         // 只在死亡状态下 复活时间为0秒时记录
-        if (!plr.dead || plr.respawnTimer != 0) return;
+        if (!plr.dead) return;
 
         Vector2 point = plr.position;
 

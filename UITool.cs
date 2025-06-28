@@ -70,24 +70,24 @@ public class UITool : Tool
             {
                 DrawTeleportUI(plr);
                 ImGui.TreePop();
-            }
 
-            // 显示NPC传送窗口
-            if (ShowNPCTeleportWindow)
-            {
-                DrawNPCTeleportWindow(plr);
-            }
+                // 显示NPC传送窗口
+                if (ShowNPCTeleportWindow)
+                {
+                    DrawNPCTeleportWindow(plr);
+                }
 
-            // 显示自定义传送点窗口
-            if (ShowCustomTeleportWindow)
-            {
-                DrawCustomTeleportWindow(plr);
-            }
+                // 显示自定义传送点窗口
+                if (ShowCustomTeleportWindow)
+                {
+                    DrawCustomTeleportWindow(plr);
+                }
 
-            // 显示死亡地点选择窗口
-            if (ShowDeathTeleportWindow)
-            {
-                DrawDeathTeleportWindow(plr);
+                // 显示死亡地点选择窗口
+                if (ShowDeathTeleportWindow)
+                {
+                    DrawDeathTeleportWindow(plr);
+                }
             }
 
             // 快速死亡复活开关（单bool + 自定义按键）
@@ -294,11 +294,8 @@ public class UITool : Tool
     public static int LastTPTime = 0;
     public static bool TPCooldown = false;
     private bool ShowNPCTeleportWindow = false; // 显示NPC传送窗口
-    public static List<Vector2> DeathPositions = new List<Vector2>(); // 存储多个死亡位置
     private bool ShowDeathTeleportWindow = false; // 显示死亡地点选择窗口
     private bool ShowCustomTeleportWindow = false; // 显示自定义传送点窗口
-    private string CustomPointSearch = ""; // 自定义点搜索文本
-    private string NewPointName = ""; // 新传送点名称
     private void DrawTeleportUI(Player plr)
     {
         // 状态显示
@@ -718,18 +715,25 @@ public class UITool : Tool
     #endregion
 
     #region 死亡地点选择窗口
+    public static List<Vector2> DeathPositions = new List<Vector2>(); // 存储多个死亡位置
     private void DrawDeathTeleportWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(400, 400), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("选择死亡地点", ref ShowDeathTeleportWindow, ImGuiWindowFlags.NoCollapse))
         {
             ImGui.Text($"已记录 {DeathPositions.Count} 个死亡地点");
+            ImGui.SameLine();
+            if (ImGui.Button("清空列表"))
+            {
+                DeathPositions.Clear();
+                ClientLoader.Chat.WriteLine("已清空所有死亡地点记录", Color.Yellow);
+            }
             ImGui.Separator();
 
-            // 按时间倒序（最近的在前）
+
             var reversedPositions = new List<Vector2>(DeathPositions);
             reversedPositions.Reverse();
-            var Index = -1;
+
             for (int i = 0; i < reversedPositions.Count; i++)
             {
                 Vector2 pos = reversedPositions[i];
@@ -742,21 +746,14 @@ public class UITool : Tool
                     ShowDeathTeleportWindow = false;
                 }
 
-                Index = i;
-            }
+                ImGui.SameLine();
 
-            // 删除按钮
-            ImGui.SameLine();
-            if (ImGui.Button($"删除##del_{Index}"))
-            {
-                DeathPositions.RemoveAt(DeathPositions.Count - 1 - Index);
-            }
-
-            ImGui.Separator();
-            if (ImGui.Button("清空列表"))
-            {
-                DeathPositions.Clear();
-                ClientLoader.Chat.WriteLine("已清空所有死亡地点记录", Color.Yellow);
+                if (ImGui.Button($"删除##del{i}"))
+                {
+                    int originalIndex = DeathPositions.Count - 1 - i;
+                    DeathPositions.RemoveAt(originalIndex);
+                    break; // 修改集合后立即跳出
+                }
             }
         }
         ImGui.End();
@@ -764,6 +761,8 @@ public class UITool : Tool
     #endregion
 
     #region 自定义传送点窗口
+    private string CustomPointSearch = ""; // 自定义点搜索文本
+    private string NewPointName = ""; // 新传送点名称
     private void DrawCustomTeleportWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(450, 500), ImGuiCond.FirstUseEver);
