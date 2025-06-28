@@ -603,6 +603,7 @@ public class UITool : Tool
                 ShowInvasionWindow = false;
             }
 
+            ImGui.SameLine();
             if (ImGui.Button("火星人入侵"))
             {
                 StartInvasion(4);
@@ -660,67 +661,8 @@ public class UITool : Tool
     {
         Main.StartInvasion(type);
 
-        string invasionName = GetInvasionName(type);
-        ClientLoader.Chat.WriteLine($"已开始{invasionName}", Color.Yellow);
-    }
-
-    // 开始月亮事件
-    private void StartMoonEvent(int moonType)
-    {
-        if (moonType == 1) // 南瓜月
-        {
-            SetPumpkinMoon(true);
-            NPC.waveKills = 0f;
-            NPC.waveNumber = 1;
-            ClientLoader.Chat.WriteLine("已开始南瓜月事件", Color.Yellow);
-        }
-        else if (moonType == 2) // 霜月
-        {
-            SetFrostMoon(true);
-            NPC.waveKills = 0f;
-            NPC.waveNumber = 1;
-            ClientLoader.Chat.WriteLine("已开始霜月事件", Color.Yellow);
-        }
-
-        Main.bloodMoon = false;
-    }
-
-    // 设置南瓜月事件
-    public void SetPumpkinMoon(bool pumpkinMoon)
-    {
-        if (pumpkinMoon)
-        {
-            Main.dayTime = false;
-            Main.pumpkinMoon = true;
-            Main.time = 0.0;
-        }
-        else
-        {
-            Main.dayTime = true;
-            Main.pumpkinMoon = false;
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-    }
-
-    // 设置霜月事件
-    public void SetFrostMoon(bool snowMoon)
-    {
-        if (snowMoon)
-        {
-            Main.dayTime = false;
-            Main.snowMoon = true;
-            Main.time = 0.0;
-        }
-        else
-        {
-            Main.dayTime = true;
-            Main.snowMoon = false;
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
+        string name = GetInvasionName(type);
+        ClientLoader.Chat.WriteLine($"已开始{name}", Color.Yellow);
     }
 
     // 停止入侵事件
@@ -733,6 +675,7 @@ public class UITool : Tool
         else
         {
             Main.invasionSize = 0;
+            Main.invasionType = 0;
         }
 
         if (Main.netMode == 2)
@@ -740,12 +683,38 @@ public class UITool : Tool
 
         ClientLoader.Chat.WriteLine("已停止当前入侵", Color.Yellow);
     }
+
+    // 开始月亮事件
+    private void StartMoonEvent(int moonType)
+    {
+        if (moonType == 1) // 南瓜月
+        {
+            Main.dayTime = false;
+            Main.pumpkinMoon = true;
+            Main.time = 0.0;
+            ClientLoader.Chat.WriteLine("已开始南瓜月事件", Color.Yellow);
+        }
+        else if (moonType == 2) // 霜月
+        {
+            Main.dayTime = false;
+            Main.snowMoon = true;
+            Main.time = 0.0;
+            NPC.waveKills = 0f;
+            NPC.waveNumber = 1;
+            ClientLoader.Chat.WriteLine("已开始霜月事件", Color.Yellow);
+        }
+
+        Main.bloodMoon = false;
+
+        if (Main.netMode == 2)
+            NetMessage.SendData(MessageID.WorldData);
+    }
     #endregion
 
-    #region 获取入侵名称
-    private string GetInvasionName(int invasionType)
+    #region 获取入侵事件名称
+    private string GetInvasionName(int type)
     {
-        return invasionType switch
+        return type switch
         {
             1 => "哥布林入侵",
             2 => "雪人军团",
