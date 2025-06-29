@@ -19,7 +19,7 @@ internal class ExtraAccessory
     public static MethodInfo? ApplyMusicBox; // 应用音乐盒的私有方法
 
     #region 注册额外饰品的Mono钩子
-    public static void AddAccessoryHooks()
+    public static void Register()
     {
         //修改 UpdateEquips 方法（处理装饰栏饰品生效）
         var UpdateEquips = typeof(Player).GetMethod("UpdateEquips", [typeof(int)])!;
@@ -36,7 +36,7 @@ internal class ExtraAccessory
     #endregion
 
     #region 卸载额外饰品的Mono钩子
-    public static void RemoveExtraAccessory()
+    public static void Dispose()
     {
         // 卸载装饰饰品栏生效钩子
         UpdateEquipsHook?.Dispose();

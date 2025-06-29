@@ -24,7 +24,7 @@ internal class IgnoreGravity
     internal static float GravDir = 1f;     // 重力方向缓存
 
     #region 添加反重力药水钩子
-    public static void AddGravityHooks()
+    public static void Register()
     {
         // DoDraw 方法（处理重力药水不反转屏幕）
         var DoDraw = typeof(Main).GetMethod("DoDraw", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(GameTime)], null)!;
@@ -72,7 +72,7 @@ internal class IgnoreGravity
     #endregion
 
     #region 卸载反重力药水钩子
-    public static void DelGravityHooks()
+    public static void Dispose()
     {
         // 卸载重力药水不反转屏幕相关钩子
         DoDrawHook?.Dispose();

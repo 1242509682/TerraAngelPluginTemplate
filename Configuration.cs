@@ -67,7 +67,7 @@ internal class Configuration
     public Keys IgnoreGravityKey = Keys.T;
 
     [JsonProperty("自动垃圾桶", Order = 14)]
-    public bool AutoTrash { get; set; } = true;
+    public bool AutoTrash { get; set; } = false;
     [JsonProperty("自动垃圾桶按键", Order = 14)]
     public Keys AutoTrashKey = Keys.C;
     [JsonProperty("自动垃圾桶同步间隔", Order = 14)]
@@ -79,11 +79,28 @@ internal class Configuration
     public Dictionary<string, Vector2> CustomTeleportPoints = new Dictionary<string, Vector2>();
 
     [JsonProperty("清除钓鱼任务", Order = 16)]
-    public bool ClearAnglerQuests { get; set; } = true;
+    public bool ClearAnglerQuests { get; set; } = false;
     [JsonProperty("清除钓鱼任务按键", Order = 16)]
     public Keys ClearQuestsKey = Keys.V;
     [JsonProperty("清除钓鱼任务间隔(毫秒)", Order = 16)]
     internal int ClearQuestsInterval = 2000;
+
+    [JsonProperty("NPC自动回血", Order = 17)]
+    public bool NPCAutoHeal { get; set; } = false;
+    [JsonProperty("NPC自动回血按键", Order = 17)]
+    public Keys NPCAutoHealKey = Keys.F;
+    [JsonProperty("普通NPC回血百分比", Order = 17)]
+    public float NPCHealVel { get; set; } = 1;         // 普通NPC回血百分比
+    [JsonProperty("普通NPC回血间隔(秒)", Order = 17)]
+    public int NPCHealInterval { get; set; } = 1;       // 普通NPC回血间隔
+    [JsonProperty("允许Boss回血", Order = 17)]
+    public bool Boss { get; set; } = false;
+    [JsonProperty("BOSS回血百分比", Order = 17)]
+    public float BossHealVel { get; set; } = 0.1f;      // BOSS回血百分比
+    [JsonProperty("BOSS每次回血上限", Order = 17)]
+    public int BossHealCap { get; set; } = 1000;        // BOSS每次回血上限
+    [JsonProperty("BOSS独立回血间隔(秒)", Order = 17)]
+    public int BossHealInterval { get; set; } = 3;      // BOSS独立回血间隔(秒)
 
     #region 预设参数方法
     public void SetDefault()
@@ -112,14 +129,22 @@ internal class Configuration
         SocialAccessoriesKey = Keys.N;
         IgnoreGravity = true;
         IgnoreGravityKey = Keys.T;
-        AutoTrash = true;
+        AutoTrash = false;
         AutoTrashKey = Keys.C;
         TrashSyncInterval = 100;
         TrashItems = new List<TrashData>();
         CustomTeleportPoints = new Dictionary<string, Vector2>();
-        ClearAnglerQuests = true;
+        ClearAnglerQuests = false;
         ClearQuestsKey = Keys.V;
         ClearQuestsInterval = 2000;
+        NPCAutoHeal = false;
+        NPCAutoHealKey = Keys.F;
+        NPCHealVel = 1;
+        NPCHealInterval = 1;
+        Boss = false;
+        BossHealVel = 0.1f;
+        BossHealCap = 1000;
+        BossHealInterval = 3;
     }
     #endregion
 

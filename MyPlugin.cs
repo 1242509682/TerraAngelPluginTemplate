@@ -1,5 +1,5 @@
-﻿using System.Numerics;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
+using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
@@ -16,17 +16,21 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 8);
+    public Version Version => new(1, 0, 9);
     #endregion
 
     #region 注册与卸载
     public override void Load()
     {
+        // 注册NPC更新事件
+        NPCEventSystem.Register();
+        NPCEventSystem.OnNPCUpdate += OnUpdateNPC;
+
         // 添加额外饰品的Mono注册钩子
-        ExtraAccessory.AddAccessoryHooks();
+        ExtraAccessory.Register();
 
         // 添加反重力药水的Mono钩子
-        IgnoreGravity.AddGravityHooks();
+        IgnoreGravity.Register();
 
         // 读取配置文件
         ReloadConfig(null!);
@@ -48,14 +52,18 @@ public class MyPlugin(string path) : Plugin(path)
 
     public override void Unload()
     {
+        // 卸载NPC更新事件
+        NPCEventSystem.Dispose();
+        NPCEventSystem.OnNPCUpdate -= OnUpdateNPC;
+
         // 卸载插件时清理UI
         ToolManager.RemoveTool<UITool>();
 
         // 卸载额外饰品的Mono注册钩子
-        ExtraAccessory.RemoveExtraAccessory();
+        ExtraAccessory.Dispose();
 
         // 卸载反重力药水的Mono钩子
-        IgnoreGravity.DelGravityHooks();
+        IgnoreGravity.Dispose();
     }
     #endregion
 
@@ -152,6 +160,15 @@ public class MyPlugin(string path) : Plugin(path)
 
         // 更新清除钓鱼任务状态
         ClearAnglerQuests(Config.ClearAnglerQuests);
+
+        // 切换NPC自动回血状态
+        if (InputSystem.IsKeyPressed(Config.NPCAutoHealKey))
+        {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
+            Config.NPCAutoHeal = !Config.NPCAutoHeal;
+            string status = Config.NPCAutoHeal ? "启用" : "禁用";
+            ClientLoader.Chat.WriteLine($"NPC自动已{status}", Color.Yellow);
+        }
     }
     #endregion
 
@@ -168,7 +185,7 @@ public class MyPlugin(string path) : Plugin(path)
             NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
 
         LastQuestsTime = now;
-    } 
+    }
     #endregion
 
     #region 记录死亡位置（在玩家死亡时调用）
@@ -499,6 +516,66 @@ public class MyPlugin(string path) : Plugin(path)
         if (Main.netMode == 2)
         {
             NetMessage.TrySendData(66, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
+        }
+    }
+    #endregion
+
+    #region NPC更新事件
+    private void OnUpdateNPC(object? sender, NPCUpdateEventArgs e)
+    {
+        var npc = e.npc;
+
+        // 排除城镇NPC、友好NPC、雕像怪、傀儡
+        if (npc == null || !npc.active || npc.townNPC || !Config.Enabled ||
+            npc.friendly || npc.SpawnedFromStatue || npc.type == 488) return;
+
+        if (Config.NPCAutoHeal)
+        {
+            // npc自动回血
+            NPCAutoHeal(npc);
+            if (Main.netMode == 2)
+            {
+                npc.netUpdate = true;
+                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, e.whoAmI);
+            }
+        }
+    }
+    #endregion
+
+    #region 自动回血
+    public static Dictionary<string, DateTime> HealTimes = new Dictionary<string, DateTime>();
+    public static void NPCAutoHeal(NPC npc)
+    {
+        if (!HealTimes.ContainsKey(npc.FullName))
+        {
+            HealTimes[npc.FullName] = DateTime.UtcNow.AddSeconds(-1);
+        }
+
+        // 获取适合该NPC的回血间隔
+        int healInterval = npc.boss ? Config.BossHealInterval : Config.NPCHealInterval;
+
+        if ((DateTime.UtcNow - HealTimes[npc.FullName]).TotalMilliseconds >= healInterval * 1000)
+        {
+            if (!npc.boss)
+            {
+                // 普通NPC回血逻辑
+                int healAmount = (int)(npc.lifeMax * (Config.NPCHealVel / 100f));
+                npc.life = Math.Min(npc.lifeMax, npc.life + healAmount);
+            }
+            else if (Config.Boss)
+            {
+                // BOSS专属回血逻辑
+                float healPercent = Config.BossHealVel / 100f;
+                int baseHeal = (int)(npc.lifeMax * healPercent);
+
+                // 应用回血上限
+                int actualHeal = Math.Min(baseHeal, Config.BossHealCap);
+
+                // 确保不会超过最大血量
+                npc.life = Math.Min(npc.lifeMax, npc.life + actualHeal);
+            }
+
+            HealTimes[npc.FullName] = DateTime.UtcNow;
         }
     }
     #endregion
