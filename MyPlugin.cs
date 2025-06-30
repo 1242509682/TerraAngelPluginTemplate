@@ -6,6 +6,7 @@ using TerraAngel.Plugin;
 using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
+using Terraria.DataStructures;
 using Terraria.ID;
 using static MyPlugin.UITool;
 
@@ -79,10 +80,9 @@ public class MyPlugin(string path) : Plugin(path)
     #endregion
 
     #region 游戏更新事件(每帧刷新)
-    public long timer;
     public override void Update()
     {
-        if (!Config.Enabled || timer++ % 1 != 0) return;
+        if (!Config.Enabled) return;
 
         //按H键回血
         HealLife(InputSystem.IsKeyPressed(Config.HealKey));
@@ -169,6 +169,9 @@ public class MyPlugin(string path) : Plugin(path)
             string status = Config.NPCAutoHeal ? "启用" : "禁用";
             ClientLoader.Chat.WriteLine($"NPC自动已{status}", Color.Yellow);
         }
+
+        // 复活城镇NPC
+        Relive(InputSystem.IsKeyPressed(Config.NPCReliveKey));
     }
     #endregion
 
@@ -176,7 +179,7 @@ public class MyPlugin(string path) : Plugin(path)
     public static long LastQuestsTime = 0;
     public static void ClearAnglerQuests(bool clear)
     {
-        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        long now = Main.GameUpdateCount;
         if (!clear || now - LastQuestsTime < Config.ClearQuestsInterval) return;
 
         Main.anglerWhoFinishedToday.Clear();
@@ -189,10 +192,12 @@ public class MyPlugin(string path) : Plugin(path)
     #endregion
 
     #region 记录死亡位置（在玩家死亡时调用）
+    public static long LastDeadTime = 0;
     public static void RecordDeathPoint(Player plr)
     {
         // 只在死亡状态下 复活时间为0秒时记录
-        if (!plr.dead) return;
+        var now = Main.GameUpdateCount;
+        if (!plr.dead || now - LastDeadTime < 300) return;
 
         Vector2 point = plr.position;
 
@@ -207,6 +212,8 @@ public class MyPlugin(string path) : Plugin(path)
             // 添加当前死亡位置
             DeathPositions.Add(point);
             ClientLoader.Chat.WriteLine($"已记录死亡位置 ({(int)point.X / 16}, {(int)point.Y / 16})", Color.Yellow);
+
+            LastDeadTime = now;
         }
     }
     #endregion
@@ -254,24 +261,22 @@ public class MyPlugin(string path) : Plugin(path)
             return;
         }
 
+        // 给自动回收物品增加同步时间
+        long now = Main.GameUpdateCount;
+
         //初始化同步时间
         if (!SyncTrashTime.ContainsKey(plr.name))
         {
-            SyncTrashTime[plr.name] = 0;
+            SyncTrashTime[plr.name] = now;
         }
 
-        // 给自动回收物品增加同步时间
-        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
         if (now - SyncTrashTime[plr.name] < Config.TrashSyncInterval) return;
 
         //获取玩家垃圾桶格子
         var trash = plr.trashItem;
 
         // 排除钱币、玩家指定排除物品和临时排除物品
-        if (data.ExcluItem.Contains(trash.type))
-        {
-            return;
-        }
+        if (data.ExcluItem.Contains(trash.type)) return;
 
         // 如果垃圾桶格子不是空的 且不在自动垃圾桶物品表中 则添加到自动垃圾桶物品表中
         if (!data.TrashList.ContainsKey(trash.type) && trash.type != 0 && !trash.IsAir)
@@ -435,7 +440,7 @@ public class MyPlugin(string path) : Plugin(path)
 
         if (!Config.AutoUseItem) return;
 
-        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        long now = Main.GameUpdateCount;
         if (now - AutoUseTime < Config.UseItemInterval) return;
 
         // 使用当前手持物品
@@ -467,7 +472,7 @@ public class MyPlugin(string path) : Plugin(path)
     private static long MouseStrikeTime = 0;
     private static void UseItemStrikeNPC(bool key)
     {
-        long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+        long now = Main.GameUpdateCount;
         if (!key || now - MouseStrikeTime < Config.MouseStrikeInterval) return;
 
         var plr = Main.player[Main.myPlayer];
@@ -524,59 +529,202 @@ public class MyPlugin(string path) : Plugin(path)
     private void OnUpdateNPC(object? sender, NPCUpdateEventArgs e)
     {
         var npc = e.npc;
-
         // 排除城镇NPC、友好NPC、雕像怪、傀儡
-        if (npc == null || !npc.active || npc.townNPC || !Config.Enabled ||
+        if (npc == null || !npc.active || !Config.Enabled || npc.townNPC ||
             npc.friendly || npc.SpawnedFromStatue || npc.type == 488) return;
 
         if (Config.NPCAutoHeal)
         {
-            // npc自动回血
-            NPCAutoHeal(npc);
-            if (Main.netMode == 2)
-            {
-                npc.netUpdate = true;
-                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, e.whoAmI);
-            }
+            NPCAutoHeal(npc, e.whoAmI);  // npc自动回血
         }
     }
     #endregion
 
     #region 自动回血
-    public static Dictionary<string, DateTime> HealTimes = new Dictionary<string, DateTime>();
-    public static void NPCAutoHeal(NPC npc)
+    public static Dictionary<int, long> HealTimes = new Dictionary<int, long>();
+    public static void NPCAutoHeal(NPC npc, int whoAmI)
     {
-        if (!HealTimes.ContainsKey(npc.FullName))
+        var now = Main.GameUpdateCount;
+
+        // 初始化npc回血时间
+        if (!HealTimes.ContainsKey(whoAmI))
         {
-            HealTimes[npc.FullName] = DateTime.UtcNow.AddSeconds(-1);
+            HealTimes[whoAmI] = now;
         }
 
         // 获取适合该NPC的回血间隔
         int healInterval = npc.boss ? Config.BossHealInterval : Config.NPCHealInterval;
 
-        if ((DateTime.UtcNow - HealTimes[npc.FullName]).TotalMilliseconds >= healInterval * 1000)
+        // 检查是否超过回血间隔
+        if (now - HealTimes[whoAmI] < healInterval * 60) return;
+
+        if (!npc.boss)
         {
-            if (!npc.boss)
+            // 普通NPC回血逻辑
+            int healAmount = (int)(npc.lifeMax * (Config.NPCHealVel / 100f));
+            // 最低回血量为1
+            if (healAmount < 1) healAmount = 1;
+            npc.life = Math.Min(npc.lifeMax, npc.life + healAmount);
+
+            if (Main.netMode == 2)
             {
-                // 普通NPC回血逻辑
-                int healAmount = (int)(npc.lifeMax * (Config.NPCHealVel / 100f));
-                npc.life = Math.Min(npc.lifeMax, npc.life + healAmount);
+                npc.netUpdate = true;
+                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
             }
-            else if (Config.Boss)
-            {
-                // BOSS专属回血逻辑
-                float healPercent = Config.BossHealVel / 100f;
-                int baseHeal = (int)(npc.lifeMax * healPercent);
-
-                // 应用回血上限
-                int actualHeal = Math.Min(baseHeal, Config.BossHealCap);
-
-                // 确保不会超过最大血量
-                npc.life = Math.Min(npc.lifeMax, npc.life + actualHeal);
-            }
-
-            HealTimes[npc.FullName] = DateTime.UtcNow;
         }
+        else if (Config.Boss)
+        {
+            // BOSS专属回血逻辑
+            float healPercent = Config.BossHealVel / 100f;
+            int baseHeal = (int)(npc.lifeMax * healPercent);
+
+            // 应用回血上限
+            int actualHeal = Math.Min(baseHeal, Config.BossHealCap);
+
+            // 确保不会超过最大血量
+            npc.life = Math.Min(npc.lifeMax, npc.life + actualHeal);
+
+            if (Main.netMode == 2)
+            {
+                npc.netUpdate = true;
+                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
+            }
+        }
+
+        // 更新回血时间
+        HealTimes[whoAmI] = now;
+    }
+    #endregion
+
+    #region 复活城镇NPC方法
+    public static void Relive(bool key)
+    {
+        if (!key) return;
+        var plr = Main.LocalPlayer;
+        List<int> relive = GetRelive();
+        for (int i = 0; i < 200; i++)
+        {
+            if (Main.npc[i].active && Main.npc[i].townNPC && relive.Contains(Main.npc[i].type))
+            {
+                relive.Remove(Main.npc[i].type);
+            }
+        }
+
+        List<string> mess = new List<string>();
+        foreach (int id in relive)
+        {
+            NPC npc = new NPC();
+            var tileX = (int)plr.position.X / 16;
+            var tileY = (int)plr.position.Y / 16;
+            npc.SetDefaults(id, default);
+            SpawnNPC(npc.type, npc.FullName, 1, tileX, tileY, 5, 2);
+            if (mess.Count != 0 && mess.Count % 10 == 0)
+            {
+                mess.Add("\n" + npc.FullName);
+            }
+            else
+            {
+                mess.Add(npc.FullName);
+            }
+        }
+
+        // 输出复活的NPC列表
+        if (relive.Count > 0)
+        {
+            string msg = $"{plr.name} 复活了 {relive.Count}个 NPC:\n{string.Join("、", mess)}";
+            ClientLoader.Chat.WriteLine($"{msg}", color);
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine($"入住过的NPC都活着", color);
+        }
+    }
+
+    // 检查指定位置的图格是否为实心图格
+    public static bool TileSolid(int tileX, int tileY)
+    {
+        if (TilePlacementValid(tileX, tileY) && Main.tile[tileX, tileY] != null! && Main.tile[tileX, tileY].active() && Main.tileSolid[Main.tile[tileX, tileY].type] && !Main.tile[tileX, tileY].inActive() && !Main.tile[tileX, tileY].halfBrick() && Main.tile[tileX, tileY].slope() == 0)
+        {
+            return Main.tile[tileX, tileY].type != 379;
+        }
+
+        return false;
+    }
+
+    // 获取复活NPC列表
+    public static List<int> GetRelive()
+    {
+        List<int> list = new List<int>();
+        List<int> list2 = new List<int>
+        {
+            17, 18, 19, 20, 22, 38, 54, 107, 108, 124,
+            160, 178, 207, 208, 209, 227, 228, 229, 353, 369,
+            441, 550, 588, 633, 663, 637, 638, 656, 670, 678,
+            679, 680, 681, 682, 683, 684
+        };
+
+        if (Main.xMas)
+        {
+            list2.Add(142);
+        }
+
+        foreach (int item in list2)
+        {
+            if (DidDiscoverBestiaryEntry(item))
+            {
+                list.Add(item);
+            }
+        }
+
+        return list;
+    }
+
+    // 检查NPC是否解锁于怪物图鉴
+    public static bool DidDiscoverBestiaryEntry(int npcId)
+    {
+        return (int)Main.BestiaryDB.FindEntryByNPCID(npcId).UIInfoProvider.GetEntryUICollectionInfo().UnlockState > 0;
+    }
+    #endregion
+
+    #region 生成NPC方法
+    public static void SpawnNPC(int type, string name, int amount, int startTileX, int startTileY, int tileXRange = 100, int tileYRange = 50)
+    {
+        for (int i = 0; i < amount; i++)
+        {
+            GetRandomClearTileWithInRange(startTileX, startTileY, tileXRange, tileYRange, out var tileX, out var tileY);
+            NPC.NewNPC(new EntitySource_DebugCommand(), tileX * 16, tileY * 16, type);
+        }
+    }
+
+    // 获取随机清除图格位置
+    public static void GetRandomClearTileWithInRange(int startTileX, int startTileY, int tileXRange, int tileYRange, out int tileX, out int tileY)
+    {
+        int num = 0;
+        do
+        {
+            if (num == 100)
+            {
+                tileX = startTileX;
+                tileY = startTileY;
+                break;
+            }
+
+            tileX = startTileX + Random.Shared.Next(tileXRange * -1, tileXRange);
+            tileY = startTileY + Random.Shared.Next(tileYRange * -1, tileYRange);
+            num++;
+        }
+        while (TilePlacementValid(tileX, tileY) && TileSolid(tileX, tileY));
+    }
+
+    // 检查指定位置的图格是否在有效范围内
+    public static bool TilePlacementValid(int tileX, int tileY)
+    {
+        if (tileX >= 0 && tileX < Main.maxTilesX && tileY >= 0)
+        {
+            return tileY < Main.maxTilesY;
+        }
+
+        return false;
     }
     #endregion
 

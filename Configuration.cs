@@ -26,8 +26,8 @@ internal class Configuration
     public bool AutoUseItem { get; set; } = true;
     [JsonProperty("自动使用按键", Order = 4)]
     public Keys AutoUseKey = Keys.J; // 默认按键J
-    [JsonProperty("使用间隔(毫秒)", Order = 4)]
-    public int UseItemInterval { get; set; } = 100; // 默认500毫秒
+    [JsonProperty("使用间隔(帧)", Order = 4)]
+    public int UseItemInterval { get; set; } = 10;
 
     [JsonProperty("鼠标范围伤害NPC", Order = 5)]
     public bool MouseStrikeNPC { get; set; } = true;
@@ -35,8 +35,8 @@ internal class Configuration
     public int MouseStrikeNPCVel { get; set; } = 0;
     [JsonProperty("鼠标伤害NPC格数", Order = 5)]
     public int MouseStrikeNPCRange { get; set; } = 10;
-    [JsonProperty("鼠标伤害间隔(毫秒)", Order = 4)]
-    public int MouseStrikeInterval { get; set; } = 500; // 默认500毫秒
+    [JsonProperty("鼠标伤害间隔(帧)", Order = 5)]
+    public int MouseStrikeInterval { get; set; } = 30; // 默认30帧
 
     [JsonProperty("修改前缀按键", Order = 6)]
     public Keys ShowEditPrefixKey = Keys.P;
@@ -71,7 +71,7 @@ internal class Configuration
     [JsonProperty("自动垃圾桶按键", Order = 14)]
     public Keys AutoTrashKey = Keys.C;
     [JsonProperty("自动垃圾桶同步间隔", Order = 14)]
-    public int TrashSyncInterval { get; set; } = 500; // 默认1秒
+    public int TrashSyncInterval { get; set; } = 10; // 默认10帧
     [JsonProperty("自动垃圾桶表", Order = 14)]
     public List<TrashData> TrashItems { get; set; } = new List<TrashData>();
 
@@ -82,13 +82,13 @@ internal class Configuration
     public bool ClearAnglerQuests { get; set; } = false;
     [JsonProperty("清除钓鱼任务按键", Order = 16)]
     public Keys ClearQuestsKey = Keys.V;
-    [JsonProperty("清除钓鱼任务间隔(毫秒)", Order = 16)]
-    internal int ClearQuestsInterval = 2000;
+    [JsonProperty("清除钓鱼任务间隔(帧)", Order = 16)]
+    internal int ClearQuestsInterval = 120;
 
     [JsonProperty("NPC自动回血", Order = 17)]
     public bool NPCAutoHeal { get; set; } = false;
     [JsonProperty("NPC自动回血按键", Order = 17)]
-    public Keys NPCAutoHealKey = Keys.F;
+    public Keys NPCAutoHealKey = Keys.None;
     [JsonProperty("普通NPC回血百分比", Order = 17)]
     public float NPCHealVel { get; set; } = 1;         // 普通NPC回血百分比
     [JsonProperty("普通NPC回血间隔(秒)", Order = 17)]
@@ -101,6 +101,9 @@ internal class Configuration
     public int BossHealCap { get; set; } = 1000;        // BOSS每次回血上限
     [JsonProperty("BOSS独立回血间隔(秒)", Order = 17)]
     public int BossHealInterval { get; set; } = 3;      // BOSS独立回血间隔(秒)
+
+    [JsonProperty("NPC复活按键", Order = 17)]
+    public Keys NPCReliveKey = Keys.Home;
 
     #region 预设参数方法
     public void SetDefault()
@@ -116,8 +119,8 @@ internal class Configuration
         MouseStrikeNPC = false;
         MouseStrikeNPCVel = 0;
         MouseStrikeNPCRange = 3;
-        MouseStrikeInterval = 500;
-        UseItemInterval = 500;
+        MouseStrikeInterval = 30;
+        UseItemInterval = 10;
         ItemModify = true;
         ItemModifyKey = Keys.I;
         ShowEditPrefixKey = Keys.P;
@@ -131,20 +134,21 @@ internal class Configuration
         IgnoreGravityKey = Keys.T;
         AutoTrash = false;
         AutoTrashKey = Keys.C;
-        TrashSyncInterval = 100;
+        TrashSyncInterval = 10;
         TrashItems = new List<TrashData>();
         CustomTeleportPoints = new Dictionary<string, Vector2>();
         ClearAnglerQuests = false;
         ClearQuestsKey = Keys.V;
-        ClearQuestsInterval = 2000;
+        ClearQuestsInterval = 120;
         NPCAutoHeal = false;
-        NPCAutoHealKey = Keys.F;
+        NPCAutoHealKey = Keys.None;
         NPCHealVel = 1;
         NPCHealInterval = 1;
         Boss = false;
         BossHealVel = 0.1f;
         BossHealCap = 1000;
         BossHealInterval = 3;
+        NPCReliveKey = Keys.Home;
     }
     #endregion
 

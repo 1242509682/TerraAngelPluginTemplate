@@ -30,7 +30,8 @@ public class UITool : Tool
     private bool EditIgnoreGravityKey = false; // 忽略重力按键编辑状态
     private bool EditAutoTrashKey = false; // 自动垃圾桶按键编辑状态
     private bool EditClearAnglerQuestsKey = false; // 清除钓鱼任务按键编辑状态
-    private bool EditNPCAutoHealKey = false; // NPP自动回血按键编辑状态
+    private bool EditNPCAutoHealKey = false; // NPC自动回血按键编辑状态
+    public bool EditNPCReliveKey = false; // 复活NPC按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -61,7 +62,7 @@ public class UITool : Tool
         bool AutoClearAngel = Config.ClearAnglerQuests; // 清除钓鱼任务开关
         int ClearAngelInterval = Config.ClearQuestsInterval; // 清除钓鱼任务按键
 
-        bool NPCAutoHeal = Config.NPCAutoHeal; // NPC自动回血开关
+        bool nPCAutoHeal = Config.NPCAutoHeal; // NPC自动回血开关
         float NPCHealVel = Config.NPCHealVel; // 普通NPC回血百分比
         int NPCHealVelInterval = Config.NPCHealInterval; // 普通NPC回血间隔(秒)
         bool Boss = Config.Boss; // 允许boss回血
@@ -184,6 +185,7 @@ public class UITool : Tool
                 ImGui.TreePop();
             }
 
+            // 辅助功能区域
             ImGui.Separator();
             if (ImGui.TreeNodeEx("辅助功能", ImGuiTreeNodeFlags.Framed))
             {
@@ -213,10 +215,10 @@ public class UITool : Tool
                 DrawKeySelector("按键", ref Config.ClearQuestsKey, ref EditClearAnglerQuestsKey);
                 if (AutoClearAngel)
                 {
-                    ImGui.Text("清理间隔(毫秒):");
+                    ImGui.Text("清理间隔(帧):");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##AnglerQuestsInterval", ref ClearAngelInterval, 1, 50000, "%d ms");
+                    ImGui.SliderInt("##AnglerQuestsInterval", ref ClearAngelInterval, 1, 3000, "%d fps");
                 }
 
                 // 自动使用物品
@@ -226,10 +228,10 @@ public class UITool : Tool
                 DrawKeySelector("按键", ref Config.AutoUseKey, ref EditAutoUseKey);
                 if (autoUseItem)
                 {
-                    ImGui.Text("使用间隔(毫秒):");
+                    ImGui.Text("使用间隔(帧):");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 20000, "%d ms");
+                    ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 1800, "%d fps");
                 }
 
                 ImGui.Checkbox("启用鼠标范围伤害NPC", ref mouseStrikeNPC);
@@ -242,10 +244,10 @@ public class UITool : Tool
                     ImGui.SameLine();
                     ImGui.Text($"{mouseStrikeNPCRange} 格");
 
-                    ImGui.Text("伤害间隔(毫秒):");
+                    ImGui.Text("伤害间隔(帧):");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##StrikeInterval", ref mouseStrikeNPCInterval, 1, 20000, "%d ms");
+                    ImGui.SliderInt("##StrikeInterval", ref mouseStrikeNPCInterval, 1, 1800, "%d fps");
 
                     ImGui.Text("伤害值:");
                     ImGui.SameLine();
@@ -255,48 +257,10 @@ public class UITool : Tool
                         ImGui.SetTooltip("不设置数值时使用手上物品伤害");
                 }
 
-                // npc自动回血
-                ImGui.Checkbox("NPC自动回血", ref NPCAutoHeal);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.NPCAutoHealKey, ref EditNPCAutoHealKey);
-                if (NPCAutoHeal)
-                {
-                    ImGui.Text("普通NPC间隔(秒):");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##NPCHealVelInterval", ref NPCHealVelInterval, 1, 60 * 5); //最久5分钟回一次
-
-                    // 普通NPC回血设置
-                    ImGui.Text("普通NPC回血(百分比):");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderFloat("##NPCHealVel", ref NPCHealVel, 0.01f, 20f, "%.2f%%");
-
-                    // BOSS回血设置
-                    ImGui.Checkbox("允许Boss回血", ref Boss);
-                    if (Boss)
-                    {
-                        ImGui.Text("BOSS回血限制");
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200);
-                        ImGui.InputInt("##BossHealCap", ref BossHealCap);
-
-                        ImGui.Text("BOSS回血间隔(秒)");
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200);
-                        ImGui.SliderInt("##BossHealInterval", ref BossHealInterval, 1, 60 * 5); //最久5分钟回一次
-
-                        ImGui.Text("BOSS回血值(百分比)");
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200);
-                        ImGui.SliderFloat("##BossHealVel", ref BossHealVel, 0.01f, 20f, "%.2f%%");
-                    }
-                }
-
                 ImGui.TreePop();
             }
 
-            // 在 DrawUI 方法中添加物品管理部分
+            // 物品管理区域
             ImGui.Separator();
             if (ImGui.TreeNodeEx("物品管理", ImGuiTreeNodeFlags.Framed))
             {
@@ -378,6 +342,151 @@ public class UITool : Tool
 
                 ImGui.TreePop();
             }
+
+            // NPC管理区域
+            ImGui.Separator();
+            if (ImGui.TreeNodeEx("NPC管理", ImGuiTreeNodeFlags.Framed))
+            {
+                // 第一次打开时加载NPC列表
+                if (!npcListLoaded)
+                {
+                    LoadNPCList();
+                    npcListLoaded = true;
+                }
+
+                // npc自动回血
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动回血");
+                ImGui.Separator();
+                ImGui.Checkbox("NPC自动回血", ref nPCAutoHeal);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.NPCAutoHealKey, ref EditNPCAutoHealKey);
+                if (nPCAutoHeal)
+                {
+                    ImGui.Text("普通NPC间隔(秒):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##NPCHealVelInterval", ref NPCHealVelInterval, 1, 60 * 5); //最久5分钟回一次
+
+                    // 普通NPC回血设置
+                    ImGui.Text("普通NPC回血(百分比):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderFloat("##NPCHealVel", ref NPCHealVel, 0.01f, 20f, "%.2f%%");
+
+                    // BOSS回血设置
+                    ImGui.Checkbox("允许Boss回血", ref Boss);
+                    if (Boss)
+                    {
+                        ImGui.Text("BOSS回血限制");
+                        ImGui.SameLine();
+                        ImGui.SetNextItemWidth(200);
+                        ImGui.InputInt("##BossHealCap", ref BossHealCap);
+
+                        ImGui.Text("BOSS回血间隔(秒)");
+                        ImGui.SameLine();
+                        ImGui.SetNextItemWidth(200);
+                        ImGui.SliderInt("##BossHealInterval", ref BossHealInterval, 1, 60 * 5); //最久5分钟回一次
+
+                        ImGui.Text("BOSS回血值(百分比)");
+                        ImGui.SameLine();
+                        ImGui.SetNextItemWidth(200);
+                        ImGui.SliderFloat("##BossHealVel", ref BossHealVel, 0.01f, 20f, "%.2f%%");
+                    }
+                }
+
+                // 复活NPC区域
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "复活NPC");
+                ImGui.Separator();
+
+                if (ImGui.Button("复活所有城镇NPC"))
+                {
+                    Relive(true);
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC");
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.NPCReliveKey, ref EditNPCReliveKey);
+
+                // 生成NPC区域
+                ImGui.Spacing();
+                ImGui.TextColored(new Vector4(0.8f, 1f, 0.6f, 1f), "生成NPC");
+                ImGui.Separator();
+
+                // 输入框和搜索
+                ImGui.Text("搜索NPC:");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(200);
+                ImGui.InputTextWithHint("##NPCSearch", "输入名称或ID", ref npcSearchFilter, 100);
+
+                // 生成数量
+                ImGui.Text("生成数量:");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(100);
+                ImGui.InputInt("##NPCAmount", ref spawnNPCAmount);
+                if (spawnNPCAmount < 1) spawnNPCAmount = 1;
+                if (spawnNPCAmount > 100) spawnNPCAmount = 100;
+
+                // 应用过滤后的NPC列表
+                var filteredNPCs = npcList
+                    .Where(n => string.IsNullOrWhiteSpace(npcSearchFilter) ||
+                                n.Name.Contains(npcSearchFilter, StringComparison.OrdinalIgnoreCase) ||
+                                n.ID.ToString().Contains(npcSearchFilter))
+                    .ToList();
+
+                // 显示NPC列表
+                ImGui.BeginChild("NPCList", new Vector2(0, 200), ImGuiChildFlags.Borders);
+
+                if (filteredNPCs.Count > 0)
+                {
+                    // 显示表头
+                    ImGui.Columns(3, "npc_columns", true);
+                    ImGui.SetColumnWidth(0, 60);  // ID
+                    ImGui.SetColumnWidth(1, 250); // 名称
+                    ImGui.SetColumnWidth(2, 120); // 操作
+
+                    ImGui.Text("ID"); ImGui.NextColumn();
+                    ImGui.Text("名称"); ImGui.NextColumn();
+                    ImGui.Text("操作"); ImGui.NextColumn();
+                    ImGui.Separator();
+
+                    foreach (var npc in filteredNPCs)
+                    {
+                        ImGui.Text($"{npc.ID}"); ImGui.NextColumn();
+                        ImGui.Text($"{npc.Name}"); ImGui.NextColumn();
+
+                        // 生成按钮
+                        if (ImGui.Button($"生成##{npc.ID}"))
+                        {
+                            SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
+                                     (int)Main.LocalPlayer.position.X / 16,
+                                     (int)Main.LocalPlayer.position.Y / 16);
+                            ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
+                        }
+
+                        ImGui.NextColumn();
+                    }
+                    ImGui.Columns(1);
+                }
+                else
+                {
+                    ImGui.Text("没有找到匹配的NPC");
+                }
+
+                ImGui.EndChild();
+
+                // 手动输入生成
+                ImGui.Text("手动生成:");
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(200);
+                ImGui.InputTextWithHint("##ManualSpawn", "输入NPC ID或名称", ref spawnNPCInput, 100);
+                ImGui.SameLine();
+                if (ImGui.Button("生成"))
+                {
+                    SpawnNPCByInput();
+                }
+
+                ImGui.TreePop();
+            }
         }
 
         // 更新配置值
@@ -408,7 +517,7 @@ public class UITool : Tool
         Config.ClearAnglerQuests = AutoClearAngel; // 清除钓鱼任务开关
         Config.ClearQuestsInterval = ClearAngelInterval; // 清除钓鱼任务间隔
 
-        Config.NPCAutoHeal = NPCAutoHeal; // NPC自动回血开关
+        Config.NPCAutoHeal = nPCAutoHeal; // NPC自动回血开关
         Config.NPCHealVel = NPCHealVel; // 普通NPC回血百分比
         Config.NPCHealInterval = NPCHealVelInterval; // 普通NPC回血间隔(秒)
         Config.Boss = Boss; // 允许boss回血
@@ -434,6 +543,106 @@ public class UITool : Tool
             Config.Write();
             ClientLoader.Chat.WriteLine("已重置为默认设置", color);
         }
+    }
+    #endregion
+
+    #region NPC管理器
+    private string spawnNPCInput = ""; // 生成NPC输入
+    private int spawnNPCAmount = 1; // 生成数量
+    private string npcSearchFilter = ""; // NPC搜索过滤器
+    private List<NPCInfo> npcList = new List<NPCInfo>(); // NPC列表缓存
+    private bool npcListLoaded = false; // NPC列表是否已加载
+
+
+    // 加载NPC列表
+    private void LoadNPCList()
+    {
+        npcList.Clear();
+
+        // 添加所有NPC
+        for (int id = -65; id < NPCID.Count; id++)
+        {
+            // 跳过无效NPC
+            if (id == 0 || id == -64 || id == -65) continue;
+
+            string name = Lang.GetNPCNameValue(id);
+
+            // 跳过无效名称
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            if (name.Contains("Unloaded")) continue;
+
+            npcList.Add(new NPCInfo
+            {
+                ID = id,
+                Name = name,
+                IsTownNPC = ContentSamples.NpcsByNetId[id].townNPC
+            });
+        }
+
+        // 按ID排序
+        npcList = npcList.OrderBy(n => n.ID).ToList();
+    }
+
+    // 根据输入生成NPC
+    private void SpawnNPCByInput()
+    {
+        if (string.IsNullOrWhiteSpace(spawnNPCInput))
+        {
+            ClientLoader.Chat.WriteLine("请输入NPC ID或名称", Color.Red);
+            return;
+        }
+
+        // 尝试解析为整数
+        if (int.TryParse(spawnNPCInput, out int npcId))
+        {
+            if (npcId < -65 || npcId >= NPCID.Count)
+            {
+                ClientLoader.Chat.WriteLine($"无效的NPC ID: {npcId}", Color.Red);
+                return;
+            }
+
+            string name = Lang.GetNPCNameValue(npcId);
+            if (string.IsNullOrWhiteSpace(name) || name.Contains("Unloaded"))
+            {
+                ClientLoader.Chat.WriteLine($"未找到ID为 {npcId} 的NPC", Color.Red);
+                return;
+            }
+
+            SpawnNPC(npcId, name, spawnNPCAmount,
+                     (int)Main.LocalPlayer.position.X / 16,
+                     (int)Main.LocalPlayer.position.Y / 16);
+            ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {name}", Color.Green);
+            return;
+        }
+
+        // 按名称搜索
+        var matches = npcList
+            .Where(n => n.Name.Equals(spawnNPCInput, StringComparison.OrdinalIgnoreCase) ||
+                        n.Name.Contains(spawnNPCInput, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            ClientLoader.Chat.WriteLine($"未找到名称为 '{spawnNPCInput}' 的NPC", Color.Red);
+            return;
+        }
+
+        if (matches.Count > 1)
+        {
+            ClientLoader.Chat.WriteLine($"找到多个匹配的NPC，请使用ID:", Color.Yellow);
+            foreach (var match in matches)
+            {
+                ClientLoader.Chat.WriteLine($"{match.Name} (ID: {match.ID})", Color.Yellow);
+            }
+            return;
+        }
+
+        // 只有一个匹配项
+        var npc = matches[0];
+        SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
+                 (int)Main.LocalPlayer.position.X / 16,
+                 (int)Main.LocalPlayer.position.Y / 16);
+        ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
     }
     #endregion
 
@@ -823,7 +1032,8 @@ public class UITool : Tool
     private void StartMoonEvent(int moonType)
     {
         // 延迟一帧确保状态完全重置
-        Main.QueueMainThreadAction(() => {
+        Main.QueueMainThreadAction(() =>
+        {
             if (moonType == 1)
             {
                 Main.pumpkinMoon = true;
@@ -869,7 +1079,7 @@ public class UITool : Tool
     public static bool TP = false;
     public static Vector4 TPColor = new Vector4(1f, 1f, 1f, 1f);
     public static float TPProgress = 0f;
-    public static int LastTPTime = 0;
+    public static uint LastTPTime = 0;
     public static bool TPCooldown = false;
     private bool ShowNPCTeleportWindow = false; // 显示NPC传送窗口
     private bool ShowDeathTeleportWindow = false; // 显示死亡地点选择窗口
@@ -1037,7 +1247,7 @@ public class UITool : Tool
         TP = true;
         TPColor = color;
         TPProgress = 0f;
-        LastTPTime = (int)Main.GameUpdateCount;
+        LastTPTime = Main.GameUpdateCount;
         TPCooldown = true;
     }
 
@@ -1809,10 +2019,10 @@ public class UITool : Tool
 
             // 同步间隔设置
             ImGui.SameLine();
-            ImGui.Text("回收间隔(毫秒):");
+            ImGui.Text("回收间隔(帧):");
             ImGui.SameLine();
             ImGui.SetNextItemWidth(150);
-            ImGui.SliderInt("##AutoTrashInterval", ref AutoTrashSyncInterval, 100, 5000, "%d ms");
+            ImGui.SliderInt("##AutoTrashInterval", ref AutoTrashSyncInterval, 1, 600, "%d fps");
             Config.TrashSyncInterval = AutoTrashSyncInterval;
 
             // 默认排除时间设置
