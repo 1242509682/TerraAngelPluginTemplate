@@ -85,6 +85,7 @@ v1.0.0
 > 配置文件位置：D:\Documents\MyGames\Terraria\TerraAngel\MyPlugin.json
 ```json
 {
+  {
   "插件开关": true,
   "回血按键": 72,
   "开启快捷键回血": true,
@@ -93,11 +94,11 @@ v1.0.0
   "快速自杀复活": true,
   "自动使用按键": 74,
   "自动使用物品": false,
-  "使用间隔(毫秒)": 500,
-  "鼠标伤害间隔(毫秒)": 500,
+  "使用间隔(帧)": 10,
   "鼠标范围伤害NPC": false,
   "鼠标范围伤害值": 0,
   "鼠标伤害NPC格数": 3,
+  "鼠标伤害间隔(帧)": 30,
   "修改前缀按键": 80,
   "快速收藏按键": 79,
   "社交栏饰品开关按键": 78,
@@ -112,19 +113,150 @@ v1.0.0
   "忽略重力药水": true,
   "自动垃圾桶按键": 67,
   "自动垃圾桶": false,
-  "自动垃圾桶同步间隔": 100,
+  "自动垃圾桶同步间隔": 10,
   "自动垃圾桶表": [],
   "自定义传送点": {},
-  "清除钓鱼任务按键": 86,
-  "清除钓鱼任务间隔(毫秒)": 2000,
+  "清除钓鱼任务按键": 70,
+  "清除钓鱼任务间隔(帧)": 120,
   "清除钓鱼任务": false,
-  "NPC自动回血按键": 70,
+  "NPC自动回血按键": 0,
   "NPC自动回血": false,
   "普通NPC回血百分比": 1.0,
   "普通NPC回血间隔(秒)": 1,
   "允许Boss回血": false,
   "BOSS回血百分比": 0.1,
   "BOSS每次回血上限": 1000,
-  "BOSS独立回血间隔(秒)": 3
+  "BOSS独立回血间隔(秒)": 3,
+  "NPC复活按键": 36,
+  "连锁挖矿按键": 86,
+  "连锁挖矿开关": false,
+  "连锁挖矿上限": 500,
+  "连锁图格表": [
+    {
+      "TileID": 6,
+      "ItemName": "铁矿"
+    },
+    {
+      "TileID": 7,
+      "ItemName": "铜矿"
+    },
+    {
+      "TileID": 8,
+      "ItemName": "金矿"
+    },
+    {
+      "TileID": 9,
+      "ItemName": "银矿"
+    },
+    {
+      "TileID": 22,
+      "ItemName": "魔矿"
+    },
+    {
+      "TileID": 37,
+      "ItemName": "陨石"
+    },
+    {
+      "TileID": 48,
+      "ItemName": "尖刺"
+    },
+    {
+      "TileID": 56,
+      "ItemName": "黑曜石"
+    },
+    {
+      "TileID": 58,
+      "ItemName": "狱石"
+    },
+    {
+      "TileID": 63,
+      "ItemName": "蓝玉石块"
+    },
+    {
+      "TileID": 64,
+      "ItemName": "红玉石块"
+    },
+    {
+      "TileID": 65,
+      "ItemName": "翡翠石块"
+    },
+    {
+      "TileID": 66,
+      "ItemName": "黄玉石块"
+    },
+    {
+      "TileID": 67,
+      "ItemName": "紫晶石块"
+    },
+    {
+      "TileID": 68,
+      "ItemName": "钻石石块"
+    },
+    {
+      "TileID": 107,
+      "ItemName": "钴矿"
+    },
+    {
+      "TileID": 108,
+      "ItemName": "秘银矿"
+    },
+    {
+      "TileID": 111,
+      "ItemName": "精金矿"
+    },
+    {
+      "TileID": 166,
+      "ItemName": "锡矿"
+    },
+    {
+      "TileID": 167,
+      "ItemName": "铅矿"
+    },
+    {
+      "TileID": 168,
+      "ItemName": "钨矿"
+    },
+    {
+      "TileID": 169,
+      "ItemName": "铂金矿"
+    },
+    {
+      "TileID": 204,
+      "ItemName": "猩红矿"
+    },
+    {
+      "TileID": 211,
+      "ItemName": "叶绿矿"
+    },
+    {
+      "TileID": 221,
+      "ItemName": "钯金矿"
+    },
+    {
+      "TileID": 222,
+      "ItemName": "山铜矿"
+    },
+    {
+      "TileID": 223,
+      "ItemName": "钛金矿"
+    },
+    {
+      "TileID": 229,
+      "ItemName": "蜂蜜块"
+    },
+    {
+      "TileID": 230,
+      "ItemName": "松脆蜂蜜块"
+    },
+    {
+      "TileID": 232,
+      "ItemName": "木尖刺"
+    },
+    {
+      "TileID": 404,
+      "ItemName": "沙漠化石"
+    }
+  ]
+}
 }
 ```
