@@ -1,14 +1,11 @@
 ﻿using Microsoft.Xna.Framework;
-using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
 using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
-using Terraria.DataStructures;
 using Terraria.ID;
-using static MyPlugin.UITool;
 
 namespace MyPlugin;
 
@@ -17,12 +14,16 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 0, 9);
+    public Version Version => new(1, 1, 0);
     #endregion
 
     #region 注册与卸载
     public override void Load()
     {
+        // 注册图格编辑事件
+        TileEditEventSystem.Register();
+        TileEditEventSystem.OnTileKill += OnTileEdit;
+
         // 注册NPC更新事件
         NPCEventSystem.Register();
         NPCEventSystem.OnNPCUpdate += OnUpdateNPC;
@@ -53,6 +54,10 @@ public class MyPlugin(string path) : Plugin(path)
 
     public override void Unload()
     {
+        //卸载图格编辑事件
+        TileEditEventSystem.Dispose();
+        TileEditEventSystem.OnTileKill -= OnTileEdit;
+
         // 卸载NPC更新事件
         NPCEventSystem.Dispose();
         NPCEventSystem.OnNPCUpdate -= OnUpdateNPC;
@@ -85,19 +90,19 @@ public class MyPlugin(string path) : Plugin(path)
         if (!Config.Enabled) return;
 
         //按H键回血
-        HealLife(InputSystem.IsKeyPressed(Config.HealKey));
+        Utils.HealLife(InputSystem.IsKeyPressed(Config.HealKey));
 
         //按K键自杀与复活自己
         Commands.KillPlayer(InputSystem.IsKeyPressed(Config.KillKey));
 
         //自动使用物品
-        AutoUseItem(InputSystem.IsKeyPressed(Config.AutoUseKey));
+        Utils.AutoUseItem(InputSystem.IsKeyPressed(Config.AutoUseKey));
 
         //使用物品时伤害鼠标范围内的NPC
-        UseItemStrikeNPC(Config.MouseStrikeNPC);
+        Utils.UseItemStrikeNPC(Config.MouseStrikeNPC);
 
         //快捷键I 自动应用修改物品
-        ModifyItem(InputSystem.IsKeyPressed(Config.ItemModifyKey));
+        Utils.ModifyItem(InputSystem.IsKeyPressed(Config.ItemModifyKey));
 
         //快捷键P 开启关闭修改批量前缀窗口
         if (InputSystem.IsKeyPressed(Config.ShowEditPrefixKey))
@@ -110,7 +115,7 @@ public class MyPlugin(string path) : Plugin(path)
         if (InputSystem.IsKeyPressed(Config.FavoriteKey))
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
-            UITool.FavoriteAllItems(Main.LocalPlayer);
+            Utils.FavoriteAllItems(Main.LocalPlayer);
         }
 
         // N键切换社交栏饰品生效状态
@@ -118,6 +123,7 @@ public class MyPlugin(string path) : Plugin(path)
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
             Config.SocialAccessory = !Config.SocialAccessory;
+            Config.Write();
             string status = Config.SocialAccessory ? "开启" : "关闭";
             ClientLoader.Chat.WriteLine($"社交栏饰品功能已{status}", color);
         }
@@ -127,6 +133,7 @@ public class MyPlugin(string path) : Plugin(path)
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
             Config.IgnoreGravity = !Config.IgnoreGravity;
+            Config.Write();
             string status = Config.IgnoreGravity ? "启用" : "禁用";
             ClientLoader.Chat.WriteLine($"重力控制已{status}", Color.Yellow);
         }
@@ -136,18 +143,19 @@ public class MyPlugin(string path) : Plugin(path)
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
             Config.AutoTrash = !Config.AutoTrash;
+            Config.Write();
             string status = Config.AutoTrash ? "启用" : "禁用";
             ClientLoader.Chat.WriteLine($"自动垃圾桶已{status}", Color.Yellow);
         }
 
         // 触发自动垃圾桶方法
-        AutoTrash();
+        Utils.AutoTrash();
 
         // 更新传送进度
-        UpdateTeleportProgress();
+        Utils.UpdateTeleportProgress();
 
         // 记录死亡坐标
-        RecordDeathPoint(Main.LocalPlayer);
+        Utils.RecordDeathPoint(Main.LocalPlayer);
 
         // 切换清除钓鱼任务状态
         if (InputSystem.IsKeyPressed(Config.ClearQuestsKey))
@@ -159,369 +167,41 @@ public class MyPlugin(string path) : Plugin(path)
         }
 
         // 更新清除钓鱼任务状态
-        ClearAnglerQuests(Config.ClearAnglerQuests);
+        Utils.ClearAnglerQuests(Config.ClearAnglerQuests);
 
         // 切换NPC自动回血状态
         if (InputSystem.IsKeyPressed(Config.NPCAutoHealKey))
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
             Config.NPCAutoHeal = !Config.NPCAutoHeal;
+            Config.Write();
             string status = Config.NPCAutoHeal ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"NPC自动已{status}", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"NPC自动回血已{status}", Color.Yellow);
         }
 
         // 复活城镇NPC
-        Relive(InputSystem.IsKeyPressed(Config.NPCReliveKey));
-    }
-    #endregion
+        Utils.Relive(InputSystem.IsKeyPressed(Config.NPCReliveKey));
 
-    #region 清理钓鱼任务方法
-    public static long LastQuestsTime = 0;
-    public static void ClearAnglerQuests(bool clear)
-    {
-        long now = Main.GameUpdateCount;
-        if (!clear || now - LastQuestsTime < Config.ClearQuestsInterval) return;
-
-        Main.anglerWhoFinishedToday.Clear();
-        Main.anglerQuestFinished = false;
-        if (Main.netMode == 2)
-            NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
-
-        LastQuestsTime = now;
-    }
-    #endregion
-
-    #region 记录死亡位置（在玩家死亡时调用）
-    public static long LastDeadTime = 0;
-    public static void RecordDeathPoint(Player plr)
-    {
-        // 只在死亡状态下 复活时间为0秒时记录
-        var now = Main.GameUpdateCount;
-        if (!plr.dead || now - LastDeadTime < 300) return;
-
-        Vector2 point = plr.position;
-
-        // 检查是否已经存在相同或非常接近的位置
-        bool Exists = DeathPositions.Any(pos =>
-            Math.Abs(pos.X - point.X) < 16 &&
-            Math.Abs(pos.Y - point.Y) < 16);
-
-        // 如果不重复，则添加新位置
-        if (!Exists)
+        // 连锁挖矿
+        if (InputSystem.IsKeyPressed(Config.VeinMinerKey))
         {
-            // 添加当前死亡位置
-            DeathPositions.Add(point);
-            ClientLoader.Chat.WriteLine($"已记录死亡位置 ({(int)point.X / 16}, {(int)point.Y / 16})", Color.Yellow);
-
-            LastDeadTime = now;
-        }
-    }
-    #endregion
-
-    #region 更新传送程序
-    public static void UpdateTeleportProgress()
-    {
-        if (TP)
-        {
-            TPProgress += 0.05f;
-            if (TPProgress >= 1f)
-            {
-                TP = false;
-                ClientLoader.Chat.WriteLine("传送完成!", Color.Yellow);
-                SoundEngine.PlaySound(SoundID.Item6); // 传送完成音效
-            }
-        }
-
-        // 检查冷却时间结束
-        if (TPCooldown && (Main.GameUpdateCount - LastTPTime) > 180)
-        {
-            TPCooldown = false;
-        }
-    }
-    #endregion
-
-    #region 触发自动垃圾桶方法
-    private static Dictionary<string, long> SyncTrashTime = new Dictionary<string, long>();
-    public static Dictionary<int, DateTime> AdventExclusions = new Dictionary<int, DateTime>();
-    private static void AutoTrash()
-    {
-        if (!Config.AutoTrash) return;
-
-        var plr = Main.player[Main.myPlayer];
-        var data = Config.TrashItems.FirstOrDefault(x => x.Name == plr.name);
-        if (data == null) //如果没有获取到的玩家数据
-        {
-            var newData = new TrashData()
-            {
-                Name = plr.name,
-                TrashList = new Dictionary<int, int>(),
-                ExcluItem = new HashSet<int>() { 71, 72, 73, 74 }
-            };
-            Config.TrashItems.Add(newData);
-            return;
-        }
-
-        // 给自动回收物品增加同步时间
-        long now = Main.GameUpdateCount;
-
-        //初始化同步时间
-        if (!SyncTrashTime.ContainsKey(plr.name))
-        {
-            SyncTrashTime[plr.name] = now;
-        }
-
-        if (now - SyncTrashTime[plr.name] < Config.TrashSyncInterval) return;
-
-        //获取玩家垃圾桶格子
-        var trash = plr.trashItem;
-
-        // 排除钱币、玩家指定排除物品和临时排除物品
-        if (data.ExcluItem.Contains(trash.type)) return;
-
-        // 如果垃圾桶格子不是空的 且不在自动垃圾桶物品表中 则添加到自动垃圾桶物品表中
-        if (!data.TrashList.ContainsKey(trash.type) && trash.type != 0 && !trash.IsAir)
-        {
-            //添加垃圾桶的物品与数量 到 “自动垃圾桶物品表”
-            ClientLoader.Chat.WriteLine($"首次将 [c/4C92D8:{Lang.GetItemNameValue(trash.type)}] 放入自动垃圾桶", color);
-            data.TrashList.Add(trash.type, trash.stack);
+            Config.VeinMinerEnabled = !Config.VeinMinerEnabled;
             Config.Write();
-            trash.stack = 0;
-            trash.TurnToAir();
-        }
-
-        for (int i = 0; i < plr.inventory.Length; i++)
-        {
-            var inv = plr.inventory[i];
-
-            if (inv.IsAir || inv.type == 0 || inv == plr.HeldItem) continue;
-
-            if (data.TrashList.ContainsKey(inv.type) &&
-                !data.ExcluItem.Contains(inv.type) &&
-                !AdventExcluded(inv.type))
-            {
-                //将该格子的物品数量 添加到“自动垃圾桶物品表”
-                data.TrashList[inv.type] += inv.stack;
-                Config.Write();
-                inv.stack = 0;
-                inv.TurnToAir();
-            }
-        }
-
-        SyncTrashTime[plr.name] = now;
-    }
-    #endregion
-
-    #region 检查物品是否在临时排除期内
-    public static bool AdventExcluded(int type)
-    {
-        if (AdventExclusions.TryGetValue(type, out var ExclusionEndTime))
-        {
-            if (DateTime.Now < ExclusionEndTime)
-            {
-                return true;
-            }
-            AdventExclusions.Remove(type);
-        }
-        return false;
-    }
-    #endregion
-
-    #region 获取临时排除剩余时间
-    public static string GetAdventTime(int itemType)
-    {
-        if (AdventExclusions.TryGetValue(itemType, out var ExclusionEndTime))
-        {
-            if (DateTime.Now < ExclusionEndTime)
-            {
-                TimeSpan left = ExclusionEndTime - DateTime.Now;
-                return $"{left.TotalSeconds:F0}秒";
-            }
-            AdventExclusions.Remove(itemType);
-        }
-        return "0秒";
-    }
-    #endregion
-
-    #region 修改手上物品方法
-    private void ModifyItem(bool key)
-    {
-        if (!Config.ItemModify || !key) return;
-
-        var plr = Main.player[Main.myPlayer];
-        var item = plr.HeldItem;
-
-        if (item == null || item.IsAir || item.type == 0)
-        {
-            ClientLoader.Chat.WriteLine("请先手持一个物品", Color.Red);
-            return;
-        }
-
-        // Alt+按键：添加当前物品到预设列表
-        if (InputSystem.Alt)
-        {
-            SoundEngine.PlaySound(SoundID.MenuTick);
-
-            // 创建新物品预设
-            ItemData newItem = ItemData.FromItem(plr.HeldItem);
-
-            // 生成唯一的预设名称
-            string baseName = $"{plr.HeldItem.Name}";
-            string newName = baseName;
-            int prefix = 1;
-
-            // 检查名称是否已存在，如果存在则添加后缀
-            while (Config.ItemModifyList.Any(p => p.Name == newName))
-            {
-                newName = $"{baseName}_{prefix++}";
-            }
-
-            newItem.Name = newName;
-
-            Config.ItemModifyList.Add(newItem);
-            Config.Write();
-            return;
-        }
-
-        // Ctrl+按键：删除当前类型的预设
-        if (InputSystem.Ctrl)
-        {
-            SoundEngine.PlaySound(SoundID.MenuTick);
-
-            // 查找匹配的预设
-            ItemData presetToRemove = Config.ItemModifyList.FirstOrDefault(p => p.Type == item.type)!;
-
-            if (presetToRemove != null)
-            {
-                Config.ItemModifyList.Remove(presetToRemove);
-                Config.Write();
-                ClientLoader.Chat.WriteLine($"已删除物品预设: {presetToRemove.Name}", Color.Yellow);
-            }
-            else
-            {
-                ClientLoader.Chat.WriteLine($"未找到类型为 {item.type} 的物品预设", Color.Red);
-            }
-            return;
-        }
-
-        // 普通按键：应用预设到当前物品
-        ItemData matchingPreset = Config.ItemModifyList.FirstOrDefault(p => p.Type == item.type)!;
-
-        if (matchingPreset != null)
-        {
-            matchingPreset.ApplyTo(item);
-
-            // 更新物品状态
-            item.UpdateItem(item.whoAmI);
-            plr.ItemCheck();
-
-            ClientLoader.Chat.WriteLine($"已应用预设: {matchingPreset.Name}", Color.Green);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine($"未找到类型为 {item.type} 的物品预设", Color.Red);
-            ClientLoader.Chat.WriteLine($"使用 Alt + {Config.ItemModifyKey} 添加当前物品为预设", Color.Yellow);
+            string status = Config.VeinMinerEnabled ? "启用" : "禁用";
+            ClientLoader.Chat.WriteLine($"连锁挖矿已{status}", Color.Yellow);
         }
     }
     #endregion
 
-    #region 自动使用物品方法
-    public static long AutoUseTime = 0;
-    private void AutoUseItem(bool key)
+    #region 图格编辑事件
+    public static Point[]? TempPoints; // 临时点
+    private void OnTileEdit(object? sender, TileKillEventArgs e)
     {
-        var plr = Main.player[Main.myPlayer];
+        if (!Config.Enabled) return;
 
-        if (key)
-        {
-            SoundEngine.PlaySound(SoundID.MenuOpen);
-            Config.AutoUseItem = !Config.AutoUseItem;
-            string status = Config.AutoUseItem ? "开启" : "关闭";
-            ClientLoader.Chat.WriteLine($"自动使用物品已{status}", Color.Yellow);
-        }
+        Utils.CreateTempPoint(e.X, e.Y); // 创建临时点方法
 
-        if (!Config.AutoUseItem) return;
-
-        long now = Main.GameUpdateCount;
-        if (now - AutoUseTime < Config.UseItemInterval) return;
-
-        // 使用当前手持物品
-        if (plr.HeldItem.IsAir || plr.HeldItem.type == 0)
-        {
-            plr.controlUseItem = false;
-            plr.ItemCheck();
-        }
-        else
-        {
-            plr.controlUseItem = true;
-            plr.dashDelay = 0; // 重置冲刺冷却
-            plr.dashType = 2; // 设置冲刺类型
-            plr.ItemCheck();
-        }
-
-        // 发送网络同步消息
-        if (Main.netMode == 2)
-        {
-            NetMessage.SendData(MessageID.PlayerControls, -1, -1, null, plr.whoAmI);
-        }
-
-        // 重置冷却时间
-        AutoUseTime = now;
-    }
-    #endregion
-
-    #region 使用物品时伤害鼠标范围内的NPC
-    private static long MouseStrikeTime = 0;
-    private static void UseItemStrikeNPC(bool key)
-    {
-        long now = Main.GameUpdateCount;
-        if (!key || now - MouseStrikeTime < Config.MouseStrikeInterval) return;
-
-        var plr = Main.player[Main.myPlayer];
-        var pos = InputSystem.MousePosition + Main.screenPosition;
-        var inRange = Main.npc.Where(n => n.active && !n.friendly && n.Distance(pos) <= Config.MouseStrikeNPCRange * 16).ToList();
-        if (!inRange.Any()) return;
-        foreach (var npc in inRange)
-        {
-            if (npc == null) continue;
-
-            if (Config.MouseStrikeNPCVel > 0)
-            {
-                npc.StrikeNPC(Config.MouseStrikeNPCVel, 0, 0, false, false, false);
-                plr.ApplyDamageToNPC(npc, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit > 0); // 应用伤害到NPC
-                if (Main.netMode == 2)
-                {
-                    npc.netUpdate = true; // 更新网络状态
-                    NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit);
-                }
-            }
-            else
-            {
-                npc.StrikeNPC(plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, false, false, false);
-                plr.ApplyDamageToNPC(npc, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit > 0); // 应用伤害到NPC
-                if (Main.netMode == 2)
-                {
-                    npc.netUpdate = true; // 更新网络状态
-                    NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit);
-                }
-            }
-        }
-
-        // 重置冷却时间
-        MouseStrikeTime = now;
-    }
-    #endregion
-
-    #region 按H键回血
-    private static void HealLife(bool key)
-    {
-        if (!Config.Heal || !key) return;
-
-        SoundEngine.PlaySound(SoundID.MenuTick);
-        var plr = Main.player[Main.myPlayer];
-        plr.Heal(Config.HealVal);
-        if (Main.netMode == 2)
-        {
-            NetMessage.TrySendData(66, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
-        }
+        Utils.VeinMiner(e.X, e.Y); // 连锁挖矿方法
     }
     #endregion
 
@@ -535,196 +215,8 @@ public class MyPlugin(string path) : Plugin(path)
 
         if (Config.NPCAutoHeal)
         {
-            NPCAutoHeal(npc, e.whoAmI);  // npc自动回血
+            Utils.NPCAutoHeal(npc, e.whoAmI);  // npc自动回血
         }
-    }
-    #endregion
-
-    #region 自动回血
-    public static Dictionary<int, long> HealTimes = new Dictionary<int, long>();
-    public static void NPCAutoHeal(NPC npc, int whoAmI)
-    {
-        var now = Main.GameUpdateCount;
-
-        // 初始化npc回血时间
-        if (!HealTimes.ContainsKey(whoAmI))
-        {
-            HealTimes[whoAmI] = now;
-        }
-
-        // 获取适合该NPC的回血间隔
-        int healInterval = npc.boss ? Config.BossHealInterval : Config.NPCHealInterval;
-
-        // 检查是否超过回血间隔
-        if (now - HealTimes[whoAmI] < healInterval * 60) return;
-
-        if (!npc.boss)
-        {
-            // 普通NPC回血逻辑
-            int healAmount = (int)(npc.lifeMax * (Config.NPCHealVel / 100f));
-            // 最低回血量为1
-            if (healAmount < 1) healAmount = 1;
-            npc.life = Math.Min(npc.lifeMax, npc.life + healAmount);
-
-            if (Main.netMode == 2)
-            {
-                npc.netUpdate = true;
-                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
-            }
-        }
-        else if (Config.Boss)
-        {
-            // BOSS专属回血逻辑
-            float healPercent = Config.BossHealVel / 100f;
-            int baseHeal = (int)(npc.lifeMax * healPercent);
-
-            // 应用回血上限
-            int actualHeal = Math.Min(baseHeal, Config.BossHealCap);
-
-            // 确保不会超过最大血量
-            npc.life = Math.Min(npc.lifeMax, npc.life + actualHeal);
-
-            if (Main.netMode == 2)
-            {
-                npc.netUpdate = true;
-                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
-            }
-        }
-
-        // 更新回血时间
-        HealTimes[whoAmI] = now;
-    }
-    #endregion
-
-    #region 复活城镇NPC方法
-    public static void Relive(bool key)
-    {
-        if (!key) return;
-        var plr = Main.LocalPlayer;
-        List<int> relive = GetRelive();
-        for (int i = 0; i < 200; i++)
-        {
-            if (Main.npc[i].active && Main.npc[i].townNPC && relive.Contains(Main.npc[i].type))
-            {
-                relive.Remove(Main.npc[i].type);
-            }
-        }
-
-        List<string> mess = new List<string>();
-        foreach (int id in relive)
-        {
-            NPC npc = new NPC();
-            var tileX = (int)plr.position.X / 16;
-            var tileY = (int)plr.position.Y / 16;
-            npc.SetDefaults(id, default);
-            SpawnNPC(npc.type, npc.FullName, 1, tileX, tileY, 5, 2);
-            if (mess.Count != 0 && mess.Count % 10 == 0)
-            {
-                mess.Add("\n" + npc.FullName);
-            }
-            else
-            {
-                mess.Add(npc.FullName);
-            }
-        }
-
-        // 输出复活的NPC列表
-        if (relive.Count > 0)
-        {
-            string msg = $"{plr.name} 复活了 {relive.Count}个 NPC:\n{string.Join("、", mess)}";
-            ClientLoader.Chat.WriteLine($"{msg}", color);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine($"入住过的NPC都活着", color);
-        }
-    }
-
-    // 检查指定位置的图格是否为实心图格
-    public static bool TileSolid(int tileX, int tileY)
-    {
-        if (TilePlacementValid(tileX, tileY) && Main.tile[tileX, tileY] != null! && Main.tile[tileX, tileY].active() && Main.tileSolid[Main.tile[tileX, tileY].type] && !Main.tile[tileX, tileY].inActive() && !Main.tile[tileX, tileY].halfBrick() && Main.tile[tileX, tileY].slope() == 0)
-        {
-            return Main.tile[tileX, tileY].type != 379;
-        }
-
-        return false;
-    }
-
-    // 获取复活NPC列表
-    public static List<int> GetRelive()
-    {
-        List<int> list = new List<int>();
-        List<int> list2 = new List<int>
-        {
-            17, 18, 19, 20, 22, 38, 54, 107, 108, 124,
-            160, 178, 207, 208, 209, 227, 228, 229, 353, 369,
-            441, 550, 588, 633, 663, 637, 638, 656, 670, 678,
-            679, 680, 681, 682, 683, 684
-        };
-
-        if (Main.xMas)
-        {
-            list2.Add(142);
-        }
-
-        foreach (int item in list2)
-        {
-            if (DidDiscoverBestiaryEntry(item))
-            {
-                list.Add(item);
-            }
-        }
-
-        return list;
-    }
-
-    // 检查NPC是否解锁于怪物图鉴
-    public static bool DidDiscoverBestiaryEntry(int npcId)
-    {
-        return (int)Main.BestiaryDB.FindEntryByNPCID(npcId).UIInfoProvider.GetEntryUICollectionInfo().UnlockState > 0;
-    }
-    #endregion
-
-    #region 生成NPC方法
-    public static void SpawnNPC(int type, string name, int amount, int startTileX, int startTileY, int tileXRange = 100, int tileYRange = 50)
-    {
-        for (int i = 0; i < amount; i++)
-        {
-            GetRandomClearTileWithInRange(startTileX, startTileY, tileXRange, tileYRange, out var tileX, out var tileY);
-            NPC.NewNPC(new EntitySource_DebugCommand(), tileX * 16, tileY * 16, type);
-        }
-    }
-
-    // 获取随机清除图格位置
-    public static void GetRandomClearTileWithInRange(int startTileX, int startTileY, int tileXRange, int tileYRange, out int tileX, out int tileY)
-    {
-        int num = 0;
-        do
-        {
-            if (num == 100)
-            {
-                tileX = startTileX;
-                tileY = startTileY;
-                break;
-            }
-
-            tileX = startTileX + Random.Shared.Next(tileXRange * -1, tileXRange);
-            tileY = startTileY + Random.Shared.Next(tileYRange * -1, tileYRange);
-            num++;
-        }
-        while (TilePlacementValid(tileX, tileY) && TileSolid(tileX, tileY));
-    }
-
-    // 检查指定位置的图格是否在有效范围内
-    public static bool TilePlacementValid(int tileX, int tileY)
-    {
-        if (tileX >= 0 && tileX < Main.maxTilesX && tileY >= 0)
-        {
-            return tileY < Main.maxTilesY;
-        }
-
-        return false;
     }
     #endregion
 

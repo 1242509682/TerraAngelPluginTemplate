@@ -1,6 +1,6 @@
-﻿using Microsoft.Xna.Framework.Input;
+﻿using System.Numerics;
+using Microsoft.Xna.Framework.Input;
 using Newtonsoft.Json;
-using System.Numerics;
 using TerraAngel;
 
 namespace MyPlugin;
@@ -81,7 +81,7 @@ internal class Configuration
     [JsonProperty("清除钓鱼任务", Order = 16)]
     public bool ClearAnglerQuests { get; set; } = false;
     [JsonProperty("清除钓鱼任务按键", Order = 16)]
-    public Keys ClearQuestsKey = Keys.V;
+    public Keys ClearQuestsKey = Keys.F;
     [JsonProperty("清除钓鱼任务间隔(帧)", Order = 16)]
     internal int ClearQuestsInterval = 120;
 
@@ -102,8 +102,18 @@ internal class Configuration
     [JsonProperty("BOSS独立回血间隔(秒)", Order = 17)]
     public int BossHealInterval { get; set; } = 3;      // BOSS独立回血间隔(秒)
 
-    [JsonProperty("NPC复活按键", Order = 17)]
+    [JsonProperty("NPC复活按键", Order = 18)]
     public Keys NPCReliveKey = Keys.Home;
+
+    [JsonProperty("连锁挖矿开关", Order = 19)]
+    public bool VeinMinerEnabled { get; set; } = false;
+    [JsonProperty("连锁挖矿按键", Order = 19)]
+    public Keys VeinMinerKey = Keys.V;
+    [JsonProperty("连锁挖矿上限", Order = 19)]
+    public int VeinMinerCount { get; set; } = 500;
+    [JsonProperty("连锁图格表", Order = 19)]
+    public List<VeinMinerItem> VeinMinerList { get; set; } = new List<VeinMinerItem>();
+
 
     #region 预设参数方法
     public void SetDefault()
@@ -138,7 +148,7 @@ internal class Configuration
         TrashItems = new List<TrashData>();
         CustomTeleportPoints = new Dictionary<string, Vector2>();
         ClearAnglerQuests = false;
-        ClearQuestsKey = Keys.V;
+        ClearQuestsKey = Keys.F;
         ClearQuestsInterval = 120;
         NPCAutoHeal = false;
         NPCAutoHealKey = Keys.None;
@@ -149,18 +159,53 @@ internal class Configuration
         BossHealCap = 1000;
         BossHealInterval = 3;
         NPCReliveKey = Keys.Home;
+        VeinMinerEnabled = false;
+        VeinMinerKey = Keys.V;
+        VeinMinerCount = 500;
+        VeinMinerList = new List<VeinMinerItem>() 
+        {
+            new VeinMinerItem(6, "铁矿"),
+            new VeinMinerItem(7, "铜矿"),
+            new VeinMinerItem(8, "金矿"),
+            new VeinMinerItem(9, "银矿"),
+            new VeinMinerItem(22, "魔矿"),
+            new VeinMinerItem(37, "陨石"),
+            new VeinMinerItem(48, "尖刺"),
+            new VeinMinerItem(56, "黑曜石"),
+            new VeinMinerItem(58, "狱石"),
+            new VeinMinerItem(63, "蓝玉石块"),
+            new VeinMinerItem(64, "红玉石块"),
+            new VeinMinerItem(65, "翡翠石块"),
+            new VeinMinerItem(66, "黄玉石块"),
+            new VeinMinerItem(67, "紫晶石块"),
+            new VeinMinerItem(68, "钻石石块"),
+            new VeinMinerItem(107, "钴矿"),
+            new VeinMinerItem(108, "秘银矿"),
+            new VeinMinerItem(111, "精金矿"),
+            new VeinMinerItem(166, "锡矿"),
+            new VeinMinerItem(167, "铅矿"),
+            new VeinMinerItem(168, "钨矿"),
+            new VeinMinerItem(169, "铂金矿"),
+            new VeinMinerItem(204, "猩红矿"),
+            new VeinMinerItem(211, "叶绿矿"),
+            new VeinMinerItem(221, "钯金矿"),
+            new VeinMinerItem(222, "山铜矿"),
+            new VeinMinerItem(223, "钛金矿"),
+            new VeinMinerItem(229, "蜂蜜块"),
+            new VeinMinerItem(230, "松脆蜂蜜块"),
+            new VeinMinerItem(232, "木尖刺"),
+            new VeinMinerItem(404, "沙漠化石"),
+        };
     }
     #endregion
 
     #region 读取与创建配置文件方法
     public static readonly string FilePath = Path.Combine(ClientLoader.SavePath, "MyPlugin.json");
-
     public void Write()
     {
         string json = JsonConvert.SerializeObject(this, Newtonsoft.Json.Formatting.Indented);
         File.WriteAllText(FilePath, json);
     }
-
     public static Configuration Read()
     {
         try

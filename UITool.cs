@@ -32,6 +32,7 @@ public class UITool : Tool
     private bool EditClearAnglerQuestsKey = false; // 清除钓鱼任务按键编辑状态
     private bool EditNPCAutoHealKey = false; // NPC自动回血按键编辑状态
     public bool EditNPCReliveKey = false; // 复活NPC按键编辑状态
+    public bool EditVeinMinerKey = false; // 连锁挖矿按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -69,6 +70,8 @@ public class UITool : Tool
         float BossHealVel = Config.BossHealVel; // BOSS回血百分比
         int BossHealCap = Config.BossHealCap; // BOSS每次回血上限
         int BossHealInterval = Config.BossHealInterval; //BOSS独立回血间隔(秒)
+
+        bool VeinMinerEnabled = Config.VeinMinerEnabled; // 连锁挖矿开关
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -111,62 +114,62 @@ public class UITool : Tool
                 // 血月按钮
                 if (ImGui.Button("血月", new Vector2(Width, 40)))
                 {
-                    ToggleBloodMoon();
+                    Utils.ToggleBloodMoon();
                 }
 
                 // 日食按钮
                 ImGui.SameLine();
                 if (ImGui.Button("日食", new Vector2(Width, 40)))
                 {
-                    ToggleEclipse();
+                    Utils.ToggleEclipse();
                 }
 
                 // 满月按钮
                 ImGui.SameLine();
                 if (ImGui.Button("满月", new Vector2(Width, 40)))
                 {
-                    ToggleFullMoon();
+                    Utils.ToggleFullMoon();
                 }
 
                 // 下雨按钮
                 ImGui.SameLine();
                 if (ImGui.Button("下雨", new Vector2(Width, 40)))
                 {
-                    ToggleRain();
+                    Utils.ToggleRain();
                 }
 
                 // 史莱姆雨按钮
                 ImGui.SameLine();
                 if (ImGui.Button("史莱姆雨", new Vector2(Width, 40)))
                 {
-                    ToggleSlimeRain();
+                    Utils.ToggleSlimeRain();
                 }
 
                 // 时间按钮
                 if (ImGui.Button("时间", new Vector2(Width, 40)))
                 {
-                    ToggleTime();
+                    Utils.ToggleTime();
                 }
 
                 // 沙尘暴按钮
                 ImGui.SameLine();
                 if (ImGui.Button("沙尘暴", new Vector2(Width, 40)))
                 {
-                    ToggleSandstorm();
+                    Utils.ToggleSandstorm();
                 }
 
                 // 灯笼夜按钮
                 ImGui.SameLine();
                 if (ImGui.Button("灯笼夜", new Vector2(Width, 40)))
                 {
-                    ToggleLanternNight();
+                    Utils.ToggleLanternNight();
                 }
 
                 // 陨石按钮
                 ImGui.SameLine();
                 if (ImGui.Button("陨石", new Vector2(Width, 40)))
                 {
-                    TriggerMeteor();
+                    Utils.TriggerMeteor();
                 }
 
                 // 入侵按钮
@@ -312,7 +315,7 @@ public class UITool : Tool
                     SoundEngine.PlaySound(SoundID.MenuTick);
 
                     // 收藏所有格子物品（包括虚空袋）
-                    int favoritedItems = FavoriteAllItems(plr);
+                    int favoritedItems = Utils.FavoriteAllItems(plr);
 
                     // 显示操作结果
                     ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
@@ -400,7 +403,7 @@ public class UITool : Tool
 
                 if (ImGui.Button("复活所有城镇NPC"))
                 {
-                    Relive(true);
+                    Utils.Relive(true);
                 }
                 if (ImGui.IsItemHovered())
                     ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC");
@@ -457,7 +460,7 @@ public class UITool : Tool
                         // 生成按钮
                         if (ImGui.Button($"生成##{npc.ID}"))
                         {
-                            SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
+                            Utils.SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
                                      (int)Main.LocalPlayer.position.X / 16,
                                      (int)Main.LocalPlayer.position.Y / 16);
                             ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
@@ -483,6 +486,27 @@ public class UITool : Tool
                 if (ImGui.Button("生成"))
                 {
                     SpawnNPCByInput();
+                }
+
+                ImGui.TreePop();
+            }
+
+            // 图格编辑区域
+            ImGui.Separator();
+            if (ImGui.TreeNodeEx("图格管理", ImGuiTreeNodeFlags.Framed))
+            {
+                TempPoints = TempPoint();
+
+                // 连锁挖矿功能开关
+                ImGui.Separator();
+                ImGui.TextColored(new Vector4(0.8f, 1f, 0.6f, 1f), "连锁挖矿");
+                ImGui.Checkbox("启用连锁挖矿", ref VeinMinerEnabled);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.VeinMinerKey, ref EditVeinMinerKey);
+                if (VeinMinerEnabled)
+                {
+                    // 连锁挖矿窗口
+                    VeinMineWindows();
                 }
 
                 ImGui.TreePop();
@@ -525,6 +549,8 @@ public class UITool : Tool
         Config.BossHealCap = BossHealCap; // BOSS每次回血上限
         Config.BossHealInterval = BossHealInterval; //BOSS独立回血间隔(秒)
 
+        Config.VeinMinerEnabled = VeinMinerEnabled; // 连锁替换开关
+
         // 保存按钮
         ImGui.Separator();
         if (ImGui.Button("保存设置"))
@@ -546,14 +572,207 @@ public class UITool : Tool
     }
     #endregion
 
+    #region 连锁挖矿窗口
+    private string veinMinerSearch = ""; // 连锁挖矿搜索过滤器
+    private void VeinMineWindows()
+    {
+        // 最大挖掘数量设置
+        int count = Config.VeinMinerCount;
+        ImGui.Text("最大挖掘上限:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150);
+        ImGui.SliderInt("##VeinMinerCount", ref count, 10, 1000, "%d");
+        Config.VeinMinerCount = count;
+
+        // 添加矿物按钮
+        if (ImGui.Button("手持物品添加图格"))
+        {
+            Item heldItem = Main.LocalPlayer.HeldItem;
+            if (heldItem.createTile >= 0)
+            {
+                int tileID = heldItem.createTile;
+                string itemName = heldItem.Name;
+
+                // 检查是否已存在相同图格ID
+                bool exists = false;
+                foreach (var mineral in Config.VeinMinerList)
+                {
+                    if (mineral.TileID == tileID)
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (!exists)
+                {
+                    Config.VeinMinerList.Add(new VeinMinerItem(tileID, itemName));
+                    ClientLoader.Chat.WriteLine($"已添加连锁图格: {itemName} (ID: {tileID})", Color.Green);
+                }
+                else
+                {
+                    ClientLoader.Chat.WriteLine("该图格已在列表中", Color.Yellow);
+                }
+            }
+            else
+            {
+                ClientLoader.Chat.WriteLine("手持物品不是可放置的图格", Color.Red);
+            }
+        }
+
+        // 清除按钮
+        ImGui.SameLine();
+        if (ImGui.Button("清除连锁图格表"))
+        {
+            Config.VeinMinerList.Clear();
+            Config.Write();
+            ClientLoader.Chat.WriteLine("已清除连锁图格表", Color.Yellow);
+        }
+
+        // 添加搜索框
+        ImGui.Separator();
+        ImGui.Text("搜索图格:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(200);
+        ImGui.InputTextWithHint("##VeinMinerSearch", "输入名称或ID", ref veinMinerSearch, 100);
+        ImGui.SameLine();
+        if (ImGui.Button("清空搜索"))
+        {
+            veinMinerSearch = "";
+        }
+
+        // 应用过滤
+        var filteredMinerals = Config.VeinMinerList
+            .Where(m => string.IsNullOrWhiteSpace(veinMinerSearch) ||
+                        m.ItemName.Contains(veinMinerSearch, StringComparison.OrdinalIgnoreCase) ||
+                        m.TileID.ToString().Contains(veinMinerSearch))
+            .ToList();
+
+        ImGui.Text($"当前连锁图格列表: ({filteredMinerals.Count} 个)");
+
+        // 矿物表显示
+        ImGui.BeginChild("VeinMinerList", new Vector2(0, 200), ImGuiChildFlags.Borders);
+        if (filteredMinerals.Count > 0)
+        {
+            // 表格样式设置
+            ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(8, 4));
+
+            // 开始表格（3列：ID、矿物名称、操作）
+            if (ImGui.BeginTable("VeinMinerTable", 3,
+                ImGuiTableFlags.Borders |
+                ImGuiTableFlags.RowBg |
+                ImGuiTableFlags.SizingFixedFit))
+            {
+                // 设置列宽
+                ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 60);
+                ImGui.TableSetupColumn("物品名称", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableSetupColumn("操作", ImGuiTableColumnFlags.WidthFixed, 80);
+                ImGui.TableHeadersRow();
+
+                // 遍历所有矿物
+                for (int i = 0; i < filteredMinerals.Count; i++)
+                {
+                    var mineral = filteredMinerals[i];
+                    int tileID = mineral.TileID;
+                    string itemName = mineral.ItemName;
+
+                    ImGui.TableNextRow();
+
+                    // ID列
+                    ImGui.TableSetColumnIndex(0);
+                    ImGui.Text($"{tileID}");
+
+                    // 名称列
+                    ImGui.TableSetColumnIndex(1);
+                    ImGui.Text(itemName);
+
+                    // 操作列
+                    ImGui.TableSetColumnIndex(2);
+                    if (ImGui.Button($"删除##{tileID}"))
+                    {
+                        string removedName = itemName;
+                        Config.VeinMinerList.Remove(mineral);
+                        ClientLoader.Chat.WriteLine($"已移除图格: {removedName}", Color.Yellow);
+                    }
+                }
+
+                ImGui.EndTable();
+            }
+            ImGui.PopStyleVar();
+        }
+        else
+        {
+            if (string.IsNullOrWhiteSpace(veinMinerSearch))
+            {
+                ImGui.TextDisabled("连锁图格表为空");
+            }
+            else
+            {
+                ImGui.TextDisabled($"没有找到包含 '{veinMinerSearch}' 的连锁图格");
+            }
+        }
+        ImGui.EndChild(); // 结束子窗口
+    }
+    #endregion
+
+    #region 设置临时点窗口
+    private static Point[] TempPoint()
+    {
+        // 临时点管理
+        ImGui.Separator();
+        ImGui.TextColored(new Vector4(0.8f, 1f, 0.6f, 1f), "临时点管理");
+        if (TempPoints == null || TempPoints.Length == 0)
+        {
+            TempPoints = new Point[2]; // 初始化2个点
+        }
+
+        // 显示临时点状态
+        ImGui.Text($"临时点数量: {TempPoints.Count(p => p.X != 0 || p.Y != 0)}");
+        if (ImGui.Button("设置临时点 1"))
+        {
+            Utils.AwaitingTempPoint = 1;
+            ClientLoader.Chat.WriteLine("请点击要设置临时点的图格", Color.Yellow);
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("设置临时点 2"))
+        {
+            Utils.AwaitingTempPoint = 2;
+            ClientLoader.Chat.WriteLine("请点击要设置临时点的图格", Color.Yellow);
+        }
+
+        // 显示已设置的临时点
+        for (int i = 0; i < TempPoints.Length; i++)
+        {
+            if (TempPoints[i].X != 0 || TempPoints[i].Y != 0)
+            {
+                ImGui.Text($"临时点 {i + 1}: ({TempPoints[i].X}, {TempPoints[i].Y})");
+                ImGui.SameLine();
+
+                if (ImGui.Button($"传送##tp{i}"))
+                {
+                    Vector2 pos = new Vector2(TempPoints[i].X * 16, (TempPoints[i].Y - 3) * 16);
+                    Main.LocalPlayer.Teleport(pos, 10);
+                }
+
+                ImGui.SameLine();
+
+                if (ImGui.Button($"清除##clear{i}"))
+                {
+                    TempPoints[i] = Point.Zero;
+                }
+            }
+        }
+
+        return TempPoints;
+    } 
+    #endregion
+
     #region NPC管理器
     private string spawnNPCInput = ""; // 生成NPC输入
     private int spawnNPCAmount = 1; // 生成数量
     private string npcSearchFilter = ""; // NPC搜索过滤器
     private List<NPCInfo> npcList = new List<NPCInfo>(); // NPC列表缓存
     private bool npcListLoaded = false; // NPC列表是否已加载
-
-
     // 加载NPC列表
     private void LoadNPCList()
     {
@@ -608,7 +827,7 @@ public class UITool : Tool
                 return;
             }
 
-            SpawnNPC(npcId, name, spawnNPCAmount,
+            Utils.SpawnNPC(npcId, name, spawnNPCAmount,
                      (int)Main.LocalPlayer.position.X / 16,
                      (int)Main.LocalPlayer.position.Y / 16);
             ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {name}", Color.Green);
@@ -639,213 +858,16 @@ public class UITool : Tool
 
         // 只有一个匹配项
         var npc = matches[0];
-        SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
+        Utils.SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
                  (int)Main.LocalPlayer.position.X / 16,
                  (int)Main.LocalPlayer.position.Y / 16);
         ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
     }
     #endregion
 
-    #region 世界事件控制方法
-    private void ToggleTime() // 切换时间状态
-    {
-        if (Main.dayTime)
-        {
-            Main.dayTime = false; // 如果是日食则切换到晚上
-            Main.time = 0.0;
-        }
-        else
-        {
-            Main.dayTime = true;
-            Main.time = 9000.0;
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.SetTime);
-
-        ClientLoader.Chat.WriteLine($"时间已修改为{(Main.dayTime ? "白天" : "晚上")}", Color.Yellow);
-    }
-
-    // 切换血月状态
-    private void ToggleBloodMoon()
-    {
-        if (Main.bloodMoon)
-        {
-            Main.bloodMoon = false;
-        }
-        else
-        {
-            Main.dayTime = false;
-            Main.bloodMoon = true;
-            Main.time = 0.0;
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-
-        ClientLoader.Chat.WriteLine($"血月事件已{(Main.bloodMoon ? "开始" : "停止")}", Color.Yellow);
-    }
-
-    // 切换日食
-    private void ToggleEclipse()
-    {
-        if (Main.dayTime)
-        {
-            Main.eclipse = !Main.eclipse; // 切换日食状态
-        }
-        else
-        {
-            Main.dayTime = true;
-            Main.eclipse = true; // 切换日食状态
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-
-        ClientLoader.Chat.WriteLine($"日食事件已{(Main.eclipse ? "开始" : "停止")}", Color.Yellow);
-    }
-
-    // 切换满月事件
-    private void ToggleFullMoon()
-    {
-        if (Main.dayTime)
-        {
-            Main.SkipToTime(0, true); // 跳到晚上
-            Main.dayTime = false;
-            Main.moonPhase = 0;
-            Main.time = 0.0;
-        }
-        else if (Main.moonPhase != 0)
-        {
-            Main.moonPhase = 0; // 如果不是满月则设置为满月
-        }
-        else
-        {
-            Main.moonPhase = Main.rand.Next(1, 8); // 如果是满月则随机设置为其他月相
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-
-        ClientLoader.Chat.WriteLine("已触发满月", Color.Yellow);
-    }
-
-    // 切换下雨状态
-    private void ToggleRain()
-    {
-        if (Main.raining)
-        {
-            Main.StopRain();
-        }
-        else
-        {
-            Main.StartRain();
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-
-        ClientLoader.Chat.WriteLine($"下雨已{(Main.raining ? "开始" : "停止")}", Color.Yellow);
-    }
-
-    // 切换史莱姆雨状态
-    private void ToggleSlimeRain()
-    {
-        if (Main.slimeRain)
-        {
-            Main.slimeRain = false;
-            Main.StopSlimeRain(false);
-        }
-        else
-        {
-            Main.slimeRain = true;
-            Main.StartSlimeRain(true);
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-
-        ClientLoader.Chat.WriteLine($"史莱姆雨已{(Main.slimeRain ? "开始" : "停止")}", Color.Yellow);
-    }
-
-    // 切换沙尘暴状态
-    private void ToggleSandstorm()
-    {
-        if (Sandstorm.Happening)
-        {
-            Sandstorm.Happening = false;
-            Sandstorm.TimeLeft = 0;
-            ChangeSeverityIntentions();
-        }
-        else
-        {
-            Sandstorm.Happening = true;
-            Sandstorm.TimeLeft = Main.rand.Next(28800, 86401);
-            ChangeSeverityIntentions();
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-
-        ClientLoader.Chat.WriteLine($"沙尘暴已{(Sandstorm.Happening ? "开始" : "停止")}", Color.Yellow);
-    }
-
-    // 更改沙尘暴的严重程度
-    public static void ChangeSeverityIntentions()
-    {
-        if (Sandstorm.Happening)
-        {
-            Sandstorm.IntendedSeverity = 0.4f + Main.rand.NextFloat();
-        }
-        else if (Main.rand.Next(3) == 0)
-        {
-            Sandstorm.IntendedSeverity = 0f;
-        }
-        else
-        {
-            Sandstorm.IntendedSeverity = Main.rand.NextFloat() * 0.3f;
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-    }
-
-    // 切换灯笼夜状态
-    private void ToggleLanternNight()
-    {
-
-        if (Terraria.GameContent.Events.LanternNight.ManualLanterns)
-        {
-            LanternNight.ToggleManualLanterns();
-        }
-        else
-        {
-            Main.dayTime = false;
-            Main.time = 0.0;
-            LanternNight.ToggleManualLanterns();
-        }
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-        ClientLoader.Chat.WriteLine($"灯笼夜已{(LanternNight.LanternsUp ? "开始" : "停止")}", Color.Yellow);
-    }
-
-    // 触发陨石事件
-    private void TriggerMeteor()
-    {
-        WorldGen.spawnMeteor = false;
-        WorldGen.dropMeteor();
-
-        if (Main.netMode == 2)
-            NetMessage.SendData(MessageID.WorldData);
-
-        ClientLoader.Chat.WriteLine("已触发陨石事件", Color.Yellow);
-    }
-    #endregion
-
     #region 入侵事件管理器
-    private bool ShowInvasionWindow = false; // 显示入侵选择窗口
-    private void DrawInvasionWindow()
+    public static bool ShowInvasionWindow = false; // 显示入侵选择窗口
+    private static void DrawInvasionWindow()
     {
         ImGui.SetNextWindowSize(new Vector2(350, 300), ImGuiCond.FirstUseEver);
         float Width = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X * 6) / 7f;
@@ -856,36 +878,36 @@ public class UITool : Tool
 
             if (ImGui.Button("哥布林入侵", new Vector2(Width, 40)))
             {
-                StartInvasion(1);
+                Utils.StartInvasion(1);
             }
 
             ImGui.SameLine();
             if (ImGui.Button("雪人军团", new Vector2(Width, 40)))
             {
-                StartInvasion(2);
+                Utils.StartInvasion(2);
             }
 
             ImGui.SameLine();
             if (ImGui.Button("海盗入侵", new Vector2(Width, 40)))
             {
-                StartInvasion(3);
+                Utils.StartInvasion(3);
             }
 
             if (ImGui.Button("火星人入侵", new Vector2(Width, 40)))
             {
-                StartInvasion(4);
+                Utils.StartInvasion(4);
             }
 
             ImGui.SameLine();
             if (ImGui.Button("南瓜月", new Vector2(Width, 40)))
             {
-                StartMoonEvent(1);
+                Utils.StartMoonEvent(1);
             }
 
             ImGui.SameLine();
             if (ImGui.Button("霜月", new Vector2(Width, 40)))
             {
-                StartMoonEvent(2);
+                Utils.StartMoonEvent(2);
             }
 
             ImGui.Separator();
@@ -893,12 +915,12 @@ public class UITool : Tool
             ImGui.SameLine();
             if (ImGui.Button("停止入侵"))
             {
-                StopInvasion();
+                Utils.StopInvasion();
             }
 
             if (Main.invasionSize > 0)
             {
-                string status = $"{GetInvasionName(Main.invasionType)}: ";
+                string status = $"{Utils.GetInvasionName(Main.invasionType)}: ";
                 status += $"{Main.invasionSize}/{Main.invasionSizeStart}";
 
                 if (Main.invasionSize <= 0)
@@ -929,149 +951,6 @@ public class UITool : Tool
             }
         }
         ImGui.End();
-    }
-
-    // 开始入侵事件
-    private void StartInvasion(int type)
-    {
-        // 重置现有入侵状态
-        Main.invasionType = 0;
-        Main.invasionSize = 0;
-        Main.invasionDelay = 0;
-
-        // 计算入侵规模
-        int playerCount = 0;
-        for (int i = 0; i < Main.maxPlayers; i++)
-        {
-            if (Main.player[i].active && Main.player[i].statLifeMax >= 200) playerCount++;
-        }
-
-        // 根据类型设置不同规模
-        switch (type)
-        {
-            case 1: // 哥布林入侵
-                Main.invasionSize = 80 + 40 * playerCount;
-                break;
-            case 2: // 雪人军团
-                Main.invasionSize = 80 + 40 * playerCount;
-                break;
-            case 3: // 海盗入侵
-                Main.invasionSize = 120 + 60 * playerCount;
-                break;
-            case 4: // 火星人入侵
-                Main.invasionSize = 160 + 40 * playerCount;
-                break;
-        }
-
-        Main.invasionSizeStart = Main.invasionSize;
-        Main.invasionType = type;
-
-        // 设置入侵起始位置
-        if (type == 4) // 火星人特殊处理
-            Main.invasionX = Main.spawnTileX - 1;
-        else
-            Main.invasionX = (Main.rand.Next(2) == 0) ? 0 : Main.maxTilesX;
-
-        // 设置警告状态
-        Main.invasionWarn = (type == 4) ? 2 : 0;
-
-        Main.StartInvasion(type);
-
-        // 发送网络同步
-        if (Main.netMode == 2)
-        {
-            NetMessage.SendData(MessageID.WorldData);
-            NetMessage.SendData(MessageID.InvasionProgressReport);
-        }
-
-        ClientLoader.Chat.WriteLine($"已开始{GetInvasionName(type)}事件", Color.Yellow);
-    }
-
-    // 停止入侵事件
-    private void StopInvasion()
-    {
-        if (DD2Event.Ongoing)
-        {
-            DD2Event.StopInvasion();
-        }
-        else if (Main.pumpkinMoon || Main.snowMoon)
-        {
-            // 完全重置月亮事件状态
-            Main.pumpkinMoon = false;
-            Main.snowMoon = false;
-            Main.bloodMoon = false;
-
-            // 重置月亮事件计数器
-            NPC.waveNumber = 0;
-            NPC.waveKills = 0f;
-            Main.stopMoonEvent();
-
-            // 重置事件进度
-            Terraria.GameContent.Events.LanternNight.GenuineLanterns = false;
-        }
-        else // 普通入侵
-        {
-            Main.invasionSize = 0;
-            Main.invasionType = 0;
-            Main.invasionDelay = 0;
-            Main.invasionSizeStart = 0;
-            Main.invasionProgress = 0;
-        }
-
-
-        if (Main.netMode == 2)
-        {
-            NetMessage.SendData(MessageID.WorldData);
-            NetMessage.SendData(MessageID.InvasionProgressReport);
-        }
-
-        ClientLoader.Chat.WriteLine("已完全停止当前入侵", Color.Yellow);
-    }
-
-    // 开始月亮事件
-    private void StartMoonEvent(int moonType)
-    {
-        // 延迟一帧确保状态完全重置
-        Main.QueueMainThreadAction(() =>
-        {
-            if (moonType == 1)
-            {
-                Main.pumpkinMoon = true;
-                NPC.waveNumber = 1;  // 必须设置初始波数
-                NPC.waveKills = 0f;
-            }
-            else if (moonType == 2)
-            {
-                Main.snowMoon = true;
-                NPC.waveNumber = 1;
-                NPC.waveKills = 0f;
-            }
-
-            Main.dayTime = false;
-            Main.time = 0.0;
-
-            if (Main.netMode == 2)
-            {
-                NetMessage.SendData(MessageID.WorldData);
-                NetMessage.SendData(MessageID.InvasionProgressReport);
-            }
-
-            ClientLoader.Chat.WriteLine($"已开始{(moonType == 1 ? "南瓜月" : "霜月")}事件", Color.Yellow);
-        });
-    }
-    #endregion
-
-    #region 获取入侵事件名称
-    private string GetInvasionName(int type)
-    {
-        return type switch
-        {
-            1 => "哥布林入侵",
-            2 => "雪人军团",
-            3 => "海盗入侵",
-            4 => "火星人入侵",
-            _ => "未知入侵"
-        };
     }
     #endregion
 
@@ -1119,7 +998,7 @@ public class UITool : Tool
         // 出生点按钮
         if (ImGui.Button("出生点", new Vector2(Width, 40)))
         {
-            TPSpawnPoint(plr);
+            Utils.TPSpawnPoint(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到世界出生点");
@@ -1128,7 +1007,7 @@ public class UITool : Tool
         ImGui.SameLine();
         if (ImGui.Button("床", new Vector2(Width, 40)))
         {
-            TPBed(plr);
+            Utils.TPBed(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到床的位置");
@@ -1177,7 +1056,7 @@ public class UITool : Tool
         // 宝藏袋按钮
         if (ImGui.Button("宝藏袋", new Vector2(Width, 40)))
         {
-            TPBossBag(plr);
+            Utils.TPBossBag(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到最近的宝藏袋位置");
@@ -1186,7 +1065,7 @@ public class UITool : Tool
         ImGui.SameLine();
         if (ImGui.Button("微光湖", new Vector2(Width, 40)))
         {
-            TPShimmerLake(plr);
+            Utils.TPShimmerLake(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到最近的微光湖");
@@ -1195,7 +1074,7 @@ public class UITool : Tool
         ImGui.SameLine();
         if (ImGui.Button("神庙", new Vector2(Width, 40)))
         {
-            TPJungleTemple(plr);
+            Utils.TPJungleTemple(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到丛林神庙入口");
@@ -1205,7 +1084,7 @@ public class UITool : Tool
         // 花苞按钮
         if (ImGui.Button("花苞", new Vector2(Width, 40)))
         {
-            TPPlanteraBulb(plr);
+            Utils.TPPlanteraBulb(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到最近的世纪之花苞");
@@ -1215,7 +1094,7 @@ public class UITool : Tool
         // 地牢按钮
         if (ImGui.Button("地牢", new Vector2(Width, 40)))
         {
-            TPDungeon(plr);
+            Utils.TPDungeon(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到地牢入口");
@@ -1225,423 +1104,11 @@ public class UITool : Tool
         // 陨石按钮
         if (ImGui.Button("陨石", new Vector2(Width, 40)))
         {
-            TPMeteor(plr);
+            Utils.TPMeteor(plr);
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到陨石附近");
     }
-    #endregion
-
-    #region 定位传送方法实现
-    private void StartTeleport(string message, Vector4 color)
-    {
-        // 检查冷却时间
-        if (TPCooldown)
-        {
-            int cooldown = Math.Max(0, 3 - (int)((Main.GameUpdateCount - LastTPTime) / 60f));
-            ClientLoader.Chat.WriteLine($"传送冷却中，请等待 {cooldown} 秒", Color.Yellow);
-            TPColor = new Vector4(1f, 0.5f, 0.5f, 1f);
-            return;
-        }
-
-        TP = true;
-        TPColor = color;
-        TPProgress = 0f;
-        LastTPTime = Main.GameUpdateCount;
-        TPCooldown = true;
-    }
-
-    // 传送出生点
-    private void TPSpawnPoint(Player plr)
-    {
-        StartTeleport("正在传送至世界出生点...", new Vector4(0.8f, 1f, 0.8f, 1f));
-
-        Vector2 pos = new Vector2(Main.spawnTileX * 16, (Main.spawnTileY - 3) * 16);
-        plr.Teleport(pos, 10);
-        ClientLoader.Chat.WriteLine($"已传送到世界出生点 ({Main.spawnTileX}, {Main.spawnTileY - 3})", Color.Yellow);
-    }
-
-    // 传送到床位置
-    private void TPBed(Player plr)
-    {
-        if (plr.SpawnX == -1 || plr.SpawnY == -1)
-        {
-            ClientLoader.Chat.WriteLine("未设置床位置! 请先放置并右键点击床", Color.Red);
-            return;
-        }
-
-        StartTeleport("正在传送至床位置...", new Vector4(1f, 0.8f, 1f, 1f));
-        plr.Spawn(new PlayerSpawnContext());
-        ClientLoader.Chat.WriteLine($"已传送到床位置 ({plr.SpawnX}, {plr.SpawnY})", Color.Yellow);
-    }
-
-    // 传送到特定死亡地点
-    private void TPDeathPoint(Player plr, Vector2 position)
-    {
-        StartTeleport("正在传送至死亡地点...", new Vector4(0.5f, 0.5f, 0.5f, 1f));
-        plr.Teleport(position, 10);
-        ClientLoader.Chat.WriteLine($"已传送到死亡地点 ({(int)position.X / 16}, {(int)position.Y / 16})", Color.Yellow);
-    }
-
-    #region 传送到NPC
-    //  NPC传送方法
-    private void TPNPC(Player plr, int npcType)
-    {
-        NPC npc = FindNPC(npcType);
-        if (npc == null || !npc.active)
-        {
-            ClientLoader.Chat.WriteLine($"未找到 {Lang.GetNPCNameValue(npcType)}", Color.Red);
-            return;
-        }
-
-        StartTeleport($"正在传送至{Lang.GetNPCNameValue(npcType)}...", new Vector4(0.8f, 0.8f, 1f, 1f));
-
-        // 传送到NPC上方一点的位置
-        Vector2 pos = npc.position - new Vector2(0, 48);
-        plr.Teleport(pos, 10);
-
-        ClientLoader.Chat.WriteLine($"已传送到 {Lang.GetNPCNameValue(npcType)} 附近", Color.Yellow);
-    }
-
-    // 查找指定类型的NPC
-    private NPC FindNPC(int npcType)
-    {
-        for (int i = 0; i < Main.maxNPCs; i++)
-        {
-            NPC npc = Main.npc[i];
-            if (npc.active && npc.type == npcType &&
-                !npc.SpawnedFromStatue && npc.type != 488) //排除假人 雕像怪
-            {
-                return npc;
-            }
-        }
-        return null!;
-    }
-    #endregion
-
-    #region 微光
-    // 传送微光湖
-    private void TPShimmerLake(Player plr)
-    {
-        StartTeleport("正在定位微光湖位置...", new Vector4(0.6f, 0.8f, 1f, 1f));
-
-        Vector2 pos = FindShimmerLake();
-        if (pos != Vector2.Zero)
-        {
-            plr.Teleport(pos * 16, 10);
-            ClientLoader.Chat.WriteLine($"已传送到微光湖附近 ({pos.X}, {pos.Y})", Color.Yellow);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine("未找到微光湖!", Color.Yellow);
-            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
-        }
-    }
-
-    // 查找微光
-    private Vector2 FindShimmerLake()
-    {
-        for (int x = 0; x < Main.maxTilesX; x++)
-        {
-            for (int y = 0; y < Main.maxTilesY; y++)
-            {
-                Tile tile = Main.tile[x, y];
-                if (tile == null! || tile.liquidType() != LiquidID.Shimmer)
-                {
-                    continue;
-                }
-
-                return new Vector2(x, y - 3);
-            }
-        }
-        return Vector2.Zero;
-    }
-    #endregion
-
-    #region 神庙
-    // 传送神庙
-    private void TPJungleTemple(Player plr)
-    {
-        StartTeleport("正在定位神庙入口...", new Vector4(0.8f, 0.6f, 0.3f, 1f));
-
-        Vector2 pos = FindJungleTemple();
-        if (pos != Vector2.Zero)
-        {
-            plr.Teleport(pos * 16, 10);
-            ClientLoader.Chat.WriteLine($"已传送到神庙附近 ({pos.X}, {pos.Y})", Color.Yellow);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine("未找到神庙!", Color.Yellow);
-            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
-        }
-    }
-
-    // 查找神庙
-    private Vector2 FindJungleTemple()
-    {
-        for (int x = 0; x < Main.maxTilesX; x++)
-        {
-            for (int y = 0; y < Main.maxTilesY; y++)
-            {
-                Tile tile = Main.tile[x, y];
-                if (tile == null!) continue;
-
-                if (tile.type == 237)
-                {
-                    return new Vector2(x, y - 3);
-                }
-            }
-        }
-        return Vector2.Zero;
-    }
-    #endregion
-
-    #region 花苞
-    // 传送到花苞
-    private void TPPlanteraBulb(Player plr)
-    {
-        StartTeleport("正在定位世纪之花苞...", new Vector4(0.6f, 1f, 0.6f, 1f));
-
-        Vector2 pos = FindPlanteraBulb();
-        if (pos != Vector2.Zero)
-        {
-            plr.Teleport(pos * 16, 10);
-            ClientLoader.Chat.WriteLine($"已传送到花苞附近 ({pos.X}, {pos.Y})", Color.Yellow);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine("未找到花苞!", Color.Yellow);
-            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
-        }
-    }
-
-    // 在丛林地下寻找花苞
-    private Vector2 FindPlanteraBulb()
-    {
-        for (int x = 0; x < Main.maxTilesX; x++)
-        {
-            for (int y = 0; y < Main.maxTilesY; y++)
-            {
-                Tile tile = Main.tile[x, y];
-                if (tile.type == TileID.PlanteraBulb)
-                {
-                    return new Vector2(x, y - 3);
-                }
-            }
-        }
-        return Vector2.Zero;
-    }
-    #endregion
-
-    #region 地牢
-    // 传送到地牢
-    private void TPDungeon(Player plr)
-    {
-        StartTeleport("正在定位地牢入口...", new Vector4(0.7f, 0.6f, 1f, 1f));
-
-        Vector2 pos = FindDungeon();
-        if (pos != Vector2.Zero)
-        {
-            plr.Teleport(pos * 16, 10);
-            ClientLoader.Chat.WriteLine($"已传送到地牢附近 ({pos.X}, {pos.Y})", Color.Yellow);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine("未找到地牢!", Color.Yellow);
-            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
-        }
-    }
-
-    // 查找地牢位置
-    private Vector2 FindDungeon()
-    {
-        if (Main.dungeonX > 0 && Main.dungeonY > 0)
-        {
-            return new Vector2(Main.dungeonX, Main.dungeonY - 3);
-        }
-
-        return Vector2.Zero;
-    }
-    #endregion
-
-    #region 宝藏袋
-    //传送到宝藏袋
-    private void TPBossBag(Player plr)
-    {
-        StartTeleport("正在定位宝藏袋...", new Vector4(1f, 0.8f, 0.3f, 1f));
-
-        Vector2 pos = FindBossBag();
-        if (pos != Vector2.Zero)
-        {
-            plr.Teleport(pos, 10);
-            ClientLoader.Chat.WriteLine($"已传送到宝藏袋附近 ({pos.X / 16}, {pos.Y / 16})", Color.Yellow);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine("未找到宝藏袋!", Color.Yellow);
-            TPColor = new Vector4(1f, 0.3f, 0.3f, 1f);
-        }
-    }
-
-    // 查找宝藏袋
-    private Vector2 FindBossBag()
-    {
-        for (int i = 0; i < Main.maxItems; i++)
-        {
-            Item item = Main.item[i];
-
-            // 检查物品是否活跃且是宝藏袋
-            if (!item.active || !ItemID.Sets.BossBag[item.type]) continue;
-
-            return item.position;
-        }
-
-        return Vector2.Zero;
-    }
-    #endregion
-
-    #region 陨石
-    // 传送到陨石坑安全位置
-    private void TPMeteor(Player plr)
-    {
-        StartTeleport("正在定位陨石位置...", new Vector4(0.6f, 0.8f, 1f, 1f));
-
-        // 查找安全位置
-        Vector2? safePos = FindSafeMeteorPosition();
-
-        if (safePos.HasValue)
-        {
-            plr.Teleport(safePos.Value, 10);
-            ClientLoader.Chat.WriteLine($"已传送到陨石坑安全位置 ({(int)safePos.Value.X / 16}, {(int)safePos.Value.Y / 16})", Color.Yellow);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine("未找到安全的陨石坑位置，无法传送", Color.Red);
-        }
-    }
-
-    // 查找陨石并返回安全位置
-    private Vector2? FindSafeMeteorPosition()
-    {
-        int meteorCount = 0; // 统计陨石方块数量
-
-        for (int x = 0; x < Main.maxTilesX; x++)
-        {
-            for (int y = 0; y < Main.maxTilesY; y++)
-            {
-                Tile tile = Main.tile[x, y];
-                if (tile == null! || !tile.active() || tile.type != TileID.Meteorite)
-                {
-                    continue;
-                }
-
-                meteorCount++; // 统计陨石方块
-
-                // 在陨石上方寻找安全位置
-                Vector2? safePos = FindSafePositionAbove(x, y - 3);
-                if (safePos.HasValue)
-                {
-                    // 只有陨石数量超过100时才返回位置
-                    if (meteorCount > 100)
-                    {
-                        return safePos.Value;
-                    }
-                }
-            }
-        }
-
-        // 如果陨石数量不足，显示信息
-        if (meteorCount > 0 && meteorCount <= 100)
-        {
-            ClientLoader.Chat.WriteLine($"陨石数量不足 ({meteorCount}/100)，无法安全传送", Color.Yellow);
-        }
-
-        return null;
-    }
-
-    // 在指定位置上方寻找安全站立点
-    private Vector2? FindSafePositionAbove(int tileX, int tileY)
-    {
-        // 从陨石位置向上搜索安全站立点
-        for (int yOffset = -5; yOffset > -50; yOffset--)
-        {
-            int checkY = tileY + yOffset;
-
-            // 检查当前位置是否安全
-            if (IsPositionSafe(tileX, checkY))
-            {
-                return new Vector2(tileX * 16, (checkY - 3) * 16);
-            }
-        }
-        return null;
-    }
-
-    // 检查位置是否安全（没有方块阻挡）
-    private bool IsPositionSafe(int tileX, int tileY)
-    {
-        // 检查玩家站立区域（2x3区域）是否有方块
-        for (int x = tileX - 1; x <= tileX + 1; x++)
-        {
-            for (int y = tileY - 2; y <= tileY; y++)
-            {
-                // 跳过无效坐标
-                if (x < 0 || x >= Main.maxTilesX || y < 0 || y >= Main.maxTilesY)
-                    return false;
-
-                Tile tile = Main.tile[x, y];
-                if (tile != null! && tile.active() && Main.tileSolid[tile.type])
-                {
-                    return false;
-                }
-            }
-        }
-
-        // 检查脚下是否有支撑物
-        int groundY = tileY + 1;
-        if (groundY >= Main.maxTilesY) return false;
-
-        bool hasGround = false;
-        for (int x = tileX - 1; x <= tileX + 1; x++)
-        {
-            if (x < 0 || x >= Main.maxTilesX) continue;
-
-            Tile groundTile = Main.tile[x, groundY];
-            if (groundTile != null! && groundTile.active() && Main.tileSolid[groundTile.type])
-            {
-                hasGround = true;
-                break;
-            }
-        }
-
-        return hasGround;
-    }
-    #endregion
-
-    #region 自定义
-    // 传送到自定义点
-    private void TPCustomPoint(Player plr, Vector2 pos, string pointName)
-    {
-        StartTeleport($"正在传送到 {pointName}...", new Vector4(0.8f, 0.6f, 0.9f, 1f));
-        plr.Teleport(pos, 10);
-        ClientLoader.Chat.WriteLine($"已传送到 {pointName} ({(int)pos.X / 16}, {(int)pos.Y / 16})", Color.Yellow);
-    }
-
-    // 添加自定义传送点
-    private void AddCustomPoint()
-    {
-        Config.CustomTeleportPoints[NewPointName] = Main.LocalPlayer.position;
-        Config.Write();
-
-        // 播放添加成功音效
-        SoundEngine.PlaySound(SoundID.Item29);
-        ClientLoader.Chat.WriteLine($"已添加传送点: {NewPointName}", Color.Green);
-
-        // 重置表单
-        NewPointName = "";
-    }
-    #endregion
-
     #endregion
 
     #region 死亡地点选择窗口
@@ -1672,7 +1139,7 @@ public class UITool : Tool
 
                 if (ImGui.Button($"死亡地点 {i + 1} ({x}, {y})##{i}"))
                 {
-                    TPDeathPoint(plr, pos);
+                    Utils.TPDeathPoint(plr, pos);
                     ShowDeathTeleportWindow = false;
                 }
 
@@ -1692,7 +1159,7 @@ public class UITool : Tool
 
     #region 自定义传送点窗口
     private string CustomPointSearch = ""; // 自定义点搜索文本
-    private string NewPointName = ""; // 新传送点名称
+    public static string NewPointName = ""; // 新传送点名称
     private void DrawCustomTeleportWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(450, 500), ImGuiCond.FirstUseEver);
@@ -1724,7 +1191,7 @@ public class UITool : Tool
                 }
                 else
                 {
-                    AddCustomPoint();
+                    Utils.AddCustomPoint();
                 }
             }
 
@@ -1786,7 +1253,7 @@ public class UITool : Tool
                     // 操作按钮
                     if (ImGui.Button($"传送##{point.Key}"))
                     {
-                        TPCustomPoint(plr, point.Value, point.Key);
+                        Utils.TPCustomPoint(plr, point.Value, point.Key);
                     }
 
                     ImGui.SameLine();
@@ -1950,7 +1417,7 @@ public class UITool : Tool
                 // 创建按钮
                 if (ImGui.Button($"{displayName}##{npc.type}", buttonSize))
                 {
-                    TPNPC(plr, npc.type);
+                    Utils.TPNPC(plr, npc.type);
                 }
 
                 ImGui.PopStyleColor();
@@ -2075,8 +1542,9 @@ public class UITool : Tool
 
                     foreach (var item in trashItems)
                     {
-                        int returned = ReturnItems(plr, item.Id, item.Amount);
-                        totalItemsReturned += returned;
+                        // 使用 GiveItem 方法返还物品
+                        Utils.GiveItem(plr, item.Id, item.Amount);
+                        totalItemsReturned += item.Amount;
                         totalTypesReturned++;
                     }
 
@@ -2166,9 +1634,9 @@ public class UITool : Tool
                     }
 
                     // 检查物品是否在临时排除期内
-                    if (AdventExcluded(item.Id))
+                    if (Utils.AdventExcluded(item.Id))
                     {
-                        string timeLeft = GetAdventTime(item.Id);
+                        string timeLeft = Utils.GetAdventTime(item.Id);
                         ClientLoader.Chat.WriteLine($"物品 [c/4C92D8:{item.Name}] 已被临时排除，剩余时间: {timeLeft}。正在返还...", Color.Yellow);
                         ExecuteReturn(plr, data, item.Id, item.Amount, currentAmount);
                     }
@@ -2215,11 +1683,11 @@ public class UITool : Tool
                 ImGui.NextColumn();
 
                 // 临时排除时间显示
-                if (AdventExclusions != null)
+                if (Utils.AdventExclusions != null)
                 {
-                    if (AdventExclusions.ContainsKey(item.Id) && AdventExclusions[item.Id] > DateTime.Now)
+                    if (Utils.AdventExclusions.ContainsKey(item.Id) && Utils.AdventExclusions[item.Id] > DateTime.Now)
                     {
-                        TimeSpan remaining = AdventExclusions[item.Id] - DateTime.Now;
+                        TimeSpan remaining = Utils.AdventExclusions[item.Id] - DateTime.Now;
                         int secondsLeft = (int)remaining.TotalSeconds;
                         ImGui.TextColored(new Vector4(1, 1, 0.5f, 1), $"剩余: {secondsLeft}秒");
                     }
@@ -2463,7 +1931,7 @@ public class UITool : Tool
 
             if (ImGui.Button($"临时排除({TryExcludeTime}秒)"))
             {
-                AdventExclusions[itemId] = DateTime.Now.AddSeconds(TryExcludeTime);
+                Utils.AdventExclusions[itemId] = DateTime.Now.AddSeconds(TryExcludeTime);
                 ClientLoader.Chat.WriteLine($"已将 [c/4C92D8:{itemName}] 临时排除{TryExcludeTime}秒", Color.Yellow);
 
                 // 如果需要返还，执行返还操作
@@ -2491,45 +1959,13 @@ public class UITool : Tool
     }
     #endregion
 
-    #region 返还物品并同步服务器的方法
-    private int ReturnItems(Player plr, int type, int amount)
-    {
-        int totalReturned = 0;
-
-        // 获取物品的最大堆叠数量
-        var item = new Item();
-        item.SetDefaults(type);
-        int maxStack = item.maxStack;
-
-        // 分批返还物品
-        while (amount > 0)
-        {
-            int stackSize = Math.Min(amount, maxStack);
-
-            // 创建物品实体
-            int Index = Item.NewItem(new EntitySource_DebugCommand(),
-                                        (int)plr.position.X, (int)plr.position.Y,
-                                        plr.width, plr.height, type, stackSize,
-                                        noBroadcast: true, item.prefix, noGrabDelay: true);
-
-            // 设置物品归属并同步
-            Main.item[Index].playerIndexTheItemIsReservedFor = plr.whoAmI;
-            NetMessage.SendData(MessageID.ItemOwner, plr.whoAmI, -1, null, Index);
-            NetMessage.SendData(MessageID.SyncItem, plr.whoAmI, -1, null, Index, 1);
-
-            amount -= stackSize;
-            totalReturned += stackSize;
-        }
-
-        return totalReturned;
-    }
-    #endregion
-
-    #region 执行返还操作的方法
+    #region 执行返还操作的方法 (使用GiveItem)
     private void ExecuteReturn(Player plr, TrashData data, int itemKey, int itemValue, int currentAmount)
     {
         int returnAmount = Math.Min(currentAmount, itemValue);
-        int returned = ReturnItems(plr, itemKey, returnAmount);
+
+        // 直接使用GiveItem方法返还物品
+        Utils.GiveItem(plr, itemKey, returnAmount);
 
         // 更新垃圾桶中的物品数量
         int newAmount = itemValue - returnAmount;
@@ -2561,45 +1997,6 @@ public class UITool : Tool
         {
             ShowExclusionWindows = false;
         }
-    }
-    #endregion
-
-    #region 一键收藏所有物品
-    private static bool isFavoriteMode = false; // 收藏模式开关（true为收藏，false为取消收藏）
-    public static int FavoriteAllItems(Player plr)
-    {
-        int count = 0;
-
-        // 反转收藏模式（每次调用切换模式）
-        isFavoriteMode = !isFavoriteMode;
-
-        // 遍历玩家背包（0-50是主背包）
-        for (int i = 0; i < 50; i++)
-        {
-            Item item = plr.inventory[i];
-
-            if (!item.IsAir)
-            {
-                // 根据当前模式设置收藏状态
-                item.favorited = isFavoriteMode;
-                count++;
-            }
-        }
-
-        // 虚空袋（40格）
-        for (int i = 0; i < 40; i++)
-        {
-            Item item = plr.bank4.item[i];
-
-            if (!item.IsAir)
-            {
-                // 根据当前模式设置收藏状态
-                item.favorited = isFavoriteMode;
-                count++;
-            }
-        }
-
-        return count;
     }
     #endregion
 
@@ -2828,7 +2225,6 @@ public class UITool : Tool
     private static int NowPage = 0; // 当前页码
     private const int PageLimit = 8; // 每页显示8个物品
     private static int AllPages = 0; // 总页数
-
     private static void ListPage(int totalItems)
     {
         // 显示分页信息和控件
@@ -3082,7 +2478,7 @@ public class UITool : Tool
 
     #region 一键修改前缀窗口
     public static bool ShowEditPrefix = false; // 显示批量修改前缀窗口
-    private static int PrefixId = 0; // 用于存储新前缀ID的变量
+    public static int PrefixId = 0; // 用于存储新前缀ID的变量
     private static void DrawEditPrefixWindow()
     {
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(300, 150), ImGuiCond.FirstUseEver);
@@ -3104,7 +2500,7 @@ public class UITool : Tool
             {
                 // 播放界面关闭音效
                 SoundEngine.PlaySound(SoundID.MenuClose);
-                ApplyPrefix();
+                Utils.ApplyPrefix();
                 ShowEditPrefix = false;
             }
 
@@ -3117,48 +2513,6 @@ public class UITool : Tool
             }
         }
         ImGui.End();
-    }
-    #endregion
-
-    #region 批量修改饰品
-    private static void ApplyPrefix()
-    {
-        Player plr = Main.player[Main.myPlayer];
-        int count = 0;
-
-        var pr = Lang.prefix[PrefixId].ToString();
-        if (string.IsNullOrEmpty(pr))
-        {
-            pr = "无";
-        }
-
-        // 默认跳过的槽位：装饰栏
-        List<int> NotSlot;
-        if (plr.extraAccessory)
-        {
-            // 开启额外饰品：饰品栏为 3~9，跳过 10、11、12
-            NotSlot = new List<int>() { 10, 11, 12 };
-        }
-        else
-        {
-            // 未开启额外饰品：饰品栏为 3~8，跳过 9、10、11
-            NotSlot = new List<int>() { 9, 10, 11 };
-        }
-
-        for (int i = 3; i < plr.armor.Length; i++)
-        {
-            if (NotSlot.Contains(i)) continue;
-            var item = plr.armor[i];
-
-            if (item != null && !item.IsAir &&
-                item.accessory && PrefixId != 0)
-            {
-                item.Prefix((byte)PrefixId);
-                count++;
-            }
-        }
-
-        ClientLoader.Chat.WriteLine($"已为 {count} 个饰品槽位设置前缀: {pr}", color);
     }
     #endregion
 

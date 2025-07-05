@@ -219,8 +219,8 @@ internal class ExtraAccessory
                 {
                     plr.MountedCenter.ToTileCoordinates();
                     DelegateMethods.v3_1 = new Vector3(0.9f, 0.8f, 0.5f);
-                    Utils.PlotTileLine(plr.Center, plr.Center + plr.velocity * 6f, 20f, DelegateMethods.CastLightOpen);
-                    Utils.PlotTileLine(plr.Left, plr.Right, 20f, DelegateMethods.CastLightOpen);
+                    Terraria.Utils.PlotTileLine(plr.Center, plr.Center + plr.velocity * 6f, 20f, DelegateMethods.CastLightOpen);
+                    Terraria.Utils.PlotTileLine(plr.Left, plr.Right, 20f, DelegateMethods.CastLightOpen);
                 }
                 break;
         }
