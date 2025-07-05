@@ -790,12 +790,7 @@ public class UITool : Tool
             if (string.IsNullOrWhiteSpace(name)) continue;
             if (name.Contains("Unloaded")) continue;
 
-            npcList.Add(new NPCInfo
-            {
-                ID = id,
-                Name = name,
-                IsTownNPC = ContentSamples.NpcsByNetId[id].townNPC
-            });
+            npcList.Add(new NPCInfo(id, name, ContentSamples.NpcsByNetId[id].townNPC));
         }
 
         // 按ID排序

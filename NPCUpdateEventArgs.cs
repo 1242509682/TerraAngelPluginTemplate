@@ -37,3 +37,5 @@ public class NPCEventSystem
 
 // 使用记录类型简化事件参数
 public record NPCUpdateEventArgs(int whoAmI, NPC npc);
+
+internal record NPCInfo(int ID, string Name, bool IsTownNPC);
