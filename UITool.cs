@@ -7,7 +7,6 @@ using TerraAngel.Input;
 using TerraAngel.Tools;
 using Terraria;
 using Terraria.Audio;
-using Terraria.DataStructures;
 using Terraria.GameContent.Events;
 using Terraria.ID;
 using static MyPlugin.MyPlugin;
@@ -71,7 +70,7 @@ public class UITool : Tool
         int BossHealCap = Config.BossHealCap; // BOSS每次回血上限
         int BossHealInterval = Config.BossHealInterval; //BOSS独立回血间隔(秒)
 
-        bool VeinMinerEnabled = Config.VeinMinerEnabled; // 连锁挖矿开关
+        bool FavoriteItemForJoinWorld = Config.FavoriteItemForJoinWorld; // 进入世界自动收藏物品
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -176,7 +175,7 @@ public class UITool : Tool
                 ImGui.SameLine();
                 if (ImGui.Button("入侵事件", new Vector2(Width, 40)))
                 {
-                    ShowInvasionWindow = true;
+                    ShowInvasionWindow = !ShowInvasionWindow;
                 }
 
                 // 显示入侵选择窗口
@@ -270,7 +269,7 @@ public class UITool : Tool
                 if (ImGui.Button("物品编辑器"))
                 {
                     SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
-                    ShowItemManagerWindow = true;
+                    ShowItemManagerWindow = !ShowItemManagerWindow;
                 }
 
                 // 物品管理器窗口
@@ -279,10 +278,12 @@ public class UITool : Tool
                     DrawItemManagerWindow(plr);
                 }
 
+                // 自动垃圾桶
+                ImGui.SameLine();
                 if (ImGui.Button("自动垃圾桶"))
                 {
                     SoundEngine.PlaySound(SoundID.MenuOpen);
-                    ShowAutoTrashWindow = true;
+                    ShowAutoTrashWindow = !ShowAutoTrashWindow;
                 }
 
                 // 显示自动垃圾桶窗口
@@ -291,39 +292,21 @@ public class UITool : Tool
                     DrawAutoTrashWindow(plr);
                 }
 
-                // 一键修改饰品前缀按钮
-                if (ImGui.Button("一键前缀"))
-                {
-                    // 播放界面打开音效
-                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                    ShowEditPrefix = true;
-                    PrefixId = 0; // 重置为0
-                }
+                // 连锁挖矿
                 ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
-
-                // 显示一键修改前缀窗口
-                if (ShowEditPrefix)
+                if (ImGui.Button("连锁挖矿"))
                 {
-                    DrawEditPrefixWindow();
+                    SoundEngine.PlaySound(SoundID.MenuOpen);
+                    ShowVeinMinerWindow = !ShowVeinMinerWindow; // 连锁挖矿窗口
                 }
 
-                // 一键收藏按钮
-                if (ImGui.Button("一键收藏背包"))
+                if (ShowVeinMinerWindow)
                 {
-                    // 播放收藏音效
-                    SoundEngine.PlaySound(SoundID.MenuTick);
-
-                    // 收藏所有格子物品（包括虚空袋）
-                    int favoritedItems = Utils.FavoriteAllItems(plr);
-
-                    // 显示操作结果
-                    ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
+                    VeinMineWindows();
                 }
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
 
                 // 使重力药水、重力球等不会反转屏幕效果
+                ImGui.Separator();
                 ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
@@ -343,6 +326,48 @@ public class UITool : Tool
                     ImGui.Checkbox("饰品功能", ref applyAccessory);
                 }
 
+                ImGui.Separator();
+                if (ImGui.TreeNodeEx("背包设置", ImGuiTreeNodeFlags.Framed))
+                {
+                    // 一键修改饰品前缀按钮
+                    if (ImGui.Button("一键饰品前缀"))
+                    {
+                        // 播放界面打开音效
+                        SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
+                        ShowEditPrefix = true;
+                        PrefixId = 0; // 重置为0
+                    }
+                    ImGui.SameLine();
+                    DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
+
+                    // 显示一键修改前缀窗口
+                    if (ShowEditPrefix)
+                    {
+                        DrawEditPrefixWindow();
+                    }
+
+                    // 一键收藏按钮
+                    if (ImGui.Button("一键收藏物品"))
+                    {
+                        // 播放收藏音效
+                        SoundEngine.PlaySound(SoundID.MenuTick);
+
+                        // 收藏所有格子物品（包括虚空袋）
+                        int favoritedItems = Utils.FavoriteAllItems(plr);
+
+                        // 显示操作结果
+                        ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
+                    }
+                    ImGui.SameLine();
+                    DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
+
+                    ImGui.Checkbox("进入世界自动收藏物品", ref FavoriteItemForJoinWorld);
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip("每次进入世界时自动收藏背包所有物品");
+
+                    ImGui.TreePop();
+                }
+
                 ImGui.TreePop();
             }
 
@@ -353,9 +378,36 @@ public class UITool : Tool
                 // 第一次打开时加载NPC列表
                 if (!npcListLoaded)
                 {
-                    LoadNPCList();
+                    Utils.LoadNPCList();
                     npcListLoaded = true;
                 }
+
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "生成与复活NPC");
+
+                // 生成NPC区域
+                ImGui.Spacing();
+                if (ImGui.Button("生成NPC"))
+                {
+                    ShowSpawnNpcWindow = !ShowSpawnNpcWindow;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("生成怪物或NPC在屏幕外");
+
+                if (ShowSpawnNpcWindow)
+                {
+                    SpawnNpcWindows();
+                }
+
+                // 复活NPC区域
+                ImGui.SameLine();
+                if (ImGui.Button("复活NPC"))
+                {
+                    Utils.Relive(true);
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC");
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.NPCReliveKey, ref EditNPCReliveKey);
 
                 // npc自动回血
                 ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动回血");
@@ -395,118 +447,6 @@ public class UITool : Tool
                         ImGui.SetNextItemWidth(200);
                         ImGui.SliderFloat("##BossHealVel", ref BossHealVel, 0.01f, 20f, "%.2f%%");
                     }
-                }
-
-                // 复活NPC区域
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "复活NPC");
-                ImGui.Separator();
-
-                if (ImGui.Button("复活所有城镇NPC"))
-                {
-                    Utils.Relive(true);
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC");
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.NPCReliveKey, ref EditNPCReliveKey);
-
-                // 生成NPC区域
-                ImGui.Spacing();
-                ImGui.TextColored(new Vector4(0.8f, 1f, 0.6f, 1f), "生成NPC");
-                ImGui.Separator();
-
-                // 输入框和搜索
-                ImGui.Text("搜索NPC:");
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(200);
-                ImGui.InputTextWithHint("##NPCSearch", "输入名称或ID", ref npcSearchFilter, 100);
-
-                // 生成数量
-                ImGui.Text("生成数量:");
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(100);
-                ImGui.InputInt("##NPCAmount", ref spawnNPCAmount);
-                if (spawnNPCAmount < 1) spawnNPCAmount = 1;
-                if (spawnNPCAmount > 100) spawnNPCAmount = 100;
-
-                // 应用过滤后的NPC列表
-                var filteredNPCs = npcList
-                    .Where(n => string.IsNullOrWhiteSpace(npcSearchFilter) ||
-                                n.Name.Contains(npcSearchFilter, StringComparison.OrdinalIgnoreCase) ||
-                                n.ID.ToString().Contains(npcSearchFilter))
-                    .ToList();
-
-                // 显示NPC列表
-                ImGui.BeginChild("NPCList", new Vector2(0, 200), ImGuiChildFlags.Borders);
-
-                if (filteredNPCs.Count > 0)
-                {
-                    // 显示表头
-                    ImGui.Columns(3, "npc_columns", true);
-                    ImGui.SetColumnWidth(0, 60);  // ID
-                    ImGui.SetColumnWidth(1, 250); // 名称
-                    ImGui.SetColumnWidth(2, 120); // 操作
-
-                    ImGui.Text("ID"); ImGui.NextColumn();
-                    ImGui.Text("名称"); ImGui.NextColumn();
-                    ImGui.Text("操作"); ImGui.NextColumn();
-                    ImGui.Separator();
-
-                    foreach (var npc in filteredNPCs)
-                    {
-                        ImGui.Text($"{npc.ID}"); ImGui.NextColumn();
-                        ImGui.Text($"{npc.Name}"); ImGui.NextColumn();
-
-                        // 生成按钮
-                        if (ImGui.Button($"生成##{npc.ID}"))
-                        {
-                            Utils.SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
-                                     (int)Main.LocalPlayer.position.X / 16,
-                                     (int)Main.LocalPlayer.position.Y / 16);
-                            ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
-                        }
-
-                        ImGui.NextColumn();
-                    }
-                    ImGui.Columns(1);
-                }
-                else
-                {
-                    ImGui.Text("没有找到匹配的NPC");
-                }
-
-                ImGui.EndChild();
-
-                // 手动输入生成
-                ImGui.Text("手动生成:");
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(200);
-                ImGui.InputTextWithHint("##ManualSpawn", "输入NPC ID或名称", ref spawnNPCInput, 100);
-                ImGui.SameLine();
-                if (ImGui.Button("生成"))
-                {
-                    SpawnNPCByInput();
-                }
-
-                ImGui.TreePop();
-            }
-
-            // 图格编辑区域
-            ImGui.Separator();
-            if (ImGui.TreeNodeEx("图格管理", ImGuiTreeNodeFlags.Framed))
-            {
-                TempPoints = TempPoint();
-
-                // 连锁挖矿功能开关
-                ImGui.Separator();
-                ImGui.TextColored(new Vector4(0.8f, 1f, 0.6f, 1f), "连锁挖矿");
-                ImGui.Checkbox("启用连锁挖矿", ref VeinMinerEnabled);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.VeinMinerKey, ref EditVeinMinerKey);
-                if (VeinMinerEnabled)
-                {
-                    // 连锁挖矿窗口
-                    VeinMineWindows();
                 }
 
                 ImGui.TreePop();
@@ -549,7 +489,7 @@ public class UITool : Tool
         Config.BossHealCap = BossHealCap; // BOSS每次回血上限
         Config.BossHealInterval = BossHealInterval; //BOSS独立回血间隔(秒)
 
-        Config.VeinMinerEnabled = VeinMinerEnabled; // 连锁替换开关
+        Config.FavoriteItemForJoinWorld = FavoriteItemForJoinWorld; // 进入世界自动收藏物品
 
         // 保存按钮
         ImGui.Separator();
@@ -573,290 +513,248 @@ public class UITool : Tool
     #endregion
 
     #region 连锁挖矿窗口
-    private string veinMinerSearch = ""; // 连锁挖矿搜索过滤器
+    private static bool ShowVeinMinerWindow = false; // 显示自动垃圾桶窗口
+    private string VeinMinerSearch = ""; // 连锁挖矿搜索过滤器
     private void VeinMineWindows()
     {
-        // 最大挖掘数量设置
-        int count = Config.VeinMinerCount;
-        ImGui.Text("最大挖掘上限:");
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(150);
-        ImGui.SliderInt("##VeinMinerCount", ref count, 10, 1000, "%d");
-        Config.VeinMinerCount = count;
-
-        // 添加矿物按钮
-        if (ImGui.Button("手持物品添加图格"))
+        bool VeinMinerEnabled = Config.VeinMinerEnabled; // 连锁挖矿开关
+        ImGui.SetNextWindowSize(new Vector2(0, 100), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("连锁挖矿", ref ShowVeinMinerWindow, ImGuiWindowFlags.NoCollapse))
         {
-            Item heldItem = Main.LocalPlayer.HeldItem;
-            if (heldItem.createTile >= 0)
+            ImGui.Separator();
+            ImGui.Checkbox("启用连锁挖矿", ref VeinMinerEnabled);
+            Config.VeinMinerEnabled = VeinMinerEnabled;
+            ImGui.SameLine();
+            DrawKeySelector("按键", ref Config.VeinMinerKey, ref EditVeinMinerKey);
+
+            // 添加矿物按钮
+            if (ImGui.Button("手持物品添加图格"))
             {
-                int tileID = heldItem.createTile;
-                string itemName = heldItem.Name;
-
-                // 检查是否已存在相同图格ID
-                bool exists = false;
-                foreach (var mineral in Config.VeinMinerList)
+                Item heldItem = Main.LocalPlayer.HeldItem;
+                if (heldItem.createTile >= 0)
                 {
-                    if (mineral.TileID == tileID)
+                    int tileID = heldItem.createTile;
+                    string itemName = heldItem.Name;
+
+                    // 检查是否已存在相同图格ID
+                    bool exists = false;
+                    foreach (var mineral in Config.VeinMinerList)
                     {
-                        exists = true;
-                        break;
+                        if (mineral.TileID == tileID)
+                        {
+                            exists = true;
+                            break;
+                        }
                     }
-                }
 
-                if (!exists)
-                {
-                    Config.VeinMinerList.Add(new VeinMinerItem(tileID, itemName));
-                    ClientLoader.Chat.WriteLine($"已添加连锁图格: {itemName} (ID: {tileID})", Color.Green);
+                    if (!exists)
+                    {
+                        Config.VeinMinerList.Add(new VeinMinerItem(tileID, itemName));
+                        ClientLoader.Chat.WriteLine($"已添加连锁图格: {itemName} (ID: {tileID})", Color.Green);
+                    }
+                    else
+                    {
+                        ClientLoader.Chat.WriteLine("该图格已在列表中", Color.Yellow);
+                    }
                 }
                 else
                 {
-                    ClientLoader.Chat.WriteLine("该图格已在列表中", Color.Yellow);
+                    ClientLoader.Chat.WriteLine("手持物品不是可放置的图格", Color.Red);
                 }
             }
-            else
+
+            // 清除按钮
+            ImGui.SameLine();
+            if (ImGui.Button("清除连锁图格表"))
             {
-                ClientLoader.Chat.WriteLine("手持物品不是可放置的图格", Color.Red);
+                Config.VeinMinerList.Clear();
+                Config.Write();
+                ClientLoader.Chat.WriteLine("已清除连锁图格表", Color.Yellow);
             }
-        }
 
-        // 清除按钮
-        ImGui.SameLine();
-        if (ImGui.Button("清除连锁图格表"))
-        {
-            Config.VeinMinerList.Clear();
-            Config.Write();
-            ClientLoader.Chat.WriteLine("已清除连锁图格表", Color.Yellow);
-        }
+            // 最大挖掘数量设置
+            int count = Config.VeinMinerCount;
+            ImGui.Text("最大挖掘上限:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(150);
+            ImGui.SliderInt("##VeinMinerCount", ref count, 10, 1000, "%d");
+            Config.VeinMinerCount = count;
 
-        // 添加搜索框
-        ImGui.Separator();
-        ImGui.Text("搜索图格:");
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(200);
-        ImGui.InputTextWithHint("##VeinMinerSearch", "输入名称或ID", ref veinMinerSearch, 100);
-        ImGui.SameLine();
-        if (ImGui.Button("清空搜索"))
-        {
-            veinMinerSearch = "";
-        }
-
-        // 应用过滤
-        var filteredMinerals = Config.VeinMinerList
-            .Where(m => string.IsNullOrWhiteSpace(veinMinerSearch) ||
-                        m.ItemName.Contains(veinMinerSearch, StringComparison.OrdinalIgnoreCase) ||
-                        m.TileID.ToString().Contains(veinMinerSearch))
-            .ToList();
-
-        ImGui.Text($"当前连锁图格列表: ({filteredMinerals.Count} 个)");
-
-        // 矿物表显示
-        ImGui.BeginChild("VeinMinerList", new Vector2(0, 200), ImGuiChildFlags.Borders);
-        if (filteredMinerals.Count > 0)
-        {
-            // 表格样式设置
-            ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(8, 4));
-
-            // 开始表格（3列：ID、矿物名称、操作）
-            if (ImGui.BeginTable("VeinMinerTable", 3,
-                ImGuiTableFlags.Borders |
-                ImGuiTableFlags.RowBg |
-                ImGuiTableFlags.SizingFixedFit))
+            // 添加搜索框
+            ImGui.Separator();
+            ImGui.Text("搜索图格:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputTextWithHint("##VeinMinerSearch", "输入名称或ID", ref VeinMinerSearch, 100);
+            ImGui.SameLine();
+            if (ImGui.Button("清空搜索"))
             {
-                // 设置列宽
-                ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 60);
-                ImGui.TableSetupColumn("物品名称", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableSetupColumn("操作", ImGuiTableColumnFlags.WidthFixed, 80);
-                ImGui.TableHeadersRow();
+                VeinMinerSearch = "";
+            }
 
-                // 遍历所有矿物
-                for (int i = 0; i < filteredMinerals.Count; i++)
+            // 应用过滤
+            var filteredMinerals = Config.VeinMinerList
+                .Where(m => string.IsNullOrWhiteSpace(VeinMinerSearch) ||
+                            m.ItemName.Contains(VeinMinerSearch, StringComparison.OrdinalIgnoreCase) ||
+                            m.TileID.ToString().Contains(VeinMinerSearch))
+                .ToList();
+
+            ImGui.Text($"当前连锁图格列表: ({filteredMinerals.Count} 个)");
+
+            // 矿物表显示
+            ImGui.BeginChild("VeinMinerList", new Vector2(0, 200), ImGuiChildFlags.Borders);
+            if (filteredMinerals.Count > 0)
+            {
+                // 表格样式设置
+                ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, new Vector2(8, 4));
+
+                // 开始表格（3列：ID、矿物名称、操作）
+                if (ImGui.BeginTable("VeinMinerTable", 3,
+                    ImGuiTableFlags.Borders |
+                    ImGuiTableFlags.RowBg |
+                    ImGuiTableFlags.SizingFixedFit))
                 {
-                    var mineral = filteredMinerals[i];
-                    int tileID = mineral.TileID;
-                    string itemName = mineral.ItemName;
+                    // 设置列宽
+                    ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 60);
+                    ImGui.TableSetupColumn("物品名称", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableSetupColumn("操作", ImGuiTableColumnFlags.WidthFixed, 80);
+                    ImGui.TableHeadersRow();
 
-                    ImGui.TableNextRow();
-
-                    // ID列
-                    ImGui.TableSetColumnIndex(0);
-                    ImGui.Text($"{tileID}");
-
-                    // 名称列
-                    ImGui.TableSetColumnIndex(1);
-                    ImGui.Text(itemName);
-
-                    // 操作列
-                    ImGui.TableSetColumnIndex(2);
-                    if (ImGui.Button($"删除##{tileID}"))
+                    // 遍历所有矿物
+                    for (int i = 0; i < filteredMinerals.Count; i++)
                     {
-                        string removedName = itemName;
-                        Config.VeinMinerList.Remove(mineral);
-                        ClientLoader.Chat.WriteLine($"已移除图格: {removedName}", Color.Yellow);
-                    }
-                }
+                        var mineral = filteredMinerals[i];
+                        int tileID = mineral.TileID;
+                        string itemName = mineral.ItemName;
 
-                ImGui.EndTable();
-            }
-            ImGui.PopStyleVar();
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(veinMinerSearch))
-            {
-                ImGui.TextDisabled("连锁图格表为空");
+                        ImGui.TableNextRow();
+
+                        // ID列
+                        ImGui.TableSetColumnIndex(0);
+                        ImGui.Text($"{tileID}");
+
+                        // 名称列
+                        ImGui.TableSetColumnIndex(1);
+                        ImGui.Text(itemName);
+
+                        // 操作列
+                        ImGui.TableSetColumnIndex(2);
+                        if (ImGui.Button($"删除##{tileID}"))
+                        {
+                            string removedName = itemName;
+                            Config.VeinMinerList.Remove(mineral);
+                            ClientLoader.Chat.WriteLine($"已移除图格: {removedName}", Color.Yellow);
+                        }
+                    }
+
+                    ImGui.EndTable();
+                }
+                ImGui.PopStyleVar();
             }
             else
             {
-                ImGui.TextDisabled($"没有找到包含 '{veinMinerSearch}' 的连锁图格");
+                if (string.IsNullOrWhiteSpace(VeinMinerSearch))
+                {
+                    ImGui.TextDisabled("连锁图格表为空");
+                }
+                else
+                {
+                    ImGui.TextDisabled($"没有找到包含 '{VeinMinerSearch}' 的连锁图格");
+                }
             }
+            ImGui.EndChild(); // 结束子窗口
         }
-        ImGui.EndChild(); // 结束子窗口
+        ImGui.End();
     }
     #endregion
 
-    #region 设置临时点窗口
-    private static Point[] TempPoint()
+    #region 生成NPC窗口
+    private static bool ShowSpawnNpcWindow = false; // 显示生成NPC窗口
+    public static string spawnNPCInput = ""; // 生成NPC输入
+    public static int spawnNPCAmount = 1; // 生成数量
+    public static string npcSearchFilter = ""; // NPC搜索过滤器
+    internal static List<NPCInfo> npcList = new List<NPCInfo>(); // NPC列表缓存
+    public static bool npcListLoaded = false; // NPC列表是否已加载
+    private void SpawnNpcWindows()
     {
-        // 临时点管理
-        ImGui.Separator();
-        ImGui.TextColored(new Vector4(0.8f, 1f, 0.6f, 1f), "临时点管理");
-        if (TempPoints == null || TempPoints.Length == 0)
+        ImGui.SetNextWindowSize(new Vector2(0, 200), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("生成NPC", ref ShowSpawnNpcWindow, ImGuiWindowFlags.NoCollapse))
         {
-            TempPoints = new Point[2]; // 初始化2个点
-        }
+            // 输入框和搜索
+            ImGui.Separator();
+            ImGui.Text("搜索NPC:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputTextWithHint("##NPCSearch", "输入名称或ID", ref npcSearchFilter, 100);
 
-        // 显示临时点状态
-        ImGui.Text($"临时点数量: {TempPoints.Count(p => p.X != 0 || p.Y != 0)}");
-        if (ImGui.Button("设置临时点 1"))
-        {
-            Utils.AwaitingTempPoint = 1;
-            ClientLoader.Chat.WriteLine("请点击要设置临时点的图格", Color.Yellow);
-        }
-        ImGui.SameLine();
-        if (ImGui.Button("设置临时点 2"))
-        {
-            Utils.AwaitingTempPoint = 2;
-            ClientLoader.Chat.WriteLine("请点击要设置临时点的图格", Color.Yellow);
-        }
+            // 生成数量
+            ImGui.Text("生成数量:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(100);
+            ImGui.InputInt("##NPCAmount", ref spawnNPCAmount);
+            if (spawnNPCAmount < 1) spawnNPCAmount = 1;
+            if (spawnNPCAmount > 100) spawnNPCAmount = 100;
 
-        // 显示已设置的临时点
-        for (int i = 0; i < TempPoints.Length; i++)
-        {
-            if (TempPoints[i].X != 0 || TempPoints[i].Y != 0)
+            // 应用过滤后的NPC列表
+            var filteredNPCs = npcList
+                .Where(n => string.IsNullOrWhiteSpace(npcSearchFilter) ||
+                            n.Name.Contains(npcSearchFilter, StringComparison.OrdinalIgnoreCase) ||
+                            n.ID.ToString().Contains(npcSearchFilter))
+                .ToList();
+
+            // 显示NPC列表
+            ImGui.BeginChild("NPCList", new Vector2(0, 300), ImGuiChildFlags.Borders);
+
+            if (filteredNPCs.Count > 0)
             {
-                ImGui.Text($"临时点 {i + 1}: ({TempPoints[i].X}, {TempPoints[i].Y})");
-                ImGui.SameLine();
+                // 显示表头
+                ImGui.Columns(3, "npc_columns", true);
+                ImGui.SetColumnWidth(0, 60);  // ID
+                ImGui.SetColumnWidth(1, 250); // 名称
+                ImGui.SetColumnWidth(2, 120); // 操作
 
-                if (ImGui.Button($"传送##tp{i}"))
+                ImGui.Text("ID"); ImGui.NextColumn();
+                ImGui.Text("名称"); ImGui.NextColumn();
+                ImGui.Text("操作"); ImGui.NextColumn();
+                ImGui.Separator();
+
+                foreach (var npc in filteredNPCs)
                 {
-                    Vector2 pos = new Vector2(TempPoints[i].X * 16, (TempPoints[i].Y - 3) * 16);
-                    Main.LocalPlayer.Teleport(pos, 10);
+                    ImGui.Text($"{npc.ID}"); ImGui.NextColumn();
+                    ImGui.Text($"{npc.Name}"); ImGui.NextColumn();
+
+                    // 生成按钮
+                    if (ImGui.Button($"生成##{npc.ID}"))
+                    {
+                        Utils.SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
+                                 (int)Main.LocalPlayer.position.X / 16,
+                                 (int)Main.LocalPlayer.position.Y / 16);
+                        ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
+                    }
+
+                    ImGui.NextColumn();
                 }
-
-                ImGui.SameLine();
-
-                if (ImGui.Button($"清除##clear{i}"))
-                {
-                    TempPoints[i] = Point.Zero;
-                }
+                ImGui.Columns(1);
             }
-        }
-
-        return TempPoints;
-    } 
-    #endregion
-
-    #region NPC管理器
-    private string spawnNPCInput = ""; // 生成NPC输入
-    private int spawnNPCAmount = 1; // 生成数量
-    private string npcSearchFilter = ""; // NPC搜索过滤器
-    private List<NPCInfo> npcList = new List<NPCInfo>(); // NPC列表缓存
-    private bool npcListLoaded = false; // NPC列表是否已加载
-    // 加载NPC列表
-    private void LoadNPCList()
-    {
-        npcList.Clear();
-
-        // 添加所有NPC
-        for (int id = -65; id < NPCID.Count; id++)
-        {
-            // 跳过无效NPC
-            if (id == 0 || id == -64 || id == -65) continue;
-
-            string name = Lang.GetNPCNameValue(id);
-
-            // 跳过无效名称
-            if (string.IsNullOrWhiteSpace(name)) continue;
-            if (name.Contains("Unloaded")) continue;
-
-            npcList.Add(new NPCInfo(id, name, ContentSamples.NpcsByNetId[id].townNPC));
-        }
-
-        // 按ID排序
-        npcList = npcList.OrderBy(n => n.ID).ToList();
-    }
-
-    // 根据输入生成NPC
-    private void SpawnNPCByInput()
-    {
-        if (string.IsNullOrWhiteSpace(spawnNPCInput))
-        {
-            ClientLoader.Chat.WriteLine("请输入NPC ID或名称", Color.Red);
-            return;
-        }
-
-        // 尝试解析为整数
-        if (int.TryParse(spawnNPCInput, out int npcId))
-        {
-            if (npcId < -65 || npcId >= NPCID.Count)
+            else
             {
-                ClientLoader.Chat.WriteLine($"无效的NPC ID: {npcId}", Color.Red);
-                return;
+                ImGui.Text("没有找到匹配的NPC");
             }
 
-            string name = Lang.GetNPCNameValue(npcId);
-            if (string.IsNullOrWhiteSpace(name) || name.Contains("Unloaded"))
+            ImGui.EndChild();
+
+            // 手动输入生成
+            ImGui.Text("手动生成:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputTextWithHint("##ManualSpawn", "输入NPC ID或名称", ref spawnNPCInput, 100);
+            ImGui.SameLine();
+            if (ImGui.Button("生成"))
             {
-                ClientLoader.Chat.WriteLine($"未找到ID为 {npcId} 的NPC", Color.Red);
-                return;
+                Utils.SpawnNPCByInput();
             }
-
-            Utils.SpawnNPC(npcId, name, spawnNPCAmount,
-                     (int)Main.LocalPlayer.position.X / 16,
-                     (int)Main.LocalPlayer.position.Y / 16);
-            ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {name}", Color.Green);
-            return;
         }
-
-        // 按名称搜索
-        var matches = npcList
-            .Where(n => n.Name.Equals(spawnNPCInput, StringComparison.OrdinalIgnoreCase) ||
-                        n.Name.Contains(spawnNPCInput, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        if (matches.Count == 0)
-        {
-            ClientLoader.Chat.WriteLine($"未找到名称为 '{spawnNPCInput}' 的NPC", Color.Red);
-            return;
-        }
-
-        if (matches.Count > 1)
-        {
-            ClientLoader.Chat.WriteLine($"找到多个匹配的NPC，请使用ID:", Color.Yellow);
-            foreach (var match in matches)
-            {
-                ClientLoader.Chat.WriteLine($"{match.Name} (ID: {match.ID})", Color.Yellow);
-            }
-            return;
-        }
-
-        // 只有一个匹配项
-        var npc = matches[0];
-        Utils.SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
-                 (int)Main.LocalPlayer.position.X / 16,
-                 (int)Main.LocalPlayer.position.Y / 16);
-        ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
+        ImGui.End();
     }
     #endregion
 
@@ -1032,7 +930,7 @@ public class UITool : Tool
         ImGui.SameLine();
         if (ImGui.Button("自定义", new Vector2(Width, 40)))
         {
-            ShowCustomTeleportWindow = true;
+            ShowCustomTeleportWindow = !ShowCustomTeleportWindow;
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("管理自定义传送点");
@@ -1041,7 +939,7 @@ public class UITool : Tool
         ImGui.SameLine();
         if (ImGui.Button("NPC", new Vector2(Width, 40)))
         {
-            ShowNPCTeleportWindow = true;
+            ShowNPCTeleportWindow = !ShowNPCTeleportWindow;
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("传送到活跃NPC位置,排除傀儡与雕像怪,排列优先级:城镇npc→boss→其他怪");

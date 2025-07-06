@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using System.Reflection;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
@@ -20,6 +21,9 @@ public class MyPlugin(string path) : Plugin(path)
     #region 注册与卸载
     public override void Load()
     {
+        // 加载世界事件
+        WorldGen.Hooks.OnWorldLoad += OnWorldLoad;
+
         // 注册图格编辑事件
         TileEditEventSystem.Register();
         TileEditEventSystem.OnTileKill += OnTileEdit;
@@ -54,6 +58,9 @@ public class MyPlugin(string path) : Plugin(path)
 
     public override void Unload()
     {
+        // 加载世界事件
+        WorldGen.Hooks.OnWorldLoad -= OnWorldLoad;
+
         //卸载图格编辑事件
         TileEditEventSystem.Dispose();
         TileEditEventSystem.OnTileKill -= OnTileEdit;
@@ -199,8 +206,6 @@ public class MyPlugin(string path) : Plugin(path)
     {
         if (!Config.Enabled) return;
 
-        Utils.CreateTempPoint(e.X, e.Y); // 创建临时点方法
-
         Utils.VeinMiner(e.X, e.Y); // 连锁挖矿方法
     }
     #endregion
@@ -220,4 +225,20 @@ public class MyPlugin(string path) : Plugin(path)
     }
     #endregion
 
+    #region 加载世界事件
+    private void OnWorldLoad()
+    {
+        var plr = Main.LocalPlayer;
+
+        if (!Config.Enabled || plr is null) return;
+
+        // 进入世界自动收藏背包物品
+        if (Config.FavoriteItemForJoinWorld)
+        {
+            Utils.isFavoriteMode = false;
+            int favoritedItems = Utils.FavoriteAllItems(plr);
+            ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
+        }
+    }
+    #endregion
 }

@@ -48,16 +48,13 @@
 		</PropertyGroup>
 
 		<!-- 删除旧的 JSON 文件 -->
-		<Delete Files="$(MyDocuments)\My Games\Terraria\TerraAngel\MyPlugin.json"
-				ContinueOnError="true">
+		<Delete Files="$(MyDocuments)\My Games\Terraria\TerraAngel\MyPlugin.json" ContinueOnError="true">
 			<Output TaskParameter="DeletedFiles" ItemName="DeletedFiles" />
 		</Delete>
 		<Message Text="✅ Deleted JSON file: @(DeletedFiles)" Condition="'@(DeletedFiles)' != ''" />
 
 		<!-- 复制新 DLL 文件 -->
-		<Copy SourceFiles="$(TargetPath)"
-			  DestinationFolder="$(TerrariaPluginsPath)"
-			  SkipUnchangedFiles="false">
+		<Copy SourceFiles="$(TargetPath)" DestinationFolder="$(TerrariaPluginsPath)" SkipUnchangedFiles="false">
 			<Output TaskParameter="CopiedFiles" ItemName="CopiedFiles" />
 		</Copy>
 		<Message Text="✅ Copied plugin to: $(TerrariaPluginsPath)" Condition="'@(CopiedFiles)' != ''" />

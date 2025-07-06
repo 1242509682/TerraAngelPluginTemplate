@@ -1,5 +1,5 @@
-﻿using System.Numerics;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
+using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using Terraria;
@@ -133,7 +133,7 @@ internal class Utils
 
         foreach (int item in list2)
         {
-            if (DidDiscoverBestiaryEntry(item))
+            if (BestiaryEntry(item))
             {
                 list.Add(item);
             }
@@ -143,7 +143,7 @@ internal class Utils
     }
 
     // 检查NPC是否解锁于怪物图鉴
-    public static bool DidDiscoverBestiaryEntry(int npcId)
+    public static bool BestiaryEntry(int npcId)
     {
         return (int)Main.BestiaryDB.FindEntryByNPCID(npcId).UIInfoProvider.GetEntryUICollectionInfo().UnlockState > 0;
     }
@@ -248,6 +248,94 @@ internal class Utils
             string mess = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] 发生异常：{ex.Message}\n堆栈信息：{ex.StackTrace}\n";
             File.AppendAllText(Path, mess);
         }
+    }
+    #endregion
+
+    #region 加载NPC列表
+    public static void LoadNPCList()
+    {
+        npcList.Clear();
+
+        // 添加所有NPC
+        for (int id = -65; id < NPCID.Count; id++)
+        {
+            // 跳过无效NPC
+            if (id == 0 || id == -64 || id == -65) continue;
+
+            string name = Lang.GetNPCNameValue(id);
+
+            // 跳过无效名称
+            if (string.IsNullOrWhiteSpace(name)) continue;
+            if (name.Contains("Unloaded")) continue;
+
+            npcList.Add(new NPCInfo(id, name, ContentSamples.NpcsByNetId[id].townNPC));
+        }
+
+        // 按ID排序
+        npcList = npcList.OrderBy(n => n.ID).ToList();
+    }
+    #endregion
+
+    #region 根据输入生成NPC
+    public static void SpawnNPCByInput()
+    {
+        if (string.IsNullOrWhiteSpace(spawnNPCInput))
+        {
+            ClientLoader.Chat.WriteLine("请输入NPC ID或名称", Color.Red);
+            return;
+        }
+
+        // 尝试解析为整数
+        if (int.TryParse(spawnNPCInput, out int npcId))
+        {
+            if (npcId < -65 || npcId >= NPCID.Count)
+            {
+                ClientLoader.Chat.WriteLine($"无效的NPC ID: {npcId}", Color.Red);
+                return;
+            }
+
+            string name = Lang.GetNPCNameValue(npcId);
+            if (string.IsNullOrWhiteSpace(name) || name.Contains("Unloaded"))
+            {
+                ClientLoader.Chat.WriteLine($"未找到ID为 {npcId} 的NPC", Color.Red);
+                return;
+            }
+
+            Utils.SpawnNPC(npcId, name, spawnNPCAmount,
+                     (int)Main.LocalPlayer.position.X / 16,
+                     (int)Main.LocalPlayer.position.Y / 16);
+            ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {name}", Color.Green);
+            return;
+        }
+
+        // 按名称搜索
+        var matches = npcList
+            .Where(n => n.Name.Equals(spawnNPCInput, StringComparison.OrdinalIgnoreCase) ||
+                        n.Name.Contains(spawnNPCInput, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            ClientLoader.Chat.WriteLine($"未找到名称为 '{spawnNPCInput}' 的NPC", Color.Red);
+            return;
+        }
+
+        if (matches.Count > 1)
+        {
+            ClientLoader.Chat.WriteLine($"找到多个匹配的NPC，请使用ID:", Color.Yellow);
+            foreach (var match in matches)
+            {
+                ClientLoader.Chat.WriteLine($"{match.Name} (ID: {match.ID})", Color.Yellow);
+            }
+            return;
+        }
+
+        // 只有一个匹配项
+        var npc = matches[0];
+        Utils.SpawnNPC(npc.ID, npc.Name, spawnNPCAmount,
+                 (int)Main.LocalPlayer.position.X / 16,
+                 (int)Main.LocalPlayer.position.Y / 16);
+        ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
     }
     #endregion
 
@@ -358,26 +446,7 @@ internal class Utils
         {
             int spawnStack = Math.Min(maxStack, stack);
             stack -= spawnStack;
-
-            int idx = Item.NewItem(
-                source: new EntitySource_DebugCommand(),
-                X: (int)plr.position.X,
-                Y: (int)plr.position.Y,
-                Width: plr.width,
-                Height: plr.height,
-                Type: type,
-                Stack: spawnStack,
-                noBroadcast: true,
-                noGrabDelay: true
-            );
-
-            Main.item[idx].playerIndexTheItemIsReservedFor = plr.whoAmI;
-
-            if (Main.netMode == 2)  // Server
-            {
-                NetMessage.SendData(MessageID.ItemOwner, -1, -1, null, idx, plr.whoAmI);
-                NetMessage.SendData(MessageID.SyncItem, -1, -1, null, idx);
-            }
+            plr.QuickSpawnItem(new EntitySource_DebugCommand(), type, spawnStack);
         }
     }
     #endregion
@@ -390,58 +459,6 @@ internal class Utils
         item.SetDefaults(type);
         item.stack = stack;
         return item;
-    }
-    #endregion
-
-    #region 创建临时点方法
-    public static int AwaitingTempPoint = new int(); //等待的临时点
-    public static void CreateTempPoint(int x, int y)
-    {
-        if (AwaitingTempPoint != 0)
-        {
-            int index = AwaitingTempPoint - 1;
-
-            // 确保索引在有效范围内
-            if (index >= 0 && index < TempPoints!.Length)
-            {
-                // 设置临时点坐标
-                TempPoints[index] = new Point(x, y);
-                ClientLoader.Chat.WriteLine($"设置临时点:{AwaitingTempPoint}.", color);
-
-                // 重置等待状态
-                AwaitingTempPoint = 0;
-
-                if (Main.netMode == 2)
-                {
-                    SendTileSquareCentered(x, y, 4);
-                }
-            }
-        }
-    }
-
-    public static bool SendTileSquareCentered(int x, int y, byte size = 10)
-    {
-        return SendTileRect((short)(x - (size / 2)), (short)(y - (size / 2)), size, size);
-    }
-
-    public static bool SendTileRect(short x, short y, byte width = 10, byte length = 10, TileChangeType changeType = TileChangeType.None)
-    {
-        try
-        {
-            NetMessage.SendTileSquare(Main.myPlayer, x, y, width, length, changeType);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // 日志目录路径
-            string Combine = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Configuration.FilePath)!, "logs");
-            string FileName = $"{DateTime.Now:yyyy-MM-dd}.log";  // 使用当前日期作为日志文件名
-            string Path = System.IO.Path.Combine(Combine, FileName);
-            // 写入日志内容
-            string mess = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] 发生异常：{ex.Message}\n堆栈信息：{ex.StackTrace}\n";
-            File.AppendAllText(Path, mess);
-        }
-        return false;
     }
     #endregion
 

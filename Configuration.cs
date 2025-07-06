@@ -1,6 +1,6 @@
-﻿using System.Numerics;
-using Microsoft.Xna.Framework.Input;
+﻿using Microsoft.Xna.Framework.Input;
 using Newtonsoft.Json;
+using System.Numerics;
 using TerraAngel;
 
 namespace MyPlugin;
@@ -114,6 +114,8 @@ internal class Configuration
     [JsonProperty("连锁图格表", Order = 19)]
     public List<VeinMinerItem> VeinMinerList { get; set; } = new List<VeinMinerItem>();
 
+    [JsonProperty("进入世界收藏背包物品", Order = 20)]
+    public bool FavoriteItemForJoinWorld { get; set; } = true;
 
     #region 预设参数方法
     public void SetDefault()
@@ -196,6 +198,8 @@ internal class Configuration
             new VeinMinerItem(232, "木尖刺"),
             new VeinMinerItem(404, "沙漠化石"),
         };
+
+        FavoriteItemForJoinWorld = true;
     }
     #endregion
 
