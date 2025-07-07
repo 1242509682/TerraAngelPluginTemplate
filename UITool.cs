@@ -1021,8 +1021,12 @@ public class UITool : Tool
     private string ItemSearchText = "";
     private void DrawItemSelector(ref int selectedItemId)
     {
+        // 合并控制变量
+        bool showWindow = ShowItemSelectorForResult || ShowItemSelectorForIngredient;
+        if (!showWindow) return; // 如果不需要显示直接返回
+
         ImGui.SetNextWindowSize(new Vector2(400, 500), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin("选择物品", ref ShowItemSelectorForResult, ImGuiWindowFlags.NoCollapse))
+        if (ImGui.Begin("选择物品", ref showWindow, ImGuiWindowFlags.NoCollapse))
         {
             ImGui.Text("搜索物品:");
             ImGui.SameLine();
@@ -1056,6 +1060,13 @@ public class UITool : Tool
             ImGui.EndChild();
         }
         ImGui.End();
+
+        // 同步关闭状态到两个控制变量
+        if (!showWindow)
+        {
+            ShowItemSelectorForResult = false;
+            ShowItemSelectorForIngredient = false;
+        }
     }
     #endregion
 
@@ -1064,7 +1075,6 @@ public class UITool : Tool
     private string TileSearchText = "";
     private List<int> TileSelectionCache = new List<int>();
     private static Dictionary<int, string> CustomStations = new Dictionary<int, string>();
-
     private void DrawTileSelector()
     {
         ImGui.SetNextWindowSize(new Vector2(450, 550), ImGuiCond.FirstUseEver);
