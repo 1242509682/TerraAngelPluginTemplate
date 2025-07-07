@@ -253,12 +253,23 @@ public class MyPlugin(string path) : Plugin(path)
     #endregion
 
     #region 配方检查事件
+    public static HashSet<int> CustomRecipeItems = new HashSet<int>();  // 存储自定义配方结果物品ID
+    public static HashSet<int> CustomRecipeIndexes = new HashSet<int>(); // 存储自定义配方索引 用于比较原版
     private void OnRecipeCheck(RecipeCheckEventArgs e)
     {
-        // 自定义配方处理逻辑 - 修复：添加自定义配方标识检查
-        if (Config.CustomRecipes.Any(r => r.Index == e.RecipeIndex))
+        if (!Config.Enabled || !Config.CustomRecipesEnabled) return;
+
+        // 隐藏原版配方：如果当前配方结果物品在自定义物品列表中，但不是自定义配方
+        if (CustomRecipeItems.Contains(e.Recipe.createItem.type) && !CustomRecipeIndexes.Contains(e.RecipeIndex))
         {
-            e.MeetsConditions = RecipeHooks.HasResultItemForRecipe(e.Player, e.Recipe);
+            e.MeetsConditions = false; // 强制不满足条件 只显示自定义配方
+            return;
+        }
+
+        // 自定义配方处理逻辑 
+        if (Config.CustomRecipes.Any(r => r.Index == e.RecipeIndex && e.MeetsStationConditions))
+        {
+            e.MeetsConditions = RecipeHooks.HasResultItemForRecipe(e.Recipe, e.CollectedItems);
             return;
         }
 
@@ -279,10 +290,14 @@ public class MyPlugin(string path) : Plugin(path)
     }
     #endregion
 
-    #region 配方查找后事件（添加自定义配方）- 修复重复添加问题
+    #region 配方查找后事件（添加自定义配方）
     private void OnPostFindRecipes()
     {
-        if (!Config.CustomRecipesEnabled) return;
+        if (!Config.Enabled || !Config.CustomRecipesEnabled) return;
+
+        // 清空缓存集合
+        CustomRecipeItems.Clear();
+        CustomRecipeIndexes.Clear();
 
         // 确保配方组系统已重置
         if (RecipeGroup.recipeGroups == null || RecipeGroup.recipeGroupIDs == null)
@@ -292,7 +307,7 @@ public class MyPlugin(string path) : Plugin(path)
             RecipeGroup.nextRecipeGroupIndex = 0;
         }
 
-        // 修复：只在需要时重置索引，而不是每次重置所有索引
+        // 检查所有自定义配方的索引有效性
         foreach (var data in Config.CustomRecipes)
         {
             // 只有当配方无效时才重置索引
@@ -302,72 +317,68 @@ public class MyPlugin(string path) : Plugin(path)
             {
                 data.Index = -1;
             }
+            else
+            {
+                // 记录有效的自定义配方
+                CustomRecipeIndexes.Add(data.Index);
+                CustomRecipeItems.Add(data.ResultItem);
+            }
         }
 
-        // 修复：使用固定槽位分配，避免重复添加
-        int addedCount = 0;
+        int count = 0;
+        bool full = false;
+
         foreach (var data in Config.CustomRecipes)
         {
             // 如果配方已经分配了有效索引，跳过
-            if (data.Index != -1 && Main.recipe[data.Index].createItem.type == data.ResultItem)
-                continue;
+            if (data.Index != -1) continue;
 
+            // 检查是否已存在相同的配方
+            if (RecipeHooks.ExistsRecipe(data))
+            {
+                // 找到已存在的相同配方并更新索引
+                int existing = RecipeHooks.FindExistingRecipeIndex(data);
+                if (existing != -1)
+                {
+                    data.Index = existing;
+
+                    // 记录新添加的配方(用于比较原版物品)
+                    CustomRecipeIndexes.Add(existing);
+                    CustomRecipeItems.Add(data.ResultItem);
+                    continue;
+                }
+            }
+
+            // 如果槽位已满则跳过后续配方
+            if (full) continue;
+
+            // 查找空槽位
             int slot = RecipeHooks.FindEmptyRecipeSlot();
             if (slot == -1)
             {
-                // 配方槽位不足，记录错误
-                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 {data.ResultItem} 的配方", Color.Red);
-                break;
+                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 {Lang.GetItemNameValue(data.ResultItem)} 的配方", Color.Red);
+                full = true; // 标记槽位已满
+                continue;
             }
 
             // 创建新配方
-            Recipe recipe = new Recipe(); // 修复：创建新实例而不是重用
-            recipe.createItem.SetDefaults(data.ResultItem);
-            recipe.createItem.stack = data.ResultStack;
-
-            // 清空配方以防残留数据
-            recipe.requiredItem = new Item[Recipe.maxRequirements];
-            recipe.requiredTile = new int[Recipe.maxRequirements];
-            for (int i = 0; i < Recipe.maxRequirements; i++)
-            {
-                recipe.requiredItem[i] = new Item();
-            }
-
-            // 设置材料
-            int ItemIndex = 0;
-            foreach (var ingredient in data.Ingredients)
-            {
-                if (ItemIndex >= Recipe.maxRequirements) break;
-
-                recipe.requiredItem[ItemIndex] = new Item();
-                recipe.requiredItem[ItemIndex].SetDefaults(ingredient.ItemId);
-                recipe.requiredItem[ItemIndex].stack = ingredient.Stack;
-                ItemIndex++;
-            }
-
-            // 设置合成站（支持多合成站）
-            int TileIndex = 0;
-            foreach (int tileId in data.RequiredTile)
-            {
-                if (TileIndex >= Recipe.maxRequirements) break;
-
-                recipe.requiredTile[TileIndex] = tileId;
-                TileIndex++;
-            }
-
-            // 炼金配方标记（玻璃瓶）
-            recipe.alchemy = data.RequiredTile.Contains(TileID.Bottles);
+            Recipe recipe = RecipeHooks.CreateRecipeFromData(data);
 
             // 应用到主配方数组
             Main.recipe[slot] = recipe;
-            data.Index = slot; // 记录已添加的配方索引
-            addedCount++;
+            data.Index = slot;
+
+            // 记录新添加的配方(用于比较原版物品)
+            CustomRecipeIndexes.Add(slot);
+            CustomRecipeItems.Add(data.ResultItem);
+
+            count++;
         }
 
-        // 修复：记录添加的配方数量
-        if (addedCount > 0)
+        // 记录添加的配方数量
+        if (count > 0)
         {
-            ClientLoader.Chat.WriteLine($"已加载 {addedCount} 个自定义配方", Color.Green);
+            ClientLoader.Chat.WriteLine($"已加载 {count} 个自定义配方", Color.Green);
         }
     }
     #endregion

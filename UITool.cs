@@ -572,7 +572,7 @@ public class UITool : Tool
     private int NewIngredientStack = 1; // 新添加的材料数量
     private void RecipeManagerWindow()
     {
-        ImGui.SetNextWindowSize(new Vector2(800, 600), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(400, 600), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("配方管理器", ref ShowRecipeManagerWindow, ImGuiWindowFlags.NoCollapse))
         {
             // 顶部按钮区域
@@ -581,6 +581,39 @@ public class UITool : Tool
             {
                 EditingRecipe = new CustomRecipeData();
                 IsNewRecipe = true;
+            }
+
+            // 新增：清空所有配方按钮
+            ImGui.SameLine();
+            if (ImGui.Button("清空所有配方"))
+            {
+                // 1. 从游戏配方槽位中移除所有自定义配方
+                foreach (var recipe in Config.CustomRecipes)
+                {
+                    if (recipe.Index != -1)
+                    {
+                        RecipeHooks.RemoveRecipe(recipe.Index);
+                        Main.availableRecipe[recipe.Index] = 0;
+                    }
+                }
+
+                // 2. 清除自定义配方物品缓存
+                CustomRecipeItems.Clear();
+                CustomRecipeIndexes.Clear();
+
+                // 3. 清空配置中的配方列表
+                Config.CustomRecipes.Clear();
+
+                // 4. 重置编辑状态
+                EditingRecipe = null;
+
+                // 5. 保存配置
+                Config.Write();
+
+                // 6. 重新加载配方
+                Recipe.FindRecipes();
+
+                ClientLoader.Chat.WriteLine("已清空所有自定义配方", Color.Green);
             }
 
             ImGui.SameLine();
@@ -1029,8 +1062,8 @@ public class UITool : Tool
     #region 配方工作台图格选择器窗口
     private bool ShowTileSelector = false;
     private string TileSearchText = "";
-    private List<int> TileSelectionCache = new List<int>(); // 缓存当前选择的合成站
-    private static Dictionary<int, string> CustomStations = new Dictionary<int, string>(); // 添加自定义合成站缓存
+    private List<int> TileSelectionCache = new List<int>();
+    private static Dictionary<int, string> CustomStations = new Dictionary<int, string>();
 
     private void DrawTileSelector()
     {
@@ -1047,22 +1080,17 @@ public class UITool : Tool
                 string SelectedStations = string.Join(", ", TileSelectionCache
                     .Select(id =>
                     {
-                        // 特殊处理-1的情况
-                        if (id == -1) return "无";
-
-                        // 直接从我们的字典中获取名称
                         if (Stations.TryGetValue(id, out var name))
                             return name;
-
-                        //string name = TileID.Search.GetName(id);
-                        //return string.IsNullOrEmpty(name) ? $"未知图格({id})" : name;
-
                         return $"未知图格({id})";
                     }));
 
                 ImGui.TextColored(new Vector4(0.8f, 1.0f, 0.8f, 1.0f), SelectedStations);
             }
-
+            else
+            {
+                ImGui.Text("已选择: 无合成站需求");
+            }
 
             ImGui.Text("搜索合成站:");
             ImGui.SameLine();
@@ -1085,21 +1113,8 @@ public class UITool : Tool
                 {
                     if (isSelected)
                     {
-                        // 选择"无"时清空其他选择
-                        if (station.Key == -1)
-                        {
-                            TileSelectionCache.Clear();
-                            TileSelectionCache.Add(-1);
-                        }
-                        else
-                        {
-                            // 添加时移除"无"
-                            if (TileSelectionCache.Contains(-1))
-                                TileSelectionCache.Remove(-1);
-
-                            if (!TileSelectionCache.Contains(station.Key))
-                                TileSelectionCache.Add(station.Key);
-                        }
+                        if (!TileSelectionCache.Contains(station.Key))
+                            TileSelectionCache.Add(station.Key);
                     }
                     else
                     {
@@ -1137,7 +1152,6 @@ public class UITool : Tool
                 ShowTileSelector = false;
             }
 
-
             // 添加手持物品合成站按钮
             ImGui.SameLine();
             Item heldItem = Main.LocalPlayer.HeldItem;
@@ -1147,8 +1161,6 @@ public class UITool : Tool
                 if (ImGui.Button($"添加手持物品: {itemName}"))
                 {
                     int tileID = heldItem.createTile;
-
-                    // 使用物品名称作为图格名称，添加" (自定义)"后缀
                     string tileName = itemName + " (自定义)";
 
                     // 添加到自定义缓存
@@ -1157,18 +1169,10 @@ public class UITool : Tool
                         CustomStations.Add(tileID, tileName);
                         Main.NewText($"已添加合成站: {tileName}");
                     }
-                    else
-                    {
-                        Main.NewText($"该合成站已存在: {CustomStations[tileID]}");
-                    }
 
                     // 自动选中新添加的合成站
                     if (!TileSelectionCache.Contains(tileID))
                     {
-                        // 如果选择了"无"，先移除
-                        if (TileSelectionCache.Contains(-1))
-                            TileSelectionCache.Remove(-1);
-
                         TileSelectionCache.Add(tileID);
                     }
                 }
@@ -1177,39 +1181,38 @@ public class UITool : Tool
         ImGui.End();
     }
 
-    #region 合成站表
+    #region 合成站表（移除了"无"选项）
     private static Dictionary<int, string> StationList()
     {
-        // 常用合成站列表
+        // 常用合成站列表（移除了"无"选项）
         var baseStations = new Dictionary<int, string>
-    {
-        { -1, "无" },
-        { TileID.WorkBenches, "工作台" },
-        { TileID.Furnaces, "熔炉" },
-        { TileID.Anvils, "铁砧/铅砧" },
-        { TileID.Hellforge, "地狱熔炉" },
-        { TileID.AlchemyTable, "炼药桌" },
-        { TileID.ImbuingStation, "灌注站" },
-        { TileID.CrystalBall, "水晶球" },
-        { TileID.Autohammer, "自动锤炼机" },
-        { TileID.Loom, "织布机" },
-        { TileID.Sawmill, "锯木机" },
-        { TileID.Kegs, "酒桶" },
-        { TileID.CookingPots, "烹饪锅" },
-        { TileID.Blendomatic, "搅拌机" },
-        { TileID.MeatGrinder, "绞肉机" },
-        { TileID.LesionStation, "病变工作站" },
-        { TileID.SteampunkBoiler, "蒸汽朋克锅炉" },
-        { TileID.GlassKiln, "玻璃窑" },
-        { TileID.Solidifier, "固化机" },
-        { TileID.BoneWelder, "骨焊机" },
-        { TileID.FleshCloningVat, "血肉克隆台" },
-        { TileID.SkyMill, "天磨" },
-        { TileID.LivingLoom, "活木织机" },
-        { TileID.IceMachine, "冰雪机" },
-        { TileID.HeavyWorkBench, "重型工作台" },
-        { 412, "远古操纵机" },
-    };
+        {
+            { TileID.WorkBenches, "工作台" },
+            { TileID.Furnaces, "熔炉" },
+            { TileID.Anvils, "铁砧/铅砧" },
+            { TileID.Hellforge, "地狱熔炉" },
+            { TileID.AlchemyTable, "炼药桌" },
+            { TileID.ImbuingStation, "灌注站" },
+            { TileID.CrystalBall, "水晶球" },
+            { TileID.Autohammer, "自动锤炼机" },
+            { TileID.Loom, "织布机" },
+            { TileID.Sawmill, "锯木机" },
+            { TileID.Kegs, "酒桶" },
+            { TileID.CookingPots, "烹饪锅" },
+            { TileID.Blendomatic, "搅拌机" },
+            { TileID.MeatGrinder, "绞肉机" },
+            { TileID.LesionStation, "病变工作站" },
+            { TileID.SteampunkBoiler, "蒸汽朋克锅炉" },
+            { TileID.GlassKiln, "玻璃窑" },
+            { TileID.Solidifier, "固化机" },
+            { TileID.BoneWelder, "骨焊机" },
+            { TileID.FleshCloningVat, "血肉克隆台" },
+            { TileID.SkyMill, "天磨" },
+            { TileID.LivingLoom, "活木织机" },
+            { TileID.IceMachine, "冰雪机" },
+            { TileID.HeavyWorkBench, "重型工作台" },
+            { 412, "远古操纵机" },
+        };
 
         // 合并自定义合成站
         var mergedStations = new Dictionary<int, string>(baseStations);
@@ -1224,7 +1227,6 @@ public class UITool : Tool
         return mergedStations;
     }
     #endregion
-
     #endregion
 
     #region 连锁挖矿窗口
