@@ -117,6 +117,15 @@ internal class Configuration
     [JsonProperty("进入世界收藏背包物品", Order = 20)]
     public bool FavoriteItemForJoinWorld { get; set; } = true;
 
+    [JsonProperty("解锁所有配方", Order = 21)]
+    public bool UnlockAllRecipes { get; set; } = false;
+    [JsonProperty("忽略工作站要求", Order = 21)]
+    public bool IgnoreStationRequirements { get; set; } = false;
+    [JsonProperty("添加自定义配方", Order = 21)]
+    public bool CustomRecipesEnabled { get; set; } = true;
+    [JsonProperty("自定义配方列表", Order = 21)]
+    public List<CustomRecipeData> CustomRecipes { get; set; } = new List<CustomRecipeData>();
+
     #region 预设参数方法
     public void SetDefault()
     {
