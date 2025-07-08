@@ -1830,6 +1830,24 @@ internal class Utils
     }
     #endregion
 
+    #region 专门处理油漆工商店打开逻辑
+    public static bool OpenPainterShop = true;
+    private static void OpenPainterShops()
+    {
+        // 先打开油漆商店 (ID 15)
+        if (OpenPainterShop)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, new object[] { 15 });
+            OpenPainterShop = false;
+        }
+        else
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, new object[] { 25 });
+            OpenPainterShop = true;
+        }
+    } 
+    #endregion
+
     #region 自动对话消息方法
     public static void TalkText(Player plr)
     {
@@ -1854,6 +1872,10 @@ internal class Utils
 
             case NPCID.TaxCollector: //税收官
                 HandleTaxCollectorInteraction(plr);
+                break;
+
+            case NPCID.Painter: //油漆工
+                OpenPainterShops();
                 break;
 
             default:
@@ -1885,7 +1907,6 @@ internal class Utils
         NPCID.DyeTrader => 12,
         NPCID.PartyGirl => 13,
         NPCID.Cyborg => 14,
-        NPCID.Painter => 15,
         NPCID.WitchDoctor => 16,
         NPCID.Pirate => 17,
         NPCID.Stylist => 18,
@@ -1987,7 +2008,14 @@ internal class Utils
             NetMessage.SendData(MessageID.MiscDataSync, -1, -1, null, Main.myPlayer, 1f);
         }
 
-        Main.npcChatText = "";
+        if (!Main.IsItDay())
+        {
+            Main.npcChatText = Lang.inter[50].Value;
+        }
+        else
+        {
+            Main.npcChatText = "你小子晚上再来找我 嘿嘿嘿~";
+        }
     }
     #endregion
 
