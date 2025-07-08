@@ -1867,17 +1867,35 @@ internal class Utils
     }
     #endregion
 
-    #region 清理钓鱼任务方法
-    public static void ClearAnglerQuests()
+    #region 获取NPC对应的商店ID
+    private static int GetNPCShopID(int npcType) => npcType switch
     {
-        long now = Main.GameUpdateCount;
-        if (!Config.ClearAnglerQuests) return;
-
-        Main.anglerWhoFinishedToday.Clear();
-        Main.anglerQuestFinished = false;
-        if (Main.netMode is 2)
-            NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
-    }
+        NPCID.Merchant => 1,
+        NPCID.ArmsDealer => 2,
+        NPCID.Dryad => 3,
+        NPCID.Demolitionist => 4,
+        NPCID.Clothier => 5,
+        NPCID.GoblinTinkerer => 6,
+        NPCID.Wizard => 7,
+        NPCID.Mechanic => 8,
+        NPCID.SantaClaus => 9,
+        NPCID.Truffle => 10,
+        NPCID.Steampunker => 11,
+        NPCID.DyeTrader => 12,
+        NPCID.PartyGirl => 13,
+        NPCID.Cyborg => 14,
+        NPCID.Painter => 15,
+        NPCID.WitchDoctor => 16,
+        NPCID.Pirate => 17,
+        NPCID.Stylist => 18,
+        NPCID.TravellingMerchant => 19,
+        NPCID.SkeletonMerchant => 20,
+        NPCID.DD2Bartender => 21,
+        NPCID.Golfer => 22,
+        NPCID.BestiaryGirl => 23,
+        NPCID.Princess => 24,
+        _ => 0
+    };
     #endregion
 
     #region 渔夫交互逻辑（完成钓鱼任务）
@@ -1943,6 +1961,19 @@ internal class Utils
     }
     #endregion
 
+    #region 清理钓鱼任务方法
+    public static void ClearAnglerQuests()
+    {
+        long now = Main.GameUpdateCount;
+        if (!Config.ClearAnglerQuests) return;
+
+        Main.anglerWhoFinishedToday.Clear();
+        Main.anglerQuestFinished = false;
+        if (Main.netMode is 2)
+            NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
+    }
+    #endregion
+
     #region 老人交互逻辑（召唤骷髅王）
     private static void HandleOldManInteraction()
     {
@@ -1956,6 +1987,124 @@ internal class Utils
         }
 
         Main.npcChatText = "";
+    }
+    #endregion
+
+    #region 护士交互逻辑
+    private static void HandleNurseInteraction(Player plr)
+    {
+        SoundEngine.PlaySound(SoundID.MenuTick);
+
+        // 计算治疗费用
+        int healCost = CalculateHealCost(plr);
+
+        // 支付处理
+        if (healCost > 0)
+        {
+            if (plr.BuyItem(healCost))
+            {
+                // 记录治疗前的生命值比例
+                double lifeRatioBefore = (double)plr.statLife / plr.statLifeMax2;
+
+                // 执行治疗
+                PerformHealing(plr);
+
+                // 设置对话
+                SetHealingDialogue(lifeRatioBefore);
+
+                // 成就和音效
+                AchievementsHelper.HandleNurseService(healCost);
+                SoundEngine.PlaySound(SoundID.Item4);
+            }
+            else
+            {
+                // 钱不足的对话
+                Main.npcChatText = Lang.dialog(Main.rand.Next(52, 55));
+            }
+        }
+    }
+
+    // 计算治疗费用
+    private static int CalculateHealCost(Player plr)
+    {
+        int healCost = plr.statLifeMax2 - plr.statLife;
+
+        // 添加减益状态的治疗费用
+        for (int j = 0; j < Player.maxBuffs; j++)
+        {
+            int buffType = plr.buffType[j];
+            if (buffType <= 0 || buffType >= BuffID.Count) continue;
+
+            if (Main.debuff[buffType] &&
+                plr.buffTime[j] > 60 &&
+                !BuffID.Sets.NurseCannotRemoveDebuff[buffType])
+            {
+                healCost += 100;
+            }
+        }
+
+        // 根据游戏进度调整治疗费用
+        healCost = ApplyGameProgressMultiplier(healCost);
+
+        // 专家模式加成
+        if (Main.expertMode) healCost *= 2;
+
+        return Math.Max(healCost, 0);
+    }
+
+    // 应用游戏进度费用乘数
+    private static int ApplyGameProgressMultiplier(int baseCost)
+    {
+        if (NPC.downedGolemBoss) return baseCost * 20;
+        if (NPC.downedPlantBoss) return baseCost * 15;
+        if (NPC.downedMechBossAny) return baseCost * 10;
+        if (Main.hardMode) return baseCost * 6;
+        if (NPC.downedBoss3 || NPC.downedQueenBee) return baseCost * 2;
+        if (NPC.downedBoss2) return baseCost * 2;
+        if (NPC.downedBoss1) return baseCost * 3;
+        return baseCost;
+    }
+
+    // 执行治疗操作
+    private static void PerformHealing(Player plr)
+    {
+        // 完全治疗
+        plr.HealEffect(plr.statLifeMax2 - plr.statLife);
+        plr.statLife = plr.statLifeMax2;
+
+        // 清除可移除的减益 - 修复索引问题
+        ClearRemovableDebuffs(plr);
+    }
+
+    // 清除可移除的减益
+    private static void ClearRemovableDebuffs(Player plr)
+    {
+        // 使用倒序循环避免索引问题
+        for (int i = Player.maxBuffs - 1; i >= 0; i--)
+        {
+            int buffType = plr.buffType[i];
+            if (buffType <= 0 || buffType >= BuffID.Count) continue;
+
+            if (Main.debuff[buffType] &&
+                plr.buffTime[i] > 0 &&
+                !BuffID.Sets.NurseCannotRemoveDebuff[buffType])
+            {
+                plr.DelBuff(i);
+            }
+        }
+    }
+
+    // 设置治疗对话
+    private static void SetHealingDialogue(double lifeRatioBefore)
+    {
+        if (lifeRatioBefore < 0.25)
+            Main.npcChatText = Lang.dialog(227);
+        else if (lifeRatioBefore < 0.5)
+            Main.npcChatText = Lang.dialog(228);
+        else if (lifeRatioBefore < 0.75)
+            Main.npcChatText = Lang.dialog(229);
+        else
+            Main.npcChatText = Lang.dialog(230);
     }
     #endregion
 
@@ -2050,151 +2199,6 @@ internal class Utils
         Main.npcChatText = Lang.dialog(Main.rand.Next(380, 382));
         plr.taxMoney = 0;
     }
-    #endregion
-
-    #region 护士交互逻辑
-    private static void HandleNurseInteraction(Player plr)
-    {
-        SoundEngine.PlaySound(SoundID.MenuTick);
-
-        // 计算治疗费用
-        int healCost = CalculateHealCost(plr);
-
-        // 支付处理
-        if (healCost > 0)
-        {
-            if (plr.BuyItem(healCost))
-            {
-                // 记录治疗前的生命值比例
-                double lifeRatioBefore = (double)plr.statLife / plr.statLifeMax2;
-
-                // 执行治疗
-                PerformHealing(plr);
-
-                // 成就和音效
-                AchievementsHelper.HandleNurseService(healCost);
-                SoundEngine.PlaySound(SoundID.Item4);
-            }
-            else
-            {
-                Main.npcChatText = Lang.dialog(Main.rand.Next(52, 55));
-            }
-        }
-    }
-
-    // 计算治疗费用
-    private static int CalculateHealCost(Player plr)
-    {
-        int healCost = plr.statLifeMax2 - plr.statLife;
-
-        // 添加减益状态的治疗费用
-        for (int j = 0; j < Player.maxBuffs; j++)
-        {
-            int buffType = plr.buffType[j];
-            if (buffType <= 0 || buffType >= BuffID.Count) continue;
-
-            if (Main.debuff[buffType] &&
-                plr.buffTime[j] > 60 &&
-                !BuffID.Sets.NurseCannotRemoveDebuff[buffType])
-            {
-                healCost += 100;
-            }
-        }
-
-        // 根据游戏进度调整治疗费用
-        healCost = ApplyGameProgressMultiplier(healCost);
-
-        // 专家模式加成
-        if (Main.expertMode) healCost *= 2;
-
-        return Math.Max(healCost, 0);
-    }
-
-    // 应用游戏进度费用乘数
-    private static int ApplyGameProgressMultiplier(int baseCost)
-    {
-        if (NPC.downedGolemBoss) return baseCost * 20;
-        if (NPC.downedPlantBoss) return baseCost * 15;
-        if (NPC.downedMechBossAny) return baseCost * 10;
-        if (Main.hardMode) return baseCost * 6;
-        if (NPC.downedBoss3 || NPC.downedQueenBee) return baseCost * 2;
-        if (NPC.downedBoss2) return baseCost * 2;
-        if (NPC.downedBoss1) return baseCost * 3;
-        return baseCost;
-    }
-
-    // 执行治疗操作
-    private static void PerformHealing(Player plr)
-    {
-        // 完全治疗
-        plr.HealEffect(plr.statLifeMax2 - plr.statLife);
-        plr.statLife = plr.statLifeMax2;
-
-        // 清除可移除的减益 - 修复索引问题
-        ClearRemovableDebuffs(plr);
-    }
-
-    // 清除可移除的减益 - 修复版本
-    private static void ClearRemovableDebuffs(Player plr)
-    {
-        // 使用倒序循环避免索引问题
-        for (int i = Player.maxBuffs - 1; i >= 0; i--)
-        {
-            int buffType = plr.buffType[i];
-            if (buffType <= 0 || buffType >= BuffID.Count) continue;
-
-            if (Main.debuff[buffType] &&
-                plr.buffTime[i] > 0 &&
-                !BuffID.Sets.NurseCannotRemoveDebuff[buffType])
-            {
-                plr.DelBuff(i);
-            }
-        }
-    }
-
-    // 设置治疗对话
-    private static void SetHealingDialogue(double lifeRatioBefore)
-    {
-        if (lifeRatioBefore < 0.25)
-            Main.npcChatText = Lang.dialog(227);
-        else if (lifeRatioBefore < 0.5)
-            Main.npcChatText = Lang.dialog(228);
-        else if (lifeRatioBefore < 0.75)
-            Main.npcChatText = Lang.dialog(229);
-        else
-            Main.npcChatText = Lang.dialog(230);
-    }
-    #endregion
-
-    #region 获取NPC对应的商店ID
-    private static int GetNPCShopID(int npcType) => npcType switch
-    {
-        NPCID.Merchant => 1,
-        NPCID.ArmsDealer => 2,
-        NPCID.Dryad => 3,
-        NPCID.Demolitionist => 4,
-        NPCID.Clothier => 5,
-        NPCID.GoblinTinkerer => 6,
-        NPCID.Wizard => 7,
-        NPCID.Mechanic => 8,
-        NPCID.SantaClaus => 9,
-        NPCID.Truffle => 10,
-        NPCID.Steampunker => 11,
-        NPCID.DyeTrader => 12,
-        NPCID.PartyGirl => 13,
-        NPCID.Cyborg => 14,
-        NPCID.Painter => 15,
-        NPCID.WitchDoctor => 16,
-        NPCID.Pirate => 17,
-        NPCID.Stylist => 18,
-        NPCID.TravellingMerchant => 19,
-        NPCID.SkeletonMerchant => 20,
-        NPCID.DD2Bartender => 21,
-        NPCID.Golfer => 22,
-        NPCID.BestiaryGirl => 23,
-        NPCID.Princess => 24,
-        _ => 0
-    };
     #endregion
 
     #region 添加税收官随机奖励物品方法
