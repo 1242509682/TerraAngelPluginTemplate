@@ -5,6 +5,7 @@ using TerraAngel.Input;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
+using Terraria.GameContent;
 using Terraria.GameContent.Achievements;
 using Terraria.GameContent.Events;
 using Terraria.ID;
@@ -1772,7 +1773,7 @@ internal class Utils
         if (plr.talkNPC != -1 || NPCID.Sets.IsTownPet[npc.type] || NPCID.Sets.IsTownSlime[npc.type]) return;
 
         plr.SetTalkNPC(npc.whoAmI, Main.netMode is 2);
-        Utils.TalkText(plr);
+        TalkText(plr);
 
         if (Main.netMode is 2)
             NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
@@ -2021,6 +2022,12 @@ internal class Utils
                 // 钱不足的对话
                 Main.npcChatText = Lang.dialog(Main.rand.Next(52, 55));
             }
+        }
+        else
+        {
+            // 避免无话可说时不打开对话栏
+            int dialogIndex = ChildSafety.Disabled ? Main.rand.Next(3) : Main.rand.Next(1, 3);
+            Main.npcChatText = Lang.dialog(55 + dialogIndex);
         }
     }
 
