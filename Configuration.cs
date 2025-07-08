@@ -78,13 +78,6 @@ internal class Configuration
     [JsonProperty("自定义传送点", Order = 15)]
     public Dictionary<string, Vector2> CustomTeleportPoints = new Dictionary<string, Vector2>();
 
-    [JsonProperty("清除钓鱼任务", Order = 16)]
-    public bool ClearAnglerQuests { get; set; } = false;
-    [JsonProperty("清除钓鱼任务按键", Order = 16)]
-    public Keys ClearQuestsKey = Keys.F;
-    [JsonProperty("清除钓鱼任务间隔(帧)", Order = 16)]
-    internal int ClearQuestsInterval = 120;
-
     [JsonProperty("NPC自动回血", Order = 17)]
     public bool NPCAutoHeal { get; set; } = false;
     [JsonProperty("NPC自动回血按键", Order = 17)]
@@ -132,9 +125,17 @@ internal class Configuration
     [JsonProperty("NPC自动对话按键", Order = 22)]
     public Keys AutoTalkKey = Keys.Y;
     [JsonProperty("NPC自动对话的最小格数", Order = 22)]
-    public int NurseRange { get; set; } = 2;
-    [JsonProperty("NPC自动对话等待秒数", Order = 22)]
-    public int AutoTalkNPCWaitTimes { get; set; } = 3;
+    public int AutoTalkRange { get; set; } = 2;
+    [JsonProperty("NPC自动对话等待帧数", Order = 22)]
+    public int AutoTalkNPCWaitTimes { get; set; } = 30;
+    [JsonProperty("清除钓鱼任务", Order = 22)]
+    public bool ClearAnglerQuests { get; set; } = true;
+    [JsonProperty("清除钓鱼任务按键", Order = 22)]
+    public Keys ClearQuestsKey = Keys.F;
+    [JsonProperty("税务官自定义奖励", Order = 22)]
+    public bool TaxCollectorCustomReward { get; set; }
+    [JsonProperty("税务官奖励列表", Order = 22)]
+    public List<RewardItem> TaxCollectorRewards { get; set; } = new List<RewardItem>();
 
     #region 预设参数方法
     public void SetDefault()
@@ -168,9 +169,8 @@ internal class Configuration
         TrashSyncInterval = 10;
         TrashItems = new List<TrashData>();
         CustomTeleportPoints = new Dictionary<string, Vector2>();
-        ClearAnglerQuests = false;
+        ClearAnglerQuests = true;
         ClearQuestsKey = Keys.F;
-        ClearQuestsInterval = 120;
         NPCAutoHeal = false;
         NPCAutoHealKey = Keys.None;
         NPCHealVel = 1;
@@ -222,8 +222,8 @@ internal class Configuration
 
         AutoTalkNPC = true;
         AutoTalkKey = Keys.Y;
-        AutoTalkNPCWaitTimes = 3;
-        NurseRange = 2;
+        AutoTalkNPCWaitTimes = 30;
+        AutoTalkRange = 2;
     }
     #endregion
 

@@ -58,19 +58,6 @@ public class MyPlugin(string path) : Plugin(path)
         // 初始化完成提示
         ClientLoader.Console.WriteLine($"[{Name}] 插件已加载 (v{Version}) 作者: {Author}");
         ClientLoader.Console.WriteLine($"[{Name}] 配置文件位置: {Configuration.FilePath}");
-
-        ClientLoader.Console.WriteLine($"地图名称: {Main.worldName}", color);
-        string Size = Utils.GetWorldWorldSize();
-        ClientLoader.Console.WriteLine($"地图大小: {Size}", Color.LimeGreen);
-        string GameMode = Utils.GetWorldGameMode();
-        ClientLoader.Console.WriteLine($"地图难度: {GameMode}", Color.LightSeaGreen);
-        var (MainProg, EventProg) = Utils.GetWorldProgress();
-        ClientLoader.Console.WriteLine($"主要进度: {MainProg}", Color.Gold);
-        ClientLoader.Console.WriteLine($"事件进度: {EventProg}", Color.LightBlue);
-        ClientLoader.Console.WriteLine($"地图ID: {Main.worldID}", Color.LightSkyBlue);
-        ClientLoader.Console.WriteLine($"角色名: {Main.LocalPlayer.name}", Color.LightSalmon);
-        ClientLoader.Console.WriteLine($"玩家IP: {Main.getIP}", Color.LightCoral);
-        ClientLoader.Console.WriteLine($"设备ID: {Main.clientUUID}", Color.LightYellow);
     }
 
 
@@ -196,9 +183,6 @@ public class MyPlugin(string path) : Plugin(path)
             ClientLoader.Chat.WriteLine($"清理渔夫任务已{status}", Color.Yellow);
         }
 
-        // 更新清除钓鱼任务状态
-        Utils.ClearAnglerQuests(Config.ClearAnglerQuests);
-
         // 切换NPC自动回血状态
         if (InputSystem.IsKeyPressed(Config.NPCAutoHealKey))
         {
@@ -260,61 +244,8 @@ public class MyPlugin(string path) : Plugin(path)
         // 自动对话处理
         if (Config.AutoTalkNPC && npc.townNPC)
         {
-            var plr = Main.LocalPlayer;
-
-            // 确保玩家可以对话
-            if (!plr.CanBeTalkedTo) return;
-
-            // 检查距离是否在范围内
-            if (!Utils.IsWithinRange(plr, npc, 10))
-            {
-                // 如果不在范围内，重置计时器
-                if (TalkTimes.ContainsKey(e.whoAmI))
-                {
-                    TalkTimes.Remove(e.whoAmI);
-                }
-                return;
-            }
-
-            // 初始化计时器
-            if (!TalkTimes.ContainsKey(e.whoAmI))
-            {
-                TalkTimes[e.whoAmI] = Main.GameUpdateCount;
-                return;
-            }
-
-            // 检查是否满足停留时间
-            long now = Main.GameUpdateCount;
-            if (now - TalkTimes[e.whoAmI] < Config.AutoTalkNPCWaitTimes * 60) return;
-
-            // 检查是否是最接近的NPC
-            if (!Utils.IsClosestNPC(plr, npc))
-            {
-                return;
-            }
-
-            // 触发对话
-            TriggerNPCTalks(plr, npc);
-
-            // 更新对话时间
-            TalkTimes[e.whoAmI] = now;
+            Utils.AutoNPCTalks(npc,e.whoAmI);
         }
-    }
-
-    // 触发NPC对话
-    public static void TriggerNPCTalks(Player plr, NPC npc)
-    {
-        if (plr.talkNPC != -1 || NPCID.Sets.IsTownPet[npc.type] || NPCID.Sets.IsTownSlime[npc.type]) return;
-
-        plr.SetTalkNPC(npc.whoAmI, Main.netMode is 2);
-        Utils.TalkText(plr);
-
-        if (Main.netMode is 2)
-            NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
-
-        // 播放音效
-        SoundEngine.PlaySound(SoundID.LiquidsWaterLava);
-        ClientLoader.Chat.WriteLine($"玩家 {plr.name} 正在与 {Lang.GetNPCNameValue(npc.type)} 自动对话", color);
     }
     #endregion
 
@@ -332,6 +263,19 @@ public class MyPlugin(string path) : Plugin(path)
             int favoritedItems = Utils.FavoriteAllItems(plr);
             ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
         }
+
+        ClientLoader.Console.WriteLine($"地图名称: {Main.worldName}", color);
+        string Size = Utils.GetWorldWorldSize();
+        ClientLoader.Console.WriteLine($"地图大小: {Size}", Color.LimeGreen);
+        string GameMode = Utils.GetWorldGameMode();
+        ClientLoader.Console.WriteLine($"地图难度: {GameMode}", Color.LightSeaGreen);
+        var (MainProg, EventProg) = Utils.GetWorldProgress();
+        ClientLoader.Console.WriteLine($"主要进度: {MainProg}", Color.Gold);
+        ClientLoader.Console.WriteLine($"事件进度: {EventProg}", Color.LightBlue);
+        ClientLoader.Console.WriteLine($"地图ID: {Main.worldID}", Color.LightSkyBlue);
+        ClientLoader.Console.WriteLine($"角色名: {Main.LocalPlayer.name}", Color.LightSalmon);
+        ClientLoader.Console.WriteLine($"玩家IP: {Main.getIP}", Color.LightCoral);
+        ClientLoader.Console.WriteLine($"设备ID: {Main.clientUUID}", Color.LightYellow);
     }
     #endregion
 

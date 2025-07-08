@@ -49,3 +49,12 @@ public class NPCEventSystem
 public record NPCUpdateEventArgs(int whoAmI, NPC npc);
 
 internal record NPCInfo(int ID, string Name, bool IsTownNPC);
+
+// 用于税收官随机奖励物品的类
+public class RewardItem
+{
+    public int ItemID { get; set; } = Terraria.ID.ItemID.PlatinumCoin;
+    public int Quantity { get; set; } = 1;
+    public int Chance { get; set; } = 100;
+    public bool Enabled { get; set; } = true;
+}

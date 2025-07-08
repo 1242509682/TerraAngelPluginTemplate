@@ -1,5 +1,6 @@
 ﻿using ImGuiNET;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Numerics;
 using TerraAngel;
@@ -61,7 +62,6 @@ public class UITool : Tool
         bool applyIgnoreGravity = Config.IgnoreGravity; // 启用忽略重力药水效果
 
         bool AutoClearAngel = Config.ClearAnglerQuests; // 清除钓鱼任务开关
-        int ClearAngelInterval = Config.ClearQuestsInterval; // 清除钓鱼任务按键
 
         bool nPCAutoHeal = Config.NPCAutoHeal; // NPC自动回血开关
         float NPCHealVel = Config.NPCHealVel; // 普通NPC回血百分比
@@ -75,7 +75,9 @@ public class UITool : Tool
 
         bool autoTalkNPC = Config.AutoTalkNPC; // NPC自动对话开关
         int waitTime = Config.AutoTalkNPCWaitTimes;  // NPC自动对话等待时间
-        int NurseRange = Config.NurseRange; // 检测格数
+        int NpcRange = Config.AutoTalkRange; // 检测格数
+
+        bool taxCollectorCustomReward = Config.TaxCollectorCustomReward;
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -215,18 +217,6 @@ public class UITool : Tool
                 ImGui.SameLine();
                 ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
                 DrawKeySelector("按键", ref Config.KillKey, ref EditKillKey);
-
-                // 自动清理渔夫任务
-                ImGui.Checkbox("清渔夫任务", ref AutoClearAngel);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.ClearQuestsKey, ref EditClearAnglerQuestsKey);
-                if (AutoClearAngel)
-                {
-                    ImGui.Text("清理间隔(帧):");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##AnglerQuestsInterval", ref ClearAngelInterval, 1, 3000, "%d fps");
-                }
 
                 // 自动使用物品
                 ImGui.Checkbox("自动使用物品", ref autoUseItem);
@@ -481,12 +471,60 @@ public class UITool : Tool
                     ImGui.Text("等待时间:");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##AutoTalkWaitTime", ref waitTime, 1, 30, "%d 秒");
+                    ImGui.SliderInt("##AutoTalkWaitTime", ref waitTime, 1, 600, "%d 帧");
 
                     ImGui.Text("检测格数:");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##NurseRange", ref NurseRange, 1, 30, "%d 格");
+                    ImGui.SliderInt("##NurseRange", ref NpcRange, 1, 30, "%d 格");
+
+                    // 自动清理渔夫任务
+                    ImGui.Checkbox("清渔夫任务", ref AutoClearAngel);
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip("按Esc键关闭聊天窗口立即完成任务(不消耗任务鱼)");
+                    ImGui.SameLine();
+                    DrawKeySelector("按键", ref Config.ClearQuestsKey, ref EditClearAnglerQuestsKey);
+
+                    // 税收官随机奖励
+                    ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "税收官奖励设置");
+                    ImGui.Separator();
+                    ImGui.Checkbox("启用税收官随机奖励", ref taxCollectorCustomReward);
+                    if (taxCollectorCustomReward)
+                    {
+                        // 添加物品按钮
+                        if (ImGui.Button("从手上添加物品"))
+                        {
+                            Utils.AddRewardFromHeldItem();
+                        }
+
+                        // 管理列表按钮
+                        ImGui.SameLine();
+                        if (ImGui.Button("管理奖励列表"))
+                        {
+                            ShowRewardEditor = !ShowRewardEditor;
+                        }
+
+                        // 绘制编辑器窗口
+                        if (ShowRewardEditor)
+                        {
+                            DrawRewardEditorWindow();
+                        }
+
+                        // 显示概率信息
+                        ImGui.SameLine();
+                        int enabledCount = Config.TaxCollectorRewards.Count(r => r.Enabled);
+                        if (enabledCount > 0)
+                        {
+                            int baseChance = 100 / enabledCount;
+                            int remainder = 100 % enabledCount;
+
+                            ImGui.Text($"启用物品数: {enabledCount}, 平均概率: {baseChance}%");
+                            if (remainder > 0)
+                            {
+                                ImGui.Text($"前 {remainder} 个启用的物品额外增加1%");
+                            }
+                        }
+                    }
 
                     // 显示当前对话状态
                     ImGui.Separator();
@@ -499,7 +537,7 @@ public class UITool : Tool
                             if (index >= 0 && index < Main.maxNPCs && Main.npc[index].active)
                             {
                                 NPC npc = Main.npc[index];
-                                float progress = (float)(Main.GameUpdateCount - kvp.Value) / (Config.AutoTalkNPCWaitTimes * 60);
+                                float progress = (float)(Main.GameUpdateCount - kvp.Value) / (Config.AutoTalkNPCWaitTimes);
                                 progress = Math.Clamp(progress, 0f, 1f);
 
                                 ImGui.ProgressBar(progress, new Vector2(200, 20), $"{Lang.GetNPCNameValue(npc.type)} - {(progress * 100):F0}%");
@@ -548,7 +586,6 @@ public class UITool : Tool
         Config.IgnoreGravity = applyIgnoreGravity; // 忽略重力药水效果开关
 
         Config.ClearAnglerQuests = AutoClearAngel; // 清除钓鱼任务开关
-        Config.ClearQuestsInterval = ClearAngelInterval; // 清除钓鱼任务间隔
 
         Config.NPCAutoHeal = nPCAutoHeal; // NPC自动回血开关
         Config.NPCHealVel = NPCHealVel; // 普通NPC回血百分比
@@ -562,7 +599,8 @@ public class UITool : Tool
 
         Config.AutoTalkNPC = autoTalkNPC; // Npc自动对话开关
         Config.AutoTalkNPCWaitTimes = waitTime; // NPC自动对话等待时间
-        Config.NurseRange = NurseRange; // 检测格数
+        Config.AutoTalkRange = NpcRange; // 检测格数
+        Config.TaxCollectorCustomReward = taxCollectorCustomReward; // 税收官自定义奖励开关
 
         // 保存按钮
         ImGui.Separator();
@@ -582,6 +620,70 @@ public class UITool : Tool
             Config.Write();
             ClientLoader.Chat.WriteLine("已重置为默认设置", color);
         }
+    }
+    #endregion
+
+    #region 税收官随机奖励编辑器窗口
+    private static bool ShowRewardEditor = false;
+    private void DrawRewardEditorWindow()
+    {
+        ImGui.Begin("税收官奖励物品管理", ref ShowRewardEditor, ImGuiWindowFlags.AlwaysAutoResize);
+
+        ImGui.Text($"税收官随机奖励表 (总数: {Config.TaxCollectorRewards.Count})");
+        ImGui.Separator();
+
+        // 显示所有奖励物品
+        for (int i = 0; i < Config.TaxCollectorRewards.Count; i++)
+        {
+            var reward = Config.TaxCollectorRewards[i];
+            bool rwenabled = reward.Enabled;
+            int quantity = reward.Quantity;
+
+            ImGui.PushID($"reward_{i}");
+
+            // 启用开关 - 当状态改变时重新计算概率
+            if (ImGui.Checkbox("##enabled", ref rwenabled))
+            {
+                reward.Enabled = rwenabled;
+                Utils.ToActiveRate();
+            }
+
+            ImGui.SameLine();
+
+            // 显示物品名称
+            string itemName = Lang.GetItemNameValue(reward.ItemID);
+            ImGui.Text($"{itemName}");
+
+            // 数量输入
+            ImGui.Text("数量:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(80);
+            if (ImGui.InputInt("##quantity", ref quantity))
+            {
+                reward.Quantity = Math.Max(1, quantity);
+            }
+
+            // 概率显示
+            ImGui.SameLine();
+            ImGui.Text($"概率: {reward.Chance}%");
+
+            // 删除按钮
+            ImGui.SameLine();
+            if (ImGui.Button("删除"))
+            {
+                Config.TaxCollectorRewards.RemoveAt(i);
+                i--;
+
+                // 重新计算启用的物品的概率
+                Utils.ToActiveRate();
+
+                ClientLoader.Chat.WriteLine("已删除奖励物品", Color.Green);
+            }
+
+            ImGui.PopID();
+        }
+
+        ImGui.End();
     }
     #endregion
 

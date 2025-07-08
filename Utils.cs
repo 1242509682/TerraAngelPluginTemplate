@@ -1,5 +1,5 @@
-﻿using Microsoft.Xna.Framework;
-using System.Numerics;
+﻿using System.Numerics;
+using Microsoft.Xna.Framework;
 using TerraAngel;
 using TerraAngel.Input;
 using Terraria;
@@ -803,22 +803,6 @@ internal class Utils
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine("已触发陨石事件", Color.Yellow);
-    }
-    #endregion
-
-    #region 清理钓鱼任务方法
-    public static long LastQuestsTime = 0;
-    public static void ClearAnglerQuests(bool clear)
-    {
-        long now = Main.GameUpdateCount;
-        if (!clear || now - LastQuestsTime < Config.ClearQuestsInterval) return;
-
-        Main.anglerWhoFinishedToday.Clear();
-        Main.anglerQuestFinished = false;
-        if (Main.netMode is 2)
-            NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
-
-        LastQuestsTime = now;
     }
     #endregion
 
@@ -1744,278 +1728,534 @@ internal class Utils
     }
     #endregion
 
+    #region 触发NPC对话
+    public static void AutoNPCTalks(NPC npc, int whoAmI)
+    {
+        var plr = Main.LocalPlayer;
+
+        // 确保玩家可以对话
+        if (!plr.CanBeTalkedTo) return;
+
+        // 提前计算距离平方（像素单位）
+        float distanceSq = npc.DistanceSQ(plr.Center);
+        float maxDistanceSq = Config.AutoTalkRange * Config.AutoTalkRange * 256; // 格数转像素平方 (16^2=256)
+
+        // 检查距离是否在范围内
+        if (distanceSq > maxDistanceSq)
+        {
+            // 如果不在范围内，重置计时器
+            if (TalkTimes.ContainsKey(whoAmI))
+            {
+                TalkTimes.Remove(whoAmI);
+            }
+            return;
+        }
+
+        // 初始化计时器
+        if (!TalkTimes.ContainsKey(whoAmI))
+        {
+            TalkTimes[whoAmI] = Main.GameUpdateCount;
+            return;
+        }
+
+        // 检查是否满足停留时间
+        long now = Main.GameUpdateCount;
+        if (now - TalkTimes[whoAmI] < Config.AutoTalkNPCWaitTimes) return;
+
+        // 检查是否是最接近的NPC（使用统一范围）
+        if (!Utils.IsClosestNPC(plr, npc, Config.AutoTalkRange))
+        {
+            return;
+        }
+
+        // 触发对话
+        if (plr.talkNPC != -1 || NPCID.Sets.IsTownPet[npc.type] || NPCID.Sets.IsTownSlime[npc.type]) return;
+
+        plr.SetTalkNPC(npc.whoAmI, Main.netMode is 2);
+        Utils.TalkText(plr);
+
+        if (Main.netMode is 2)
+            NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
+
+        // 播放音效
+        SoundEngine.PlaySound(SoundID.LiquidsWaterLava);
+        ClientLoader.Chat.WriteLine($"玩家 {plr.name} 正在与 {Lang.GetNPCNameValue(npc.type)} 自动对话", color);
+
+        // 更新对话时间
+        TalkTimes[whoAmI] = now;
+    }
+    #endregion
+
     #region 判断玩家与NPC是否在指定格数范围内
     public static bool IsWithinRange(Player plr, NPC npc, int tileRange)
     {
-        // 计算玩家和NPC中心点坐标
-        Vector2 pCenter = plr.Center;
-        Vector2 nCenter = npc.Center;
+        // 将格数转换为像素距离 (1格 = 16像素)
+        float maxDistanceSquared = (tileRange * 16) * (tileRange * 16);
 
-        // 计算两点间距离
-        float dX = pCenter.X - nCenter.X;
-        float dY = pCenter.Y - nCenter.Y;
-        float distance = (float)Math.Sqrt(dX * dX + dY * dY);
-
-        // 将格数转换为像素距离（1格 = 16像素）
-        float maxDistance = tileRange * 16f;
-
-        return distance <= maxDistance;
+        // 使用NPC内置的高效距离平方计算方法
+        return npc.DistanceSQ(plr.Center) <= maxDistanceSquared;
     }
     #endregion
 
     #region 检查是否是最接近玩家的NPC
-    public static bool IsClosestNPC(Player plr, NPC currentNPC)
+    public static bool IsClosestNPC(Player plr, NPC currentNPC, int tileRange)
     {
-        float closestDistance = float.MaxValue;
-        NPC closestNPC = new NPC();
+        int closestIndex = -1;  // 使用-1表示未找到
+        float closestDistanceSq = float.MaxValue;
 
-        // 遍历所有NPC寻找最近的
+        // 提前计算最大允许的平方距离
+        float maxAllowedSq = (tileRange * 16) * (tileRange * 16);
+
         for (int i = 0; i < Main.maxNPCs; i++)
         {
             NPC npc = Main.npc[i];
-            if (!npc.active || !npc.townNPC || npc.SpawnedFromStatue || npc.type == 488)
+            if (!npc.active || !npc.townNPC ||
+                npc.SpawnedFromStatue || npc.type == 488)
                 continue;
 
-            if (IsWithinRange(plr, npc, Config.NurseRange))
+            // 使用内置方法计算距离平方
+            float distanceSq = npc.DistanceSQ(plr.Center);
+
+            // 双重检查：在范围内且更近
+            if (distanceSq <= maxAllowedSq && distanceSq < closestDistanceSq)
             {
-                float distance = Vector2.Distance(plr.Center, npc.Center);
-                if (distance < closestDistance)
-                {
-                    closestDistance = distance;
-                    closestNPC = npc;
-                }
+                closestDistanceSq = distanceSq;
+                closestIndex = i;
             }
         }
 
-        // 检查当前NPC是否是最接近的
-        return closestNPC != null && closestNPC.whoAmI == currentNPC.whoAmI;
+        // 有效检测：找到的NPC是当前NPC
+        return closestIndex != -1 && Main.npc[closestIndex].whoAmI == currentNPC.whoAmI;
     }
     #endregion
 
-    #region 自动对话消息方法（从Main类的GUIChatDrawInner方法抄来的)
+    #region 自动对话消息方法
     public static void TalkText(Player plr)
     {
-        if (Main.npc[plr.talkNPC].type == NPCID.Angler)
+        var npcType = Main.npc[plr.talkNPC].type;
+        switch (npcType)
         {
-            Main.npcChatCornerItem = 0;
-            SoundEngine.PlaySound(12);
-            bool flag4 = false;
-            if (!Main.anglerQuestFinished && !Main.anglerWhoFinishedToday.Contains(plr.name))
-            {
-                int num20 = plr.FindItem(Main.anglerQuestItemNetIDs[Main.anglerQuest]);
-                if (num20 != -1)
-                {
-                    plr.inventory[num20].stack--;
-                    if (plr.inventory[num20].stack <= 0)
-                    {
-                        plr.inventory[num20] = new Item();
-                    }
+            case NPCID.Angler: //渔夫
+                HandleAnglerInteraction(plr);
+                break;
 
-                    flag4 = true;
-                    SoundEngine.PlaySound(24);
-                    plr.anglerQuestsFinished++;
-                    plr.GetAnglerReward(Main.npc[plr.talkNPC], Main.anglerQuestItemNetIDs[Main.anglerQuest]);
+            case NPCID.Nurse: //护士
+                HandleNurseInteraction(plr);
+                break;
+
+            case NPCID.Guide: //向导
+                NPCEventSystem.HelpTextMethod?.Invoke(null, null);
+                break;
+
+            case NPCID.OldMan: //老人
+                HandleOldManInteraction();
+                break;
+
+            case NPCID.TaxCollector: //税收官
+                HandleTaxCollectorInteraction(plr);
+                break;
+
+            default:
+                // 商店NPC统一处理
+                int shopID = GetNPCShopID(npcType);
+                if (shopID > 0)
+                {
+                    NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [shopID]);
                 }
-            }
+                break;
+        }
+    }
+    #endregion
 
-            Main.npcChatText = Lang.AnglerQuestChat(flag4);
-            if (flag4)
+    #region 清理钓鱼任务方法
+    public static void ClearAnglerQuests()
+    {
+        long now = Main.GameUpdateCount;
+        if (!Config.ClearAnglerQuests) return;
+
+        Main.anglerWhoFinishedToday.Clear();
+        Main.anglerQuestFinished = false;
+        if (Main.netMode is 2)
+            NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
+    }
+    #endregion
+
+    #region 渔夫交互逻辑（完成钓鱼任务）
+    private static void HandleAnglerInteraction(Player plr)
+    {
+        Main.npcChatCornerItem = 0;
+        SoundEngine.PlaySound(SoundID.MenuTick);
+
+        bool questCompleted = false;
+        if (!Main.anglerQuestFinished && !Main.anglerWhoFinishedToday.Contains(plr.name))
+        {
+            int Index = plr.FindItem(Main.anglerQuestItemNetIDs[Main.anglerQuest]);
+            if (Index != -1)
             {
-                Main.anglerQuestFinished = true;
-                if (Main.netMode == 1)
+                if (!Config.ClearAnglerQuests)
                 {
-                    NetMessage.SendData(75);
+                    plr.inventory[Index].stack--;
+                    if (plr.inventory[Index].stack <= 0)
+                    {
+                        plr.inventory[Index] = new Item();
+                    }
+                }
+
+                questCompleted = true;
+                SoundEngine.PlaySound(SoundID.Item4);
+                plr.anglerQuestsFinished++;
+                plr.GetAnglerReward(Main.npc[plr.talkNPC], Main.anglerQuestItemNetIDs[Main.anglerQuest]);
+            }
+        }
+
+        Main.npcChatText = Lang.AnglerQuestChat(questCompleted);
+
+        if (questCompleted)
+        {
+            if (!Config.ClearAnglerQuests)
+            {
+                // 设置渔夫任务完成状态
+                Main.anglerQuestFinished = true;
+
+                if (Main.netMode is 1)
+                {
+                    NetMessage.SendData(MessageID.AnglerQuestFinished);
                 }
                 else
                 {
                     Main.anglerWhoFinishedToday.Add(plr.name);
                 }
+                // 处理成就
+                AchievementsHelper.HandleAnglerService();
+            }
+            else
+            {
+                ClearAnglerQuests();
+
+                if (Main.netMode is 1)
+                {
+                    NetMessage.SendData(MessageID.AnglerQuestFinished);
+                }
 
                 AchievementsHelper.HandleAnglerService();
             }
         }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Merchant)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [1]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.ArmsDealer)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [2]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Mechanic)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [8]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.SantaClaus)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [9]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.OldMan)
-        {
-            if (Main.netMode == 0)
-            {
-                NPC.SpawnSkeletron(Main.myPlayer);
-            }
-            else
-            {
-                NetMessage.SendData(51, -1, -1, null, Main.myPlayer, 1f);
-            }
+    }
+    #endregion
 
-            Main.npcChatText = "";
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Dryad)
+    #region 老人交互逻辑（召唤骷髅王）
+    private static void HandleOldManInteraction()
+    {
+        if (Main.netMode == 1)
         {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [3]);
+            NPC.SpawnSkeletron(Main.myPlayer);
         }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Demolitionist)
+        else
         {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [4]);
+            NetMessage.SendData(MessageID.MiscDataSync, -1, -1, null, Main.myPlayer, 1f);
         }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Clothier)
+
+        Main.npcChatText = "";
+    }
+    #endregion
+
+    #region 税收官交互逻辑（发钱）
+    private static void HandleTaxCollectorInteraction(Player plr)
+    {
+        // 如果启用了自定义随机奖励
+        if (Config.TaxCollectorCustomReward && Config.TaxCollectorRewards.Count > 0)
         {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [5]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.GoblinTinkerer)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [6]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Wizard)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [7]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Truffle)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [10]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Steampunker)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [11]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.DyeTrader)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [12]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.PartyGirl)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [13]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Cyborg)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [14]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Painter)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [15]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.WitchDoctor)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [16]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Pirate)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [17]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Stylist)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [18]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.TravellingMerchant)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [19]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.SkeletonMerchant)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [20]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.DD2Bartender)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [21]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Golfer)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [22]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.BestiaryGirl)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [23]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Princess)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [24]);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.Guide)
-        {
-            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
-        }
-        else if (Main.npc[plr.talkNPC].type == NPCID.TaxCollector)
-        {
-            if (plr.taxMoney > 0)
+            bool receivedAny = false;
+
+            // 给予所有启用的奖励物品（根据概率）
+            foreach (var reward in Config.TaxCollectorRewards)
             {
-                int taxMoney3 = plr.taxMoney;
-                taxMoney3 = (int)(taxMoney3 / plr.currentShoppingSettings.PriceAdjustment);
-                while (taxMoney3 > 0)
+                if (reward.Enabled && Main.rand.Next(100) < reward.Chance)
                 {
-                    EntitySource_Gift source = new EntitySource_Gift(Main.npc[plr.talkNPC]);
-                    if (taxMoney3 > 1000000)
-                    {
-                        int num21 = taxMoney3 / 1000000;
-                        taxMoney3 -= 1000000 * num21;
-                        int number = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 74, num21);
-                        if (Main.netMode == 1)
-                        {
-                            NetMessage.SendData(21, -1, -1, null, number, 1f);
-                        }
+                    GiveItem(plr, reward.ItemID, reward.Quantity);
+                    receivedAny = true;
 
-                        continue;
-                    }
-
-                    if (taxMoney3 > 10000)
-                    {
-                        int num22 = taxMoney3 / 10000;
-                        taxMoney3 -= 10000 * num22;
-                        int number2 = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 73, num22);
-                        if (Main.netMode == 1)
-                        {
-                            NetMessage.SendData(21, -1, -1, null, number2, 1f);
-                        }
-
-                        continue;
-                    }
-
-                    if (taxMoney3 > 100)
-                    {
-                        int num23 = taxMoney3 / 100;
-                        taxMoney3 -= 100 * num23;
-                        int number3 = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 72, num23);
-                        if (Main.netMode == 1)
-                        {
-                            NetMessage.SendData(21, -1, -1, null, number3, 1f);
-                        }
-
-                        continue;
-                    }
-
-                    int num24 = taxMoney3;
-                    if (num24 < 1)
-                    {
-                        num24 = 1;
-                    }
-
-                    taxMoney3 -= num24;
-                    int number4 = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 71, num24);
-                    if (Main.netMode == 1)
-                    {
-                        NetMessage.SendData(21, -1, -1, null, number4, 1f);
-                    }
+                    // 显示获得信息
+                    string itemName = Lang.GetItemNameValue(reward.ItemID);
+                    ClientLoader.Chat.WriteLine($"获得了 {itemName} x{reward.Quantity}", Color.Gold);
                 }
+            }
 
+            if (receivedAny)
+            {
                 Main.npcChatText = Lang.dialog(Main.rand.Next(380, 382));
-                plr.taxMoney = 0;
             }
             else
             {
-                Main.npcChatText = Lang.dialog(Main.rand.Next(390, 401));
+                Main.npcChatText = "这次没有合适的奖励给你...";
             }
+
+            return;
+        }
+
+        // 以下是原有的税款系统逻辑
+        if (plr.taxMoney <= 0)
+        {
+            Main.npcChatText = Lang.dialog(Main.rand.Next(390, 401));
+            return;
+        }
+
+        int taxMoney = (int)(plr.taxMoney / plr.currentShoppingSettings.PriceAdjustment);
+        var source = new EntitySource_Gift(Main.npc[plr.talkNPC]);
+
+        while (taxMoney > 0)
+        {
+            int amount;
+            int itemType;
+
+            if (taxMoney > 1000000)
+            {
+                amount = taxMoney / 1000000;
+                itemType = ItemID.PlatinumCoin;
+            }
+            else if (taxMoney > 10000)
+            {
+                amount = taxMoney / 10000;
+                itemType = ItemID.GoldCoin;
+            }
+            else if (taxMoney > 100)
+            {
+                amount = taxMoney / 100;
+                itemType = ItemID.SilverCoin;
+            }
+            else
+            {
+                amount = Math.Max(taxMoney, 1);
+                itemType = ItemID.CopperCoin;
+            }
+
+            taxMoney -= amount * (itemType switch
+            {
+                ItemID.PlatinumCoin => 1000000,
+                ItemID.GoldCoin => 10000,
+                ItemID.SilverCoin => 100,
+                _ => 1
+            });
+
+            GiveItem(plr, itemType, amount);
+        }
+
+        Main.npcChatText = Lang.dialog(Main.rand.Next(380, 382));
+        plr.taxMoney = 0;
+    }
+    #endregion
+
+    #region 护士交互逻辑
+    private static void HandleNurseInteraction(Player plr)
+    {
+        SoundEngine.PlaySound(SoundID.MenuTick);
+
+        // 计算治疗费用
+        int healCost = CalculateHealCost(plr);
+
+        // 支付处理
+        if (healCost > 0)
+        {
+            if (plr.BuyItem(healCost))
+            {
+                // 记录治疗前的生命值比例
+                double lifeRatioBefore = (double)plr.statLife / plr.statLifeMax2;
+
+                // 执行治疗
+                PerformHealing(plr);
+
+                // 成就和音效
+                AchievementsHelper.HandleNurseService(healCost);
+                SoundEngine.PlaySound(SoundID.Item4);
+            }
+            else
+            {
+                Main.npcChatText = Lang.dialog(Main.rand.Next(52, 55));
+            }
+        }
+    }
+
+    // 计算治疗费用
+    private static int CalculateHealCost(Player plr)
+    {
+        int healCost = plr.statLifeMax2 - plr.statLife;
+
+        // 添加减益状态的治疗费用
+        for (int j = 0; j < Player.maxBuffs; j++)
+        {
+            int buffType = plr.buffType[j];
+            if (buffType <= 0 || buffType >= BuffID.Count) continue;
+
+            if (Main.debuff[buffType] &&
+                plr.buffTime[j] > 60 &&
+                !BuffID.Sets.NurseCannotRemoveDebuff[buffType])
+            {
+                healCost += 100;
+            }
+        }
+
+        // 根据游戏进度调整治疗费用
+        healCost = ApplyGameProgressMultiplier(healCost);
+
+        // 专家模式加成
+        if (Main.expertMode) healCost *= 2;
+
+        return Math.Max(healCost, 0);
+    }
+
+    // 应用游戏进度费用乘数
+    private static int ApplyGameProgressMultiplier(int baseCost)
+    {
+        if (NPC.downedGolemBoss) return baseCost * 20;
+        if (NPC.downedPlantBoss) return baseCost * 15;
+        if (NPC.downedMechBossAny) return baseCost * 10;
+        if (Main.hardMode) return baseCost * 6;
+        if (NPC.downedBoss3 || NPC.downedQueenBee) return baseCost * 2;
+        if (NPC.downedBoss2) return baseCost * 2;
+        if (NPC.downedBoss1) return baseCost * 3;
+        return baseCost;
+    }
+
+    // 执行治疗操作
+    private static void PerformHealing(Player plr)
+    {
+        // 完全治疗
+        plr.HealEffect(plr.statLifeMax2 - plr.statLife);
+        plr.statLife = plr.statLifeMax2;
+
+        // 清除可移除的减益 - 修复索引问题
+        ClearRemovableDebuffs(plr);
+    }
+
+    // 清除可移除的减益 - 修复版本
+    private static void ClearRemovableDebuffs(Player plr)
+    {
+        // 使用倒序循环避免索引问题
+        for (int i = Player.maxBuffs - 1; i >= 0; i--)
+        {
+            int buffType = plr.buffType[i];
+            if (buffType <= 0 || buffType >= BuffID.Count) continue;
+
+            if (Main.debuff[buffType] &&
+                plr.buffTime[i] > 0 &&
+                !BuffID.Sets.NurseCannotRemoveDebuff[buffType])
+            {
+                plr.DelBuff(i);
+            }
+        }
+    }
+
+    // 设置治疗对话
+    private static void SetHealingDialogue(double lifeRatioBefore)
+    {
+        if (lifeRatioBefore < 0.25)
+            Main.npcChatText = Lang.dialog(227);
+        else if (lifeRatioBefore < 0.5)
+            Main.npcChatText = Lang.dialog(228);
+        else if (lifeRatioBefore < 0.75)
+            Main.npcChatText = Lang.dialog(229);
+        else
+            Main.npcChatText = Lang.dialog(230);
+    }
+    #endregion
+
+    #region 获取NPC对应的商店ID
+    private static int GetNPCShopID(int npcType) => npcType switch
+    {
+        NPCID.Merchant => 1,
+        NPCID.ArmsDealer => 2,
+        NPCID.Dryad => 3,
+        NPCID.Demolitionist => 4,
+        NPCID.Clothier => 5,
+        NPCID.GoblinTinkerer => 6,
+        NPCID.Wizard => 7,
+        NPCID.Mechanic => 8,
+        NPCID.SantaClaus => 9,
+        NPCID.Truffle => 10,
+        NPCID.Steampunker => 11,
+        NPCID.DyeTrader => 12,
+        NPCID.PartyGirl => 13,
+        NPCID.Cyborg => 14,
+        NPCID.Painter => 15,
+        NPCID.WitchDoctor => 16,
+        NPCID.Pirate => 17,
+        NPCID.Stylist => 18,
+        NPCID.TravellingMerchant => 19,
+        NPCID.SkeletonMerchant => 20,
+        NPCID.DD2Bartender => 21,
+        NPCID.Golfer => 22,
+        NPCID.BestiaryGirl => 23,
+        NPCID.Princess => 24,
+        _ => 0
+    };
+    #endregion
+
+    #region 添加税收官随机奖励物品方法
+    public static void AddRewardFromHeldItem()
+    {
+        Item heldItem = Main.LocalPlayer.HeldItem;
+        if (heldItem.type > 0)
+        {
+            // 检查是否已经添加过该物品
+            bool alreadyExists = Config.TaxCollectorRewards.Any(r => r.ItemID == heldItem.type);
+            if (alreadyExists)
+            {
+                ClientLoader.Chat.WriteLine("该物品已在奖励列表中!", Color.Orange);
+            }
+            else
+            {
+                // 添加新物品
+                Config.TaxCollectorRewards.Add(new RewardItem
+                {
+                    ItemID = heldItem.type,
+                    Quantity = heldItem.stack,
+                    Enabled = true
+                });
+
+                // 重新计算所有启用的物品的概率
+                ToActiveRate();
+
+                ClientLoader.Chat.WriteLine($"已添加: {Lang.GetItemNameValue(heldItem.type)}", Color.Green);
+            }
+        }
+        else
+        {
+            ClientLoader.Chat.WriteLine("请手持一个物品!", Color.Orange);
+        }
+    }
+    #endregion
+
+    #region 重新计算启用的物品的概率
+    public static void ToActiveRate()
+    {
+        // 获取所有启用的物品
+        var ActiveRewards = Config.TaxCollectorRewards.Where(r => r.Enabled).ToList();
+        int ActiveCount = ActiveRewards.Count;
+
+        if (ActiveCount == 0)
+        {
+            // 如果没有启用的物品，将所有物品的概率设为0
+            foreach (var reward in Config.TaxCollectorRewards)
+            {
+                reward.Chance = 0;
+            }
+            return;
+        }
+
+        // 计算基础概率和余数
+        int baseChance = 100 / ActiveCount;
+        int remainder = 100 % ActiveCount;
+
+        // 重置所有物品的概率为0（禁用的物品保持0）
+        foreach (var reward in Config.TaxCollectorRewards)
+        {
+            reward.Chance = 0;
+        }
+
+        // 为启用的物品分配概率
+        for (int i = 0; i < ActiveCount; i++)
+        {
+            ActiveRewards[i].Chance = baseChance + (i < remainder ? 1 : 0);
         }
     }
     #endregion
