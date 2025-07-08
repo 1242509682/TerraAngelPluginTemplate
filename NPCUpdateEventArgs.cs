@@ -8,6 +8,9 @@ public class NPCEventSystem
 {
     private static Hook? NpcUpdateHook; // 钩子
     public static event EventHandler<NPCUpdateEventArgs>? OnNPCUpdate; // NPC更新事件
+                                                                       // 用于反射调用私有方法
+    public static MethodInfo? OpenShopMethod;
+    public static MethodInfo? HelpTextMethod;
 
     public static void Register()
     {
@@ -17,6 +20,11 @@ public class NPCEventSystem
 
         // 创建钩子
         NpcUpdateHook = new Hook(UpdateNPC, NewUpdateNPC);
+
+        // 获取私有方法信息
+        OpenShopMethod = typeof(Main).GetMethod("OpenShop", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(int)],null);
+
+        HelpTextMethod = typeof(Main).GetMethod("HelpText",BindingFlags.Static | BindingFlags.NonPublic);
     }
 
     public static void Dispose()
@@ -25,6 +33,8 @@ public class NPCEventSystem
         NpcUpdateHook?.Dispose();
         NpcUpdateHook = null;
         OnNPCUpdate = null;
+        OpenShopMethod = null;
+        HelpTextMethod = null;
     }
 
     // 钩住的UpdateNPC方法

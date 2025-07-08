@@ -7,6 +7,14 @@
 ## 更新日志
 
 ```
+v1.1.2
+自定义配方不再需要合成站,移除合成站添加窗口
+加入了NPC自动对话功能，当靠近NPC时自动弹出聊天窗口(有商店的自动打开商店)
+插件初始化时可获取到当前地图信息（地图名、大小、难度、进度、ID）
+修复移除配方时不会删除游戏内配方BUG
+修复重新添加和保存相同物品配方时无法更新配方材料BUG
+注意：配方异常时请重启TerraAngel并删除本插件的配置文件来恢复
+
 v1.1.1
 优化窗口排版
 给连锁挖矿与生成NPC使用独立窗口
@@ -92,7 +100,6 @@ v1.0.0
 > 配置文件位置：D:\Documents\MyGames\Terraria\TerraAngel\MyPlugin.json
 ```json
 {
-  {
   "插件开关": true,
   "回血按键": 72,
   "开启快捷键回血": true,
@@ -263,7 +270,30 @@ v1.0.0
       "TileID": 404,
       "ItemName": "沙漠化石"
     }
-  ]
-}
+  ],
+  "进入世界收藏背包物品": true,
+  "解锁所有配方": false,
+  "忽略工作站要求": false,
+  "添加自定义配方": true,
+  "自定义配方列表": [
+    {
+      "UniqueID": "5f987edc-49ad-40ac-b0b6-361c1c47bbc9",
+      "Index": -1,
+      "ResultItem": 8,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 2,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    }
+  ],
+  "NPC自动对话按键": 89,
+  "NPC自动对话": true,
+  "NPC自动对话的最小格数": 2,
+  "NPC自动对话等待秒数": 3
 }
 ```

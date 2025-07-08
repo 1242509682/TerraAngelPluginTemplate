@@ -126,6 +126,16 @@ internal class Configuration
     [JsonProperty("自定义配方列表", Order = 21)]
     public List<CustomRecipeData> CustomRecipes { get; set; } = new List<CustomRecipeData>();
 
+
+    [JsonProperty("NPC自动对话", Order = 22)]
+    public bool AutoTalkNPC { get; set; } = true;
+    [JsonProperty("NPC自动对话按键", Order = 22)]
+    public Keys AutoTalkKey = Keys.Y;
+    [JsonProperty("NPC自动对话的最小格数", Order = 22)]
+    public int NurseRange { get; set; } = 2;
+    [JsonProperty("NPC自动对话等待秒数", Order = 22)]
+    public int AutoTalkNPCWaitTimes { get; set; } = 3;
+
     #region 预设参数方法
     public void SetDefault()
     {
@@ -209,6 +219,11 @@ internal class Configuration
         };
 
         FavoriteItemForJoinWorld = true;
+
+        AutoTalkNPC = true;
+        AutoTalkKey = Keys.Y;
+        AutoTalkNPCWaitTimes = 3;
+        NurseRange = 2;
     }
     #endregion
 

@@ -32,6 +32,7 @@ public class UITool : Tool
     private bool EditNPCAutoHealKey = false; // NPC自动回血按键编辑状态
     public bool EditNPCReliveKey = false; // 复活NPC按键编辑状态
     public bool EditVeinMinerKey = false; // 连锁挖矿按键编辑状态
+    public bool EditAutoTalkKey = false; // NPC自动对话按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -71,6 +72,10 @@ public class UITool : Tool
         int BossHealInterval = Config.BossHealInterval; //BOSS独立回血间隔(秒)
 
         bool FavoriteItemForJoinWorld = Config.FavoriteItemForJoinWorld; // 进入世界自动收藏物品
+
+        bool autoTalkNPC = Config.AutoTalkNPC; // NPC自动对话开关
+        int waitTime = Config.AutoTalkNPCWaitTimes;  // NPC自动对话等待时间
+        int NurseRange = Config.NurseRange; // 检测格数
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -464,6 +469,55 @@ public class UITool : Tool
                     }
                 }
 
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动对话");
+                ImGui.Separator();
+
+                // 自动对话开关
+                ImGui.Checkbox("NPC自动对话", ref autoTalkNPC);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.AutoTalkKey, ref EditAutoTalkKey);
+                if (autoTalkNPC)
+                {
+                    ImGui.Text("等待时间:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##AutoTalkWaitTime", ref waitTime, 1, 30, "%d 秒");
+
+                    ImGui.Text("检测格数:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##NurseRange", ref NurseRange, 1, 30, "%d 格");
+
+                    // 显示当前对话状态
+                    ImGui.Separator();
+                    ImGui.Text("当前对话状态:");
+                    if (TalkTimes.Count > 0)
+                    {
+                        foreach (var kvp in TalkTimes)
+                        {
+                            int index = kvp.Key;
+                            if (index >= 0 && index < Main.maxNPCs && Main.npc[index].active)
+                            {
+                                NPC npc = Main.npc[index];
+                                float progress = (float)(Main.GameUpdateCount - kvp.Value) / (Config.AutoTalkNPCWaitTimes * 60);
+                                progress = Math.Clamp(progress, 0f, 1f);
+
+                                ImGui.ProgressBar(progress, new Vector2(200, 20), $"{Lang.GetNPCNameValue(npc.type)} - {(progress * 100):F0}%");
+
+                                // 添加取消按钮
+                                ImGui.SameLine();
+                                if (ImGui.Button($"取消##{index}"))
+                                {
+                                    TalkTimes.Remove(index);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1f), "没有正在进行的对话");
+                    }
+                }
                 ImGui.TreePop();
             }
         }
@@ -505,6 +559,10 @@ public class UITool : Tool
         Config.BossHealInterval = BossHealInterval; //BOSS独立回血间隔(秒)
 
         Config.FavoriteItemForJoinWorld = FavoriteItemForJoinWorld; // 进入世界自动收藏物品
+
+        Config.AutoTalkNPC = autoTalkNPC; // Npc自动对话开关
+        Config.AutoTalkNPCWaitTimes = waitTime; // NPC自动对话等待时间
+        Config.NurseRange = NurseRange; // 检测格数
 
         // 保存按钮
         ImGui.Separator();
@@ -583,45 +641,14 @@ public class UITool : Tool
                 IsNewRecipe = true;
             }
 
-            // 新增：清空所有配方按钮
-            ImGui.SameLine();
-            if (ImGui.Button("清空所有配方"))
-            {
-                // 1. 从游戏配方槽位中移除所有自定义配方
-                foreach (var recipe in Config.CustomRecipes)
-                {
-                    if (recipe.Index != -1)
-                    {
-                        RecipeHooks.RemoveRecipe(recipe.Index);
-                        Main.availableRecipe[recipe.Index] = 0;
-                    }
-                }
-
-                // 2. 清除自定义配方物品缓存
-                CustomRecipeItems.Clear();
-                CustomRecipeIndexes.Clear();
-
-                // 3. 清空配置中的配方列表
-                Config.CustomRecipes.Clear();
-
-                // 4. 重置编辑状态
-                EditingRecipe = null;
-
-                // 5. 保存配置
-                Config.Write();
-
-                // 6. 重新加载配方
-                Recipe.FindRecipes();
-
-                ClientLoader.Chat.WriteLine("已清空所有自定义配方", Color.Green);
-            }
-
             ImGui.SameLine();
             if (ImGui.Button("保存所有配方"))
             {
                 Config.Write();
                 ClientLoader.Chat.WriteLine("配方已保存", color);
-                Recipe.FindRecipes(); // 强制重新加载所有配方
+
+                // 重建自定义配方
+                RecipeHooks.RebuildCustomRecipes();
             }
 
             ImGui.SameLine();
@@ -656,16 +683,48 @@ public class UITool : Tool
 
             // 搜索框
             ImGui.Separator();
-            ImGui.Text("搜索配方:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "搜索配方:");
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200);
             ImGui.InputTextWithHint("##RecipeSearch", "输入物品名称或ID", ref RecipeSearch, 100);
 
             // 配方列表区域
             ImGui.Separator();
-            ImGui.Text("配方列表:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "配方列表:");
             ImGui.SameLine();
             ImGui.Text($"({Config.CustomRecipes.Count} 个配方)");
+
+            // 清空所有配方按钮
+            ImGui.SameLine();
+            if (ImGui.Button("清空所有配方"))
+            {
+                // 1. 从游戏配方槽位中移除所有自定义配方
+                foreach (var recipe in Config.CustomRecipes)
+                {
+                    if (recipe.Index != -1)
+                    {
+                        RecipeHooks.RemoveRecipe(recipe.Index);
+                    }
+                }
+
+                // 2. 清除自定义配方物品缓存
+                CustomRecipeItems.Clear();
+                CustomRecipeIndexes.Clear();
+
+                // 3. 清空配置中的配方列表
+                Config.CustomRecipes.Clear();
+
+                // 4. 重置编辑状态
+                EditingRecipe = null;
+
+                // 5. 保存配置
+                Config.Write();
+
+                // 6. 重新加载配方
+                Recipe.FindRecipes();
+
+                ClientLoader.Chat.WriteLine("已清空所有自定义配方", Color.Green);
+            }
 
             ImGui.BeginChild("RecipeList", new Vector2(250, 300), ImGuiChildFlags.Borders);
 
@@ -721,22 +780,21 @@ public class UITool : Tool
 
             if (EditingRecipe != null)
             {
-                ImGui.Text("编辑配方:");
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "《配方编辑器》");
                 ImGui.Separator();
 
                 // 结果物品设置
-                ImGui.Text("结果物品:");
+                ImGui.Text("合成物品:");
                 ImGui.SameLine();
-
                 Item resultItem = new Item();
                 resultItem.SetDefaults(EditingRecipe.ResultItem);
                 string resultLabel = resultItem.Name != "" ? $"{resultItem.Name} (ID:{EditingRecipe.ResultItem})" : "未选择";
-
                 if (ImGui.Button(resultLabel))
                 {
                     ShowItemSelectorForResult = !ShowItemSelectorForResult;
                 }
 
+                // 显示合成物品窗口
                 if (ShowItemSelectorForResult)
                 {
                     var selectedItemId = EditingRecipe.ResultItem;
@@ -753,9 +811,7 @@ public class UITool : Tool
                 // 材料列表
                 ImGui.Separator();
                 ImGui.Text("所需材料:");
-
                 ImGui.BeginChild("IngredientsList", new Vector2(0, 150), ImGuiChildFlags.Borders);
-
                 if (EditingRecipe.Ingredients.Count == 0)
                 {
                     ImGui.TextDisabled("没有添加材料");
@@ -782,13 +838,12 @@ public class UITool : Tool
                         ImGui.PopID();
                     }
                 }
-
                 ImGui.EndChild();
 
-                // 添加新材料
-                ImGui.Text("添加新材料:");
+                // 添加材料
+                ImGui.Separator();
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "添加材料:");
                 ImGui.SameLine();
-
                 Item newIngItem = new Item();
                 newIngItem.SetDefaults(NewIngredientItemId);
                 string newIngLabel = newIngItem.Name != "" ? $"{newIngItem.Name} (ID:{NewIngredientItemId})" : "选择物品";
@@ -798,6 +853,7 @@ public class UITool : Tool
                     ShowItemSelectorForIngredient = !ShowItemSelectorForIngredient;
                 }
 
+                // 显示材料选择窗口
                 if (ShowItemSelectorForIngredient)
                 {
                     DrawItemSelector(ref NewIngredientItemId);
@@ -822,44 +878,6 @@ public class UITool : Tool
                     NewIngredientStack = 1;
                 }
 
-                // 合成站设置 - 多选支持
-                ImGui.Separator();
-                ImGui.Text("合成站:");
-
-                // 显示当前选择的合成站
-                if (EditingRecipe.RequiredTile.Count() > 0)
-                {
-                    string stationNames = string.Join(", ", EditingRecipe.RequiredTile
-                        .Select(id => TileID.Search.GetName(id))
-                        .Where(name => !string.IsNullOrEmpty(name)));
-
-                    ImGui.TextColored(new Vector4(0.8f, 1.0f, 0.8f, 1.0f), stationNames);
-                }
-                else
-                {
-                    ImGui.TextDisabled("无合成站需求");
-                }
-
-                ImGui.SameLine();
-                if (ImGui.Button("选择合成站"))
-                {
-                    ShowTileSelector = !ShowTileSelector;
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("手持可放置图格的物品可添加自定义合成站");
-
-                // 清空合成站按钮
-                ImGui.SameLine();
-                if (ImGui.Button("清空"))
-                {
-                    EditingRecipe.RequiredTile.Clear();
-                }
-
-                if (ShowTileSelector)
-                {
-                    DrawTileSelector();
-                }
-
                 // 保存/删除按钮
                 ImGui.Separator();
                 if (ImGui.Button(IsNewRecipe ? "添加配方" : "保存修改"))
@@ -876,9 +894,18 @@ public class UITool : Tool
                             EditingRecipe.Index = -1;
                             Config.CustomRecipes.Add(EditingRecipe);
                             ClientLoader.Chat.WriteLine($"已添加配方: {resultItem.Name}", Color.Green);
-
                             // 保存并重新加载配方
                             Config.Write();
+
+                            // 添加到游戏可用配方中
+                            foreach (var recipe in Config.CustomRecipes)
+                            {
+                                if (recipe.Index != -1)
+                                {
+                                    RecipeHooks.AddToAvailableRecipes(recipe.Index);
+                                }
+                            }
+
                             Recipe.FindRecipes();
                         }
                         else
@@ -893,7 +920,9 @@ public class UITool : Tool
 
                         // 保存并重新加载配方
                         Config.Write();
-                        Recipe.FindRecipes();
+
+                        // 重建自定义配方
+                        RecipeHooks.RebuildCustomRecipes();
                     }
 
                     // 重置编辑状态
@@ -922,10 +951,54 @@ public class UITool : Tool
 
                     // 保存并重新加载配方
                     Config.Write();
-                    Recipe.FindRecipes();
+
+                    // 重建自定义配方
+                    RecipeHooks.RebuildCustomRecipes();
 
                     EditingRecipe = null;
                 }
+
+                // 添加手持物品到材料按钮
+                ImGui.SameLine();
+                // 获取玩家手持物品
+                Item heldItem = Main.LocalPlayer.HeldItem;
+                string itemName = heldItem != null && heldItem.type > 0 ? Lang.GetItemNameValue(heldItem.type) : "空手";
+
+                // 当手持物品有效时启用按钮
+                bool canAddHeldItem = heldItem != null && heldItem.type > 0;
+                if (!canAddHeldItem) ImGui.BeginDisabled();
+
+                if (ImGui.Button($"添加手持材料: {itemName}"))
+                {
+                    if (canAddHeldItem)
+                    {
+                        // 检查物品是否已存在
+                        bool itemExists = EditingRecipe!.Ingredients.Any(i => i.ItemId == heldItem!.type);
+
+                        if (!itemExists)
+                        {
+                            EditingRecipe.Ingredients.Add(new IngredientData
+                            {
+                                ItemId = heldItem!.type,
+                                Stack = NewIngredientStack
+                            });
+                            ClientLoader.Chat.WriteLine($"已添加材料: {itemName} x{NewIngredientStack}", Color.Green);
+                        }
+                        else
+                        {
+                            ClientLoader.Chat.WriteLine($"材料已存在: {itemName}", Color.Yellow);
+                        }
+                    }
+                }
+
+                // 添加悬停提示
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip("将当前手持物品添加到配方材料列表");
+                }
+
+                if (!canAddHeldItem) ImGui.EndDisabled();
+
             }
             else
             {
@@ -947,14 +1020,14 @@ public class UITool : Tool
         if (ImGui.Begin("从原版配方导入", ref ShowVanillaRecipeSelector, ImGuiWindowFlags.NoCollapse))
         {
             // 搜索框
-            ImGui.Text("搜索配方:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "搜索配方:");
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200);
             ImGui.InputTextWithHint("##VanillaRecipeSearch", "输入物品名称或ID", ref VanillaRecipeSearch, 100);
 
             // 配方列表
             ImGui.Separator();
-            ImGui.Text("原版配方列表:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "原版配方列表:");
             ImGui.BeginChild("VanillaRecipeList", new Vector2(0, 400), ImGuiChildFlags.Borders);
 
             // 应用搜索过滤
@@ -1028,7 +1101,7 @@ public class UITool : Tool
         ImGui.SetNextWindowSize(new Vector2(400, 500), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("选择物品", ref showWindow, ImGuiWindowFlags.NoCollapse))
         {
-            ImGui.Text("搜索物品:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "搜索物品:");
             ImGui.SameLine();
             ImGui.SetNextItemWidth(200);
             ImGui.InputText("##ItemSearch", ref ItemSearchText, 100);
@@ -1056,7 +1129,6 @@ public class UITool : Tool
                     ShowItemSelectorForIngredient = false;
                 }
             }
-
             ImGui.EndChild();
         }
         ImGui.End();
@@ -1068,175 +1140,6 @@ public class UITool : Tool
             ShowItemSelectorForIngredient = false;
         }
     }
-    #endregion
-
-    #region 配方工作台图格选择器窗口
-    private bool ShowTileSelector = false;
-    private string TileSearchText = "";
-    private List<int> TileSelectionCache = new List<int>();
-    private static Dictionary<int, string> CustomStations = new Dictionary<int, string>();
-    private void DrawTileSelector()
-    {
-        ImGui.SetNextWindowSize(new Vector2(450, 550), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin("选择合成站", ref ShowTileSelector, ImGuiWindowFlags.NoCollapse))
-        {
-            // 显示当前已选择的合成站
-            Dictionary<int, string> Stations = StationList();
-            if (TileSelectionCache.Count > 0)
-            {
-                ImGui.Text("已选择:");
-                ImGui.SameLine();
-
-                string SelectedStations = string.Join(", ", TileSelectionCache
-                    .Select(id =>
-                    {
-                        if (Stations.TryGetValue(id, out var name))
-                            return name;
-                        return $"未知图格({id})";
-                    }));
-
-                ImGui.TextColored(new Vector4(0.8f, 1.0f, 0.8f, 1.0f), SelectedStations);
-            }
-            else
-            {
-                ImGui.Text("已选择: 无合成站需求");
-            }
-
-            ImGui.Text("搜索合成站:");
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(250);
-            ImGui.InputText("##TileSearch", ref TileSearchText, 100);
-
-            ImGui.BeginChild("TileList", new Vector2(0, 380), ImGuiChildFlags.Borders);
-
-            // 过滤常用合成站
-            var GetStations = Stations.Where(s =>
-                string.IsNullOrWhiteSpace(TileSearchText) ||
-                s.Value.Contains(TileSearchText, StringComparison.OrdinalIgnoreCase) ||
-                s.Key.ToString().Contains(TileSearchText)
-            );
-
-            foreach (var station in GetStations)
-            {
-                bool isSelected = TileSelectionCache.Contains(station.Key);
-                if (ImGui.Checkbox($"{station.Value}##{station.Key}", ref isSelected))
-                {
-                    if (isSelected)
-                    {
-                        if (!TileSelectionCache.Contains(station.Key))
-                            TileSelectionCache.Add(station.Key);
-                    }
-                    else
-                    {
-                        TileSelectionCache.Remove(station.Key);
-                    }
-                }
-            }
-
-            ImGui.EndChild();
-
-            // 按钮区域
-            ImGui.Separator();
-            if (ImGui.Button("清空选择"))
-            {
-                TileSelectionCache.Clear();
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("确认"))
-            {
-                // 更新当前编辑配方的合成站
-                if (EditingRecipe != null)
-                {
-                    EditingRecipe.RequiredTile.Clear();
-                    EditingRecipe.RequiredTile.AddRange(TileSelectionCache);
-                }
-                TileSelectionCache.Clear();
-                ShowTileSelector = false;
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("取消"))
-            {
-                TileSelectionCache.Clear();
-                ShowTileSelector = false;
-            }
-
-            // 添加手持物品合成站按钮
-            ImGui.SameLine();
-            Item heldItem = Main.LocalPlayer.HeldItem;
-            if (heldItem != null && heldItem.createTile > 0)
-            {
-                string itemName = Lang.GetItemNameValue(heldItem.type);
-                if (ImGui.Button($"添加手持物品: {itemName}"))
-                {
-                    int tileID = heldItem.createTile;
-                    string tileName = itemName + " (自定义)";
-
-                    // 添加到自定义缓存
-                    if (!CustomStations.ContainsKey(tileID))
-                    {
-                        CustomStations.Add(tileID, tileName);
-                        Main.NewText($"已添加合成站: {tileName}");
-                    }
-
-                    // 自动选中新添加的合成站
-                    if (!TileSelectionCache.Contains(tileID))
-                    {
-                        TileSelectionCache.Add(tileID);
-                    }
-                }
-            }
-        }
-        ImGui.End();
-    }
-
-    #region 合成站表（移除了"无"选项）
-    private static Dictionary<int, string> StationList()
-    {
-        // 常用合成站列表（移除了"无"选项）
-        var baseStations = new Dictionary<int, string>
-        {
-            { TileID.WorkBenches, "工作台" },
-            { TileID.Furnaces, "熔炉" },
-            { TileID.Anvils, "铁砧/铅砧" },
-            { TileID.Hellforge, "地狱熔炉" },
-            { TileID.AlchemyTable, "炼药桌" },
-            { TileID.ImbuingStation, "灌注站" },
-            { TileID.CrystalBall, "水晶球" },
-            { TileID.Autohammer, "自动锤炼机" },
-            { TileID.Loom, "织布机" },
-            { TileID.Sawmill, "锯木机" },
-            { TileID.Kegs, "酒桶" },
-            { TileID.CookingPots, "烹饪锅" },
-            { TileID.Blendomatic, "搅拌机" },
-            { TileID.MeatGrinder, "绞肉机" },
-            { TileID.LesionStation, "病变工作站" },
-            { TileID.SteampunkBoiler, "蒸汽朋克锅炉" },
-            { TileID.GlassKiln, "玻璃窑" },
-            { TileID.Solidifier, "固化机" },
-            { TileID.BoneWelder, "骨焊机" },
-            { TileID.FleshCloningVat, "血肉克隆台" },
-            { TileID.SkyMill, "天磨" },
-            { TileID.LivingLoom, "活木织机" },
-            { TileID.IceMachine, "冰雪机" },
-            { TileID.HeavyWorkBench, "重型工作台" },
-            { 412, "远古操纵机" },
-        };
-
-        // 合并自定义合成站
-        var mergedStations = new Dictionary<int, string>(baseStations);
-        foreach (var custom in CustomStations)
-        {
-            if (!mergedStations.ContainsKey(custom.Key))
-            {
-                mergedStations.Add(custom.Key, custom.Value);
-            }
-        }
-
-        return mergedStations;
-    }
-    #endregion
     #endregion
 
     #region 连锁挖矿窗口

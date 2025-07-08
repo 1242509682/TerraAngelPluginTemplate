@@ -5,6 +5,7 @@ using TerraAngel.Input;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
+using Terraria.GameContent.Achievements;
 using Terraria.GameContent.Events;
 using Terraria.ID;
 using static MyPlugin.MyPlugin;
@@ -40,7 +41,7 @@ internal class Utils
             if (healAmount < 1) healAmount = 1;
             npc.life = Math.Min(npc.lifeMax, npc.life + healAmount);
 
-            if (Main.netMode == 2)
+            if (Main.netMode is 2)
             {
                 npc.netUpdate = true;
                 NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
@@ -58,7 +59,7 @@ internal class Utils
             // 确保不会超过最大血量
             npc.life = Math.Min(npc.lifeMax, npc.life + actualHeal);
 
-            if (Main.netMode == 2)
+            if (Main.netMode is 2)
             {
                 npc.netUpdate = true;
                 NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
@@ -231,7 +232,7 @@ internal class Utils
                 WorldGen.KillTile(point.X, point.Y, false, false, true);
             }
 
-            if (Main.netMode == 2)
+            if (Main.netMode is 2)
             {
                 NetMessage.SendData(MessageID.TileManipulation, -1, -1, null, 4, x, y, false.GetHashCode());
             }
@@ -523,7 +524,7 @@ internal class Utils
         Main.StartInvasion(type);
 
         // 发送网络同步
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
         {
             NetMessage.SendData(MessageID.WorldData);
             NetMessage.SendData(MessageID.InvasionProgressReport);
@@ -565,7 +566,7 @@ internal class Utils
         }
 
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
         {
             NetMessage.SendData(MessageID.WorldData);
             NetMessage.SendData(MessageID.InvasionProgressReport);
@@ -597,7 +598,7 @@ internal class Utils
             Main.dayTime = false;
             Main.time = 0.0;
 
-            if (Main.netMode == 2)
+            if (Main.netMode is 2)
             {
                 NetMessage.SendData(MessageID.WorldData);
                 NetMessage.SendData(MessageID.InvasionProgressReport);
@@ -622,7 +623,7 @@ internal class Utils
             Main.time = 9000.0;
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.SetTime);
 
         ClientLoader.Chat.WriteLine($"时间已修改为{(Main.dayTime ? "白天" : "晚上")}", Color.Yellow);
@@ -642,7 +643,7 @@ internal class Utils
             Main.time = 0.0;
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine($"血月事件已{(Main.bloodMoon ? "开始" : "停止")}", Color.Yellow);
@@ -661,7 +662,7 @@ internal class Utils
             Main.eclipse = true; // 切换日食状态
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine($"日食事件已{(Main.eclipse ? "开始" : "停止")}", Color.Yellow);
@@ -686,7 +687,7 @@ internal class Utils
             Main.moonPhase = Main.rand.Next(1, 8); // 如果是满月则随机设置为其他月相
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine("已触发满月", Color.Yellow);
@@ -704,7 +705,7 @@ internal class Utils
             Main.StartRain();
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine($"下雨已{(Main.raining ? "开始" : "停止")}", Color.Yellow);
@@ -724,7 +725,7 @@ internal class Utils
             Main.StartSlimeRain(true);
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine($"史莱姆雨已{(Main.slimeRain ? "开始" : "停止")}", Color.Yellow);
@@ -746,7 +747,7 @@ internal class Utils
             ChangeSeverityIntentions();
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine($"沙尘暴已{(Sandstorm.Happening ? "开始" : "停止")}", Color.Yellow);
@@ -768,7 +769,7 @@ internal class Utils
             Sandstorm.IntendedSeverity = Main.rand.NextFloat() * 0.3f;
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
     }
 
@@ -787,7 +788,7 @@ internal class Utils
             LanternNight.ToggleManualLanterns();
         }
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
         ClientLoader.Chat.WriteLine($"灯笼夜已{(LanternNight.LanternsUp ? "开始" : "停止")}", Color.Yellow);
     }
@@ -798,7 +799,7 @@ internal class Utils
         WorldGen.spawnMeteor = false;
         WorldGen.dropMeteor();
 
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendData(MessageID.WorldData);
 
         ClientLoader.Chat.WriteLine("已触发陨石事件", Color.Yellow);
@@ -814,7 +815,7 @@ internal class Utils
 
         Main.anglerWhoFinishedToday.Clear();
         Main.anglerQuestFinished = false;
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
             NetMessage.SendAnglerQuest(Main.LocalPlayer.whoAmI);
 
         LastQuestsTime = now;
@@ -1502,7 +1503,7 @@ internal class Utils
         }
 
         // 发送网络同步消息
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
         {
             NetMessage.SendData(MessageID.PlayerControls, -1, -1, null, plr.whoAmI);
         }
@@ -1573,7 +1574,7 @@ internal class Utils
             {
                 npc.StrikeNPC(Config.MouseStrikeNPCVel, 0, 0, false, false, false);
                 plr.ApplyDamageToNPC(npc, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit > 0); // 应用伤害到NPC
-                if (Main.netMode == 2)
+                if (Main.netMode is 2)
                 {
                     npc.netUpdate = true; // 更新网络状态
                     NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit);
@@ -1583,7 +1584,7 @@ internal class Utils
             {
                 npc.StrikeNPC(plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, false, false, false);
                 plr.ApplyDamageToNPC(npc, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit > 0); // 应用伤害到NPC
-                if (Main.netMode == 2)
+                if (Main.netMode is 2)
                 {
                     npc.netUpdate = true; // 更新网络状态
                     NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit);
@@ -1604,7 +1605,7 @@ internal class Utils
         SoundEngine.PlaySound(SoundID.MenuTick);
         var plr = Main.player[Main.myPlayer];
         plr.Heal(Config.HealVal);
-        if (Main.netMode == 2)
+        if (Main.netMode is 2)
         {
             NetMessage.TrySendData(66, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
         }
@@ -1647,6 +1648,375 @@ internal class Utils
         }
 
         return count;
+    }
+    #endregion
+
+    #region 获取地图大小
+    public static string GetWorldWorldSize()
+    {
+        switch (Main.maxTilesX)
+        {
+            case 4200 when Main.maxTilesY == 1200:
+                return "小（4200x1200）";
+            case 6400 when Main.maxTilesY == 1800:
+                return "中（6400x1800）";
+            case 8400 when Main.maxTilesY == 2400:
+                return "大（8400x2400）";
+            default:
+                return "未知";
+        }
+
+    }
+    #endregion
+
+    #region 获取地图难度
+    public static string GetWorldGameMode()
+    {
+        string GameMode = "";
+        switch (Main.GameMode)
+        {
+            case 0: GameMode = "普通模式"; break;
+            case 1: GameMode = "专家模式"; break;
+            case 2:
+                if (!Main.zenithWorld)
+                    GameMode = "大师模式";
+                else
+                    GameMode = "传奇模式";
+                break;
+            case 3: GameMode = "旅途模式"; break;
+            default:
+                break;
+        }
+
+        return GameMode;
+    }
+    #endregion
+
+    #region 获取地图进度
+    public static (string mainProgress, string eventProgress) GetWorldProgress()
+    {
+        var mainProgress = new List<string>();
+        var eventProgress = new List<string>();
+
+        // 主进度收集
+        if (NPC.downedSlimeKing) mainProgress.Add("史王");
+        if (NPC.downedBoss1) mainProgress.Add("克眼");
+        if (NPC.downedBoss2 && (Utils.BestiaryEntry(13) || Utils.BestiaryEntry(14) || Utils.BestiaryEntry(15))) mainProgress.Add("世吞");
+        if (NPC.downedBoss2 && Utils.BestiaryEntry(266) && Utils.BestiaryEntry(267)) mainProgress.Add("克脑");
+
+        if (NPC.downedDeerclops) mainProgress.Add("鹿角怪");
+        if (NPC.downedBoss3) mainProgress.Add("骷髅王");
+        if (NPC.downedQueenBee) mainProgress.Add("蜂王");
+        if (Main.hardMode && (Utils.BestiaryEntry(NPCID.WallofFlesh) || Utils.BestiaryEntry(NPCID.WallofFleshEye))) mainProgress.Add("肉山");
+
+        if (NPC.downedMechBoss1) mainProgress.Add("毁灭者");
+        if (NPC.downedMechBoss2) mainProgress.Add("双子眼");
+        if (NPC.downedMechBoss3) mainProgress.Add("铁骷髅王");
+        if (NPC.downedPlantBoss) mainProgress.Add("世花");
+        if (NPC.downedGolemBoss) mainProgress.Add("石巨人");
+        if (NPC.downedQueenSlime) mainProgress.Add("史后");
+        if (NPC.downedEmpressOfLight) mainProgress.Add("光女");
+        if (NPC.downedFishron) mainProgress.Add("猪鲨");
+        if (NPC.downedAncientCultist) mainProgress.Add("拜月教");
+
+        bool allPillars = NPC.downedTowerSolar && NPC.downedTowerVortex &&
+                          NPC.downedTowerNebula && NPC.downedTowerStardust;
+        if (allPillars) mainProgress.Add("四柱后");
+        if (NPC.downedMoonlord) mainProgress.Add("月总");
+
+        // 事件进度收集
+        if (NPC.downedGoblins) eventProgress.Add("哥布林");
+        if (NPC.downedPirates) eventProgress.Add("海盗");
+        if (NPC.downedMartians) eventProgress.Add("火星");
+
+        if (NPC.downedHalloweenTree || NPC.downedHalloweenKing)
+            eventProgress.Add("南瓜月");
+
+        if (NPC.downedChristmasIceQueen || NPC.downedChristmasTree ||
+            NPC.downedChristmasSantank)
+            eventProgress.Add("霜月");
+
+        return (
+            mainProgress.Count > 0 ?
+            string.Join("、", mainProgress) : "无",
+            eventProgress.Count > 0 ?
+            string.Join("、", eventProgress) : "无");
+    }
+    #endregion
+
+    #region 判断玩家与NPC是否在指定格数范围内
+    public static bool IsWithinRange(Player plr, NPC npc, int tileRange)
+    {
+        // 计算玩家和NPC中心点坐标
+        Vector2 pCenter = plr.Center;
+        Vector2 nCenter = npc.Center;
+
+        // 计算两点间距离
+        float dX = pCenter.X - nCenter.X;
+        float dY = pCenter.Y - nCenter.Y;
+        float distance = (float)Math.Sqrt(dX * dX + dY * dY);
+
+        // 将格数转换为像素距离（1格 = 16像素）
+        float maxDistance = tileRange * 16f;
+
+        return distance <= maxDistance;
+    }
+    #endregion
+
+    #region 检查是否是最接近玩家的NPC
+    public static bool IsClosestNPC(Player plr, NPC currentNPC)
+    {
+        float closestDistance = float.MaxValue;
+        NPC closestNPC = new NPC();
+
+        // 遍历所有NPC寻找最近的
+        for (int i = 0; i < Main.maxNPCs; i++)
+        {
+            NPC npc = Main.npc[i];
+            if (!npc.active || !npc.townNPC || npc.SpawnedFromStatue || npc.type == 488)
+                continue;
+
+            if (IsWithinRange(plr, npc, Config.NurseRange))
+            {
+                float distance = Vector2.Distance(plr.Center, npc.Center);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestNPC = npc;
+                }
+            }
+        }
+
+        // 检查当前NPC是否是最接近的
+        return closestNPC != null && closestNPC.whoAmI == currentNPC.whoAmI;
+    }
+    #endregion
+
+    #region 自动对话消息方法（从Main类的GUIChatDrawInner方法抄来的)
+    public static void TalkText(Player plr)
+    {
+        if (Main.npc[plr.talkNPC].type == NPCID.Angler)
+        {
+            Main.npcChatCornerItem = 0;
+            SoundEngine.PlaySound(12);
+            bool flag4 = false;
+            if (!Main.anglerQuestFinished && !Main.anglerWhoFinishedToday.Contains(plr.name))
+            {
+                int num20 = plr.FindItem(Main.anglerQuestItemNetIDs[Main.anglerQuest]);
+                if (num20 != -1)
+                {
+                    plr.inventory[num20].stack--;
+                    if (plr.inventory[num20].stack <= 0)
+                    {
+                        plr.inventory[num20] = new Item();
+                    }
+
+                    flag4 = true;
+                    SoundEngine.PlaySound(24);
+                    plr.anglerQuestsFinished++;
+                    plr.GetAnglerReward(Main.npc[plr.talkNPC], Main.anglerQuestItemNetIDs[Main.anglerQuest]);
+                }
+            }
+
+            Main.npcChatText = Lang.AnglerQuestChat(flag4);
+            if (flag4)
+            {
+                Main.anglerQuestFinished = true;
+                if (Main.netMode == 1)
+                {
+                    NetMessage.SendData(75);
+                }
+                else
+                {
+                    Main.anglerWhoFinishedToday.Add(plr.name);
+                }
+
+                AchievementsHelper.HandleAnglerService();
+            }
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Merchant)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [1]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.ArmsDealer)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [2]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Mechanic)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [8]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.SantaClaus)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [9]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.OldMan)
+        {
+            if (Main.netMode == 0)
+            {
+                NPC.SpawnSkeletron(Main.myPlayer);
+            }
+            else
+            {
+                NetMessage.SendData(51, -1, -1, null, Main.myPlayer, 1f);
+            }
+
+            Main.npcChatText = "";
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Dryad)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [3]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Demolitionist)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [4]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Clothier)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [5]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.GoblinTinkerer)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [6]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Wizard)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [7]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Truffle)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [10]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Steampunker)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [11]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.DyeTrader)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [12]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.PartyGirl)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [13]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Cyborg)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [14]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Painter)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [15]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.WitchDoctor)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [16]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Pirate)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [17]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Stylist)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [18]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.TravellingMerchant)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [19]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.SkeletonMerchant)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [20]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.DD2Bartender)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [21]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Golfer)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [22]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.BestiaryGirl)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [23]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Princess)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [24]);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.Guide)
+        {
+            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
+        }
+        else if (Main.npc[plr.talkNPC].type == NPCID.TaxCollector)
+        {
+            if (plr.taxMoney > 0)
+            {
+                int taxMoney3 = plr.taxMoney;
+                taxMoney3 = (int)(taxMoney3 / plr.currentShoppingSettings.PriceAdjustment);
+                while (taxMoney3 > 0)
+                {
+                    EntitySource_Gift source = new EntitySource_Gift(Main.npc[plr.talkNPC]);
+                    if (taxMoney3 > 1000000)
+                    {
+                        int num21 = taxMoney3 / 1000000;
+                        taxMoney3 -= 1000000 * num21;
+                        int number = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 74, num21);
+                        if (Main.netMode == 1)
+                        {
+                            NetMessage.SendData(21, -1, -1, null, number, 1f);
+                        }
+
+                        continue;
+                    }
+
+                    if (taxMoney3 > 10000)
+                    {
+                        int num22 = taxMoney3 / 10000;
+                        taxMoney3 -= 10000 * num22;
+                        int number2 = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 73, num22);
+                        if (Main.netMode == 1)
+                        {
+                            NetMessage.SendData(21, -1, -1, null, number2, 1f);
+                        }
+
+                        continue;
+                    }
+
+                    if (taxMoney3 > 100)
+                    {
+                        int num23 = taxMoney3 / 100;
+                        taxMoney3 -= 100 * num23;
+                        int number3 = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 72, num23);
+                        if (Main.netMode == 1)
+                        {
+                            NetMessage.SendData(21, -1, -1, null, number3, 1f);
+                        }
+
+                        continue;
+                    }
+
+                    int num24 = taxMoney3;
+                    if (num24 < 1)
+                    {
+                        num24 = 1;
+                    }
+
+                    taxMoney3 -= num24;
+                    int number4 = Item.NewItem(source, (int)plr.position.X, (int)plr.position.Y, plr.width, plr.height, 71, num24);
+                    if (Main.netMode == 1)
+                    {
+                        NetMessage.SendData(21, -1, -1, null, number4, 1f);
+                    }
+                }
+
+                Main.npcChatText = Lang.dialog(Main.rand.Next(380, 382));
+                plr.taxMoney = 0;
+            }
+            else
+            {
+                Main.npcChatText = Lang.dialog(Main.rand.Next(390, 401));
+            }
+        }
     }
     #endregion
 }

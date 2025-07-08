@@ -77,24 +77,29 @@ public static class RecipeHooks
     private delegate void orig_FindRecipes(bool canDelayCheck);
     private static void OnFindRecipes(orig_FindRecipes orig, bool canDelayCheck)
     {
+        // 处理延迟检查情况
         if (canDelayCheck)
         {
             orig(canDelayCheck);
             return;
         }
 
+        // 保存当前聚焦的配方信息
         int oldRecipe = Main.availableRecipe[Main.focusRecipe];
         float focusY = Main.availableRecipeY[Main.focusRecipe];
-        Recipe.ClearAvailableRecipes(); // 清理可用配方
+
+        // 清理可用配方
+        Recipe.ClearAvailableRecipes();
 
         // 先添加自定义配方
         OnPostFindRecipes?.Invoke();
 
-        if (!Main.guideItem.IsAir && Main.guideItem.Name != "")
+        // 处理向导物品的配方
+        if (!Main.guideItem.IsAir && !string.IsNullOrEmpty(Main.guideItem.Name))
         {
-            CollectGuideRecipes(); // 处理向导物品的配方
-            TryRefocusingRecipe(oldRecipe); // 尝试重新聚焦配方
-            VisuallyRepositionRecipes(focusY); // 视觉定位配方
+            CollectGuideRecipes();
+            TryRefocusingRecipe(oldRecipe);
+            VisuallyRepositionRecipes(focusY);
             return;
         }
 
@@ -106,33 +111,37 @@ public static class RecipeHooks
         // 获取原版收集的物品数据
         var collectedItems = GetCollectedItems();
 
+        // 遍历所有配方
         for (int i = 0; i < Recipe.maxRecipes; i++)
         {
             Recipe recipe = Main.recipe[i];
-            if (recipe.createItem.type == 0) continue; // 跳过空配方
 
-            // 检查原始条件
-            bool meetsConditions = true;
-            bool meetsStationConditions = true;
+            // 跳过空配方
+            if (recipe.createItem.type == 0) continue;
 
-            // 使用反射得到的委托检查条件
-            if (PlayerMeetsTileRequirements != null)
-            {
-                meetsConditions &= PlayerMeetsTileRequirements(plr, recipe);
-                meetsStationConditions = meetsConditions; // 单独记录工作站条件
-            }
+            // 检查工作站条件
+            bool meetsStationConditions = PlayerMeetsTileRequirements != null && PlayerMeetsTileRequirements(plr, recipe);
 
-            // 检查环境条件（如血月、夜晚等）
-            if (PlayerMeetsEnvironmentConditions != null)
-            {
-                meetsConditions &= PlayerMeetsEnvironmentConditions(plr, recipe);
-            }
+            // 检查环境条件
+            bool meetsEnvironmentConditions = PlayerMeetsEnvironmentConditions != null && PlayerMeetsEnvironmentConditions(plr, recipe);
 
             // 检查材料是否足够
-            meetsConditions &= Recipe.CollectedEnoughItemsToCraftRecipeNew(recipe);
+            bool meetsMaterialConditions = Recipe.CollectedEnoughItemsToCraftRecipeNew(recipe);
+
+            // 初始条件检查结果
+            bool meetsConditions = meetsStationConditions &&
+                                  meetsEnvironmentConditions &&
+                                  meetsMaterialConditions;
 
             // 创建事件参数
-            var args = new RecipeCheckEventArgs(recipe, plr, meetsConditions, meetsStationConditions, i, collectedItems);
+            var args = new RecipeCheckEventArgs(
+                recipe,
+                plr,
+                meetsConditions,
+                meetsStationConditions,
+                i,
+                collectedItems
+            );
 
             // 触发自定义配方检查事件
             OnRecipeCheck?.Invoke(args);
@@ -144,6 +153,7 @@ public static class RecipeHooks
             }
         }
 
+        // 恢复配方聚焦和位置
         TryRefocusingRecipe(oldRecipe);
         VisuallyRepositionRecipes(focusY);
     }
@@ -151,14 +161,14 @@ public static class RecipeHooks
 
     #region 从Recipe类里抄来的辅助方法
     // 添加可用配方
-    private static void AddToAvailableRecipes(int recipeIndex)
+    public static void AddToAvailableRecipes(int recipeIndex)
     {
         Main.availableRecipe[Main.numAvailableRecipes] = recipeIndex;
         Main.numAvailableRecipes++;
     }
 
     // 尝试重新聚焦配方
-    private static void TryRefocusingRecipe(int oldRecipe)
+    public static void TryRefocusingRecipe(int oldRecipe)
     {
         for (int i = 0; i < Main.numAvailableRecipes; i++)
         {
@@ -177,7 +187,7 @@ public static class RecipeHooks
     }
 
     // 视觉定位配方
-    private static void VisuallyRepositionRecipes(float focusY)
+    public static void VisuallyRepositionRecipes(float focusY)
     {
         if (Main.numAvailableRecipes == 0) return;
 
@@ -189,7 +199,7 @@ public static class RecipeHooks
     }
 
     // 收集向导配方
-    private static void CollectGuideRecipes()
+    public static void CollectGuideRecipes()
     {
         int type = Main.guideItem.type;
         for (int i = 0; i < Recipe.maxRecipes; i++)
@@ -239,6 +249,7 @@ public static class RecipeHooks
         if (recipeIndex >= 0 && recipeIndex < Recipe.maxRecipes)
         {
             Main.recipe[recipeIndex] = new Recipe();
+            Main.availableRecipe[recipeIndex] = 0;
         }
     }
 
@@ -254,6 +265,37 @@ public static class RecipeHooks
         }
         return -1;
     }
+
+    // 重建配方方法
+    public static void RebuildCustomRecipes()
+    {
+        // 先移除所有自定义配方
+        foreach (var recipe in Config.CustomRecipes)
+        {
+            if (recipe.Index != -1)
+            {
+                RemoveRecipe(recipe.Index);
+            }
+        }
+
+        // 清除缓存
+        CustomRecipeItems.Clear();
+        CustomRecipeIndexes.Clear();
+
+        // 重新添加所有自定义配方
+        foreach (var recipe in Config.CustomRecipes)
+        {
+            if (recipe.Index != -1)
+            {
+                AddToAvailableRecipes(recipe.Index);
+            }
+        }
+
+        // 重新加载配方
+        Recipe.FindRecipes();
+        TryRefocusingRecipe(Main.availableRecipe[Main.focusRecipe]);
+        VisuallyRepositionRecipes(Main.availableRecipeY[Main.focusRecipe]);
+    }
     #endregion
 
     #region 复用已收集的物品
@@ -263,7 +305,7 @@ public static class RecipeHooks
         {
             if (item.type <= 0) continue;
 
-            // 检查物品组（如果适用）
+            // 检查物品组
             if (RecipeGroup.recipeGroups != null)
             {
                 foreach (var group in RecipeGroup.recipeGroups.Values)
@@ -442,6 +484,7 @@ public static class RecipeHooks
         foreach (int tileId in data.RequiredTile)
         {
             if (tileIndex >= Recipe.maxRequirements) break;
+            if (tileId <= 0) continue; // 跳过无效ID（包括0）
 
             recipe.requiredTile[tileIndex] = tileId;
             tileIndex++;
@@ -483,7 +526,7 @@ public static class RecipeHooks
             {
                 if (tileId > 0)
                 {
-                    myRecipe.RequiredTile.Append(tileId);
+                    myRecipe.RequiredTile.Add(tileId);
                     break;
                 }
             }
