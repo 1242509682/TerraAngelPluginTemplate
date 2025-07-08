@@ -1963,27 +1963,34 @@ internal class Utils
     private static void HandleTaxCollectorInteraction(Player plr)
     {
         // 如果启用了自定义随机奖励
-        if (Config.TaxCollectorCustomReward && Config.TaxCollectorRewards.Count > 0)
+        if (Config.TaxCollectorCustomReward)
         {
-            bool receivedAny = false;
-
-            // 给予所有启用的奖励物品（根据概率）
-            foreach (var reward in Config.TaxCollectorRewards)
+            if (Config.TaxCollectorRewards.Count > 0)
             {
-                if (reward.Enabled && Main.rand.Next(100) < reward.Chance)
+                bool receivedAny = false;
+
+                // 给予所有启用的奖励物品（根据概率）
+                foreach (var reward in Config.TaxCollectorRewards)
                 {
-                    GiveItem(plr, reward.ItemID, reward.Quantity);
-                    receivedAny = true;
+                    if (reward.Enabled && Main.rand.Next(100) < reward.Chance)
+                    {
+                        GiveItem(plr, reward.ItemID, reward.Quantity);
+                        receivedAny = true;
 
-                    // 显示获得信息
-                    string itemName = Lang.GetItemNameValue(reward.ItemID);
-                    ClientLoader.Chat.WriteLine($"获得了 {itemName} x{reward.Quantity}", Color.Gold);
+                        // 显示获得信息
+                        string itemName = Lang.GetItemNameValue(reward.ItemID);
+                        ClientLoader.Chat.WriteLine($"获得了 {itemName} x{reward.Quantity}", Color.Gold);
+                    }
                 }
-            }
 
-            if (receivedAny)
-            {
-                Main.npcChatText = Lang.dialog(Main.rand.Next(380, 382));
+                if (receivedAny)
+                {
+                    Main.npcChatText = Lang.dialog(Main.rand.Next(380, 382));
+                }
+                else
+                {
+                    Main.npcChatText = "这次没有合适的奖励给你...";
+                }
             }
             else
             {
