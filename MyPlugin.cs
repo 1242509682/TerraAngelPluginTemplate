@@ -14,7 +14,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 1, 2);
+    public Version Version => new(1, 1, 3);
     #endregion
 
     #region 注册与卸载
@@ -98,6 +98,15 @@ public class MyPlugin(string path) : Plugin(path)
         Config = Configuration.Read();
         Config.Write();
         ClientLoader.Console.WriteLine($"[{Name}] 配置文件已重载", color);
+    }
+    #endregion
+
+    #region 图格编辑事件
+    private void OnTileEdit(object? sender, TileKillEventArgs e)
+    {
+        if (!Config.Enabled) return;
+
+        Utils.VeinMiner(e.X, e.Y); // 连锁挖矿方法
     }
     #endregion
 
@@ -217,19 +226,7 @@ public class MyPlugin(string path) : Plugin(path)
     }
     #endregion
 
-    #region 图格编辑事件
-    public static Point[]? TempPoints; // 临时点
-    private void OnTileEdit(object? sender, TileKillEventArgs e)
-    {
-        if (!Config.Enabled) return;
-
-        Utils.VeinMiner(e.X, e.Y); // 连锁挖矿方法
-    }
-    #endregion
-
     #region NPC更新事件
-    // 存储每个NPC的最近对话时间
-    public static readonly Dictionary<int, long> TalkTimes = new Dictionary<int, long>();
     private void OnUpdateNPC(object? sender, NPCUpdateEventArgs e)
     {
         var npc = e.npc;

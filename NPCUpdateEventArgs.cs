@@ -54,7 +54,7 @@ internal record NPCInfo(int ID, string Name, bool IsTownNPC);
 public class RewardItem
 {
     public int ItemID { get; set; } = Terraria.ID.ItemID.PlatinumCoin;
-    public int Quantity { get; set; } = 1;
+    public int Stack { get; set; } = 1;
     public int Chance { get; set; } = 100;
     public bool Enabled { get; set; } = true;
 }

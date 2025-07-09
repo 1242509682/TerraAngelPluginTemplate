@@ -1,6 +1,5 @@
 ﻿using ImGuiNET;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.Numerics;
 using TerraAngel;
@@ -62,6 +61,7 @@ public class UITool : Tool
         bool applyIgnoreGravity = Config.IgnoreGravity; // 启用忽略重力药水效果
 
         bool AutoClearAngel = Config.ClearAnglerQuests; // 清除钓鱼任务开关
+        bool ClearFish = Config.ClearFish; // 消耗任务鱼开关
 
         bool nPCAutoHeal = Config.NPCAutoHeal; // NPC自动回血开关
         float NPCHealVel = Config.NPCHealVel; // 普通NPC回血百分比
@@ -76,7 +76,22 @@ public class UITool : Tool
         bool autoTalkNPC = Config.AutoTalkNPC; // NPC自动对话开关
         int waitTime = Config.AutoTalkNPCWaitTimes;  // NPC自动对话等待时间
         int NpcRange = Config.AutoTalkRange; // 检测格数
-
+        bool TalkingNpcImmortal = Config.TalkingNpcImmortal;
+        // 在NPC管理区域开始时定义所有NPC设置变量
+        bool helpTextForGuide = Config.HelpTextForGuide;
+        bool inGuideCraftMenu = Config.InGuideCraftMenu;
+        bool openShopForPartyGirl = Config.OpenShopForPartyGirl;
+        bool swapMusicing = Config.SwapMusicing;
+        bool openShopForDD2Bartender = Config.OpenShopForDD2Bartender;
+        bool helpTextFoDD2Bartender = Config.HelpTextForDD2Bartender;
+        bool openShopForDryad = Config.OpenShopForDryad;
+        bool checkBiomes = Config.CheckBiomes;
+        bool openShopForGoblin = Config.OpenShopForGoblin;
+        bool inReforgeMenu = Config.InReforgeMenu;
+        bool openHairWindow = Config.OpenHairWindow;
+        bool openShopForStylist = Config.OpenShopForStylist;
+        bool openShopForPainter = Config.OpenShopForPainter;
+        bool openShopForWall = Config.OpenShopForWall;
         bool taxCollectorCustomReward = Config.TaxCollectorCustomReward;
 
         // 绘制插件设置界面
@@ -420,8 +435,8 @@ public class UITool : Tool
                 DrawKeySelector("按键", ref Config.NPCReliveKey, ref EditNPCReliveKey);
 
                 // npc自动回血
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动回血");
                 ImGui.Separator();
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动回血");
                 ImGui.Checkbox("NPC自动回血", ref nPCAutoHeal);
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.NPCAutoHealKey, ref EditNPCAutoHealKey);
@@ -459,15 +474,24 @@ public class UITool : Tool
                     }
                 }
 
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动对话");
+                // npc自动对话
                 ImGui.Separator();
-
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动对话");
                 // 自动对话开关
                 ImGui.Checkbox("NPC自动对话", ref autoTalkNPC);
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.AutoTalkKey, ref EditAutoTalkKey);
                 if (autoTalkNPC)
                 {
+                    ImGui.Checkbox("对话NPC无敌", ref TalkingNpcImmortal);
+                    if (ImGui.IsItemHovered())
+                    {
+                        string tooltipText = "使正在对话的NPC自动无敌(对护士/渔夫无效)\n" +
+                                             "因为护士/渔夫有自动重置对话npc索引功能";
+
+                        ImGui.SetTooltip(tooltipText);
+                    }
+
                     ImGui.Text("等待时间:");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200);
@@ -476,62 +500,33 @@ public class UITool : Tool
                     ImGui.Text("检测格数:");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##NurseRange", ref NpcRange, 1, 30, "%d 格");
+                    ImGui.SliderInt("##NurseRange", ref NpcRange, 1, 85, "%d 格");
 
-                    // 自动清理渔夫任务
-                    ImGui.Checkbox("清渔夫任务", ref AutoClearAngel);
-                    if (ImGui.IsItemHovered())
-                        ImGui.SetTooltip("按Esc键关闭聊天窗口立即完成任务(不消耗任务鱼)");
-                    ImGui.SameLine();
-                    DrawKeySelector("按键", ref Config.ClearQuestsKey, ref EditClearAnglerQuestsKey);
-
-                    // 税收官随机奖励
-                    ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "税收官奖励设置");
-                    ImGui.Separator();
-                    ImGui.Checkbox("启用税收官随机奖励", ref taxCollectorCustomReward);
-                    if (taxCollectorCustomReward)
+                    if (ImGui.Button("NPC自动对话行为设置"))
                     {
-                        // 添加物品按钮
-                        if (ImGui.Button("从手上添加物品"))
-                        {
-                            Utils.AddRewardFromHeldItem();
-                        }
+                        ShowNPCBehaviorWindows = !ShowNPCBehaviorWindows;
+                    }
 
-                        // 管理列表按钮
-                        ImGui.SameLine();
-                        if (ImGui.Button("管理奖励列表"))
-                        {
-                            ShowRewardEditor = !ShowRewardEditor;
-                        }
-
-                        // 绘制编辑器窗口
-                        if (ShowRewardEditor)
-                        {
-                            DrawRewardEditorWindow();
-                        }
-
-                        // 显示概率信息
-                        ImGui.SameLine();
-                        int enabledCount = Config.TaxCollectorRewards.Count(r => r.Enabled);
-                        if (enabledCount > 0)
-                        {
-                            int baseChance = 100 / enabledCount;
-                            int remainder = 100 % enabledCount;
-
-                            ImGui.Text($"启用物品数: {enabledCount}, 平均概率: {baseChance}%");
-                            if (remainder > 0)
-                            {
-                                ImGui.Text($"前 {remainder} 个启用的物品额外增加1%");
-                            }
-                        }
+                    // 渲染NPC行为设置窗口
+                    if (ShowNPCBehaviorWindows)
+                    {
+                        DrawNPCBehaviorSettingsWindow(ref helpTextForGuide, ref inGuideCraftMenu,
+                                                      ref openShopForPartyGirl, ref swapMusicing,
+                                                      ref openShopForDD2Bartender, ref helpTextFoDD2Bartender,
+                                                      ref openShopForDryad, ref checkBiomes,
+                                                      ref openShopForGoblin, ref inReforgeMenu,
+                                                      ref openHairWindow, ref openShopForStylist,
+                                                      ref openShopForPainter, ref openShopForWall,
+                                                      ref AutoClearAngel, ref ClearFish,
+                                                      ref taxCollectorCustomReward);
                     }
 
                     // 显示当前对话状态
                     ImGui.Separator();
                     ImGui.Text("当前对话状态:");
-                    if (TalkTimes.Count > 0)
+                    if (Utils.TalkTimes.Count > 0)
                     {
-                        foreach (var kvp in TalkTimes)
+                        foreach (var kvp in Utils.TalkTimes)
                         {
                             int index = kvp.Key;
                             if (index >= 0 && index < Main.maxNPCs && Main.npc[index].active)
@@ -546,7 +541,8 @@ public class UITool : Tool
                                 ImGui.SameLine();
                                 if (ImGui.Button($"取消##{index}"))
                                 {
-                                    TalkTimes.Remove(index);
+                                    Utils.TalkTimes.Remove(index);
+                                    plr.SetTalkNPC(-1, Main.netMode is 2); // 自动关闭对话栏
                                 }
                             }
                         }
@@ -585,8 +581,6 @@ public class UITool : Tool
 
         Config.IgnoreGravity = applyIgnoreGravity; // 忽略重力药水效果开关
 
-        Config.ClearAnglerQuests = AutoClearAngel; // 清除钓鱼任务开关
-
         Config.NPCAutoHeal = nPCAutoHeal; // NPC自动回血开关
         Config.NPCHealVel = NPCHealVel; // 普通NPC回血百分比
         Config.NPCHealInterval = NPCHealVelInterval; // 普通NPC回血间隔(秒)
@@ -600,6 +594,24 @@ public class UITool : Tool
         Config.AutoTalkNPC = autoTalkNPC; // Npc自动对话开关
         Config.AutoTalkNPCWaitTimes = waitTime; // NPC自动对话等待时间
         Config.AutoTalkRange = NpcRange; // 检测格数
+        Config.TalkingNpcImmortal = TalkingNpcImmortal;
+
+        Config.ClearAnglerQuests = AutoClearAngel; // 清除钓鱼任务开关
+        Config.ClearFish = ClearFish; //消耗任务鱼开关
+        Config.HelpTextForGuide = helpTextForGuide;
+        Config.InGuideCraftMenu = inGuideCraftMenu;
+        Config.OpenShopForPartyGirl = openShopForPartyGirl;
+        Config.SwapMusicing = swapMusicing;
+        Config.OpenShopForDD2Bartender = openShopForDD2Bartender;
+        Config.HelpTextForDD2Bartender = helpTextFoDD2Bartender;
+        Config.OpenShopForDryad = openShopForDryad;
+        Config.CheckBiomes = checkBiomes;
+        Config.OpenShopForGoblin = openShopForGoblin;
+        Config.InReforgeMenu = inReforgeMenu;
+        Config.OpenHairWindow = openHairWindow;
+        Config.OpenShopForStylist = openShopForStylist;
+        Config.OpenShopForPainter = openShopForPainter;
+        Config.OpenShopForWall = openShopForWall;
         Config.TaxCollectorCustomReward = taxCollectorCustomReward; // 税收官自定义奖励开关
 
         // 保存按钮
@@ -623,6 +635,187 @@ public class UITool : Tool
     }
     #endregion
 
+    #region 渲染NPC自动对话触发行为的窗口
+    private bool ShowNPCBehaviorWindows = false;
+    private void DrawNPCBehaviorSettingsWindow(ref bool helpTextForGuide, ref bool inGuideCraftMenu,
+                                              ref bool openShopForPartyGirl, ref bool swapMusicing,
+                                              ref bool openShopForDD2Bartender, ref bool helpTextFoDD2Bartender,
+                                              ref bool openShopForDryad, ref bool checkBiomes,
+                                              ref bool openShopForGoblin, ref bool inReforgeMenu,
+                                              ref bool openHairWindow, ref bool openShopForStylist,
+                                              ref bool openShopForPainter, ref bool openShopForWall,
+                                              ref bool AutoClearAngel, ref bool ClearFish,
+                                              ref bool taxCollectorCustomReward)
+    {
+        ImGui.Begin("NPC行为设置", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse);
+
+        ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "配置不同NPC的对话行为");
+        ImGui.Separator();
+        // 向导设置
+        if (ImGui.TreeNodeEx("向导", ImGuiTreeNodeFlags.Framed))
+        {
+            ImGui.Checkbox("显示指导语提示", ref helpTextForGuide);
+            ImGui.Checkbox("打开制作栏", ref inGuideCraftMenu);
+            ImGui.TreePop();
+        }
+
+        // 派对女孩设置
+        if (ImGui.TreeNodeEx("派对女孩", ImGuiTreeNodeFlags.Framed))
+        {
+            ImGui.Checkbox("打开商店", ref openShopForPartyGirl);
+            ImGui.Checkbox("切换音乐", ref swapMusicing);
+            ImGui.TreePop();
+        }
+
+        // 酒馆老板设置
+        if (ImGui.TreeNodeEx("酒馆老板", ImGuiTreeNodeFlags.Framed))
+        {
+            ImGui.Checkbox("打开商店", ref openShopForDD2Bartender);
+            ImGui.Checkbox("显示指导语提示", ref helpTextFoDD2Bartender);
+            ImGui.TreePop();
+        }
+
+        // 渔夫设置
+        if (ImGui.TreeNodeEx("渔夫", ImGuiTreeNodeFlags.Framed))
+        {
+            ImGui.Checkbox("清渔夫任务", ref AutoClearAngel);
+            ImGui.SameLine();
+            DrawKeySelector("按键", ref Config.ClearQuestsKey, ref EditClearAnglerQuestsKey);
+            ImGui.Checkbox("消耗任务鱼", ref ClearFish);
+            ImGui.TreePop();
+        }
+
+        // 税收官设置
+        if (ImGui.TreeNodeEx("税收官", ImGuiTreeNodeFlags.Framed))
+        {
+            ImGui.Checkbox("随机奖励", ref taxCollectorCustomReward);
+            if (taxCollectorCustomReward)
+            {
+                // 添加物品按钮
+                if (ImGui.Button("从手上添加物品"))
+                {
+                    Utils.AddRewardFromHeldItem();
+                }
+
+                // 管理列表按钮
+                ImGui.SameLine();
+                if (ImGui.Button("管理奖励列表"))
+                {
+                    ShowRewardEditor = !ShowRewardEditor;
+                }
+
+                // 绘制编辑器窗口
+                if (ShowRewardEditor)
+                {
+                    DrawRewardEditorWindow();
+                }
+
+                // 显示概率信息
+                ImGui.SameLine();
+                int enabledCount = Config.TaxCollectorRewards.Count(r => r.Enabled);
+                if (enabledCount > 0)
+                {
+                    int baseChance = 100 / enabledCount;
+                    int remainder = 100 % enabledCount;
+
+                    ImGui.Text($"启用物品数: {enabledCount}, 平均概率: {baseChance}%");
+                    if (remainder > 0)
+                    {
+                        ImGui.Text($"前 {remainder} 个启用的物品额外增加1%");
+                    }
+                }
+            }
+            ImGui.TreePop();
+        }
+
+        // 树妖设置
+        if (ImGui.TreeNodeEx("树妖", ImGuiTreeNodeFlags.Framed))
+        {
+            ImGui.Checkbox("打开商店", ref openShopForDryad);
+            ImGui.Checkbox("检查环境", ref checkBiomes);
+            ImGui.TreePop();
+        }
+
+        // 哥布林工匠设置 - 使用互斥单选按钮
+        if (ImGui.TreeNodeEx("哥布林工匠", ImGuiTreeNodeFlags.Framed))
+        {
+            // 使用互斥的单选按钮
+            ImGui.Text("选择行为:");
+            ImGui.Indent();
+
+            if (ImGui.RadioButton("打开商店", openShopForGoblin))
+            {
+                // 选择打开商店时，关闭重铸界面
+                openShopForGoblin = true;
+                inReforgeMenu = false;
+            }
+
+            if (ImGui.RadioButton("打开重铸界面", inReforgeMenu))
+            {
+                // 选择重铸界面时，关闭商店
+                openShopForGoblin = false;
+                inReforgeMenu = true;
+            }
+
+            ImGui.Unindent();
+
+            ImGui.TreePop();
+        }
+
+        // 发型师设置 - 使用互斥单选按钮
+        if (ImGui.TreeNodeEx("发型师", ImGuiTreeNodeFlags.Framed))
+        {
+            // 使用互斥的单选按钮
+            ImGui.Text("选择行为:");
+            ImGui.Indent();
+
+            if (ImGui.RadioButton("打开发型窗口", openHairWindow))
+            {
+                // 选择发型窗口时，关闭商店
+                openHairWindow = true;
+                openShopForStylist = false;
+            }
+
+            if (ImGui.RadioButton("打开商店", openShopForStylist))
+            {
+                // 选择商店时，关闭发型窗口
+                openHairWindow = false;
+                openShopForStylist = true;
+            }
+
+            ImGui.Unindent();
+            ImGui.TreePop();
+        }
+
+        // 油漆工设置 - 使用互斥单选按钮
+        if (ImGui.TreeNodeEx("油漆工", ImGuiTreeNodeFlags.Framed))
+        {
+            // 使用互斥的单选按钮
+            ImGui.Text("选择行为:");
+            ImGui.Indent();
+
+            if (ImGui.RadioButton("打开喷漆商店", openShopForPainter))
+            {
+                // 选择喷漆商店时，关闭壁纸商店
+                openShopForPainter = true;
+                openShopForWall = false;
+            }
+
+            if (ImGui.RadioButton("打开壁纸商店", openShopForWall))
+            {
+                // 选择壁纸商店时，关闭喷漆商店
+                openShopForPainter = false;
+                openShopForWall = true;
+            }
+
+            ImGui.Unindent();
+            ImGui.TreePop();
+        }
+
+        ImGui.End();
+    } 
+    #endregion
+
     #region 税收官随机奖励编辑器窗口
     private static bool ShowRewardEditor = false;
     private void DrawRewardEditorWindow()
@@ -637,7 +830,7 @@ public class UITool : Tool
         {
             var reward = Config.TaxCollectorRewards[i];
             bool rwenabled = reward.Enabled;
-            int quantity = reward.Quantity;
+            int quantity = reward.Stack;
 
             ImGui.PushID($"reward_{i}");
 
@@ -660,7 +853,7 @@ public class UITool : Tool
             ImGui.SetNextItemWidth(80);
             if (ImGui.InputInt("##quantity", ref quantity))
             {
-                reward.Quantity = Math.Max(1, quantity);
+                reward.Stack = Math.Max(1, quantity);
             }
 
             // 概率显示

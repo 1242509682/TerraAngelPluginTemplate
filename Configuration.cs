@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System.Numerics;
 using TerraAngel;
+using Terraria.ID;
 
 namespace MyPlugin;
 
@@ -128,12 +129,44 @@ internal class Configuration
     public int AutoTalkRange { get; set; } = 2;
     [JsonProperty("NPC自动对话等待帧数", Order = 22)]
     public int AutoTalkNPCWaitTimes { get; set; } = 30;
+    [JsonProperty("自动对话NPC无敌", Order = 22)]
+    public bool TalkingNpcImmortal { get; set; } = true;
     [JsonProperty("清除钓鱼任务", Order = 22)]
     public bool ClearAnglerQuests { get; set; } = true;
     [JsonProperty("清除钓鱼任务按键", Order = 22)]
     public Keys ClearQuestsKey = Keys.F;
+    [JsonProperty("消耗任务鱼", Order = 22)]
+    public bool ClearFish { get; set; } = false;
+    [JsonProperty("派对女孩切换音乐", Order = 22)]
+    public bool SwapMusicing { get; set; } = true;
+    [JsonProperty("派对女孩打开商店", Order = 22)]
+    public bool OpenShopForPartyGirl { get; set; } = true;
+    [JsonProperty("向导是否提示指导语", Order = 22)]
+    public bool HelpTextForGuide { get; set; } = true;
+    [JsonProperty("向导打开制作栏", Order = 22)]
+    public bool InGuideCraftMenu { get; set; } = true;
+    [JsonProperty("酒馆老板打开商店", Order = 22)]
+    public bool OpenShopForDD2Bartender { get; set; } = true;
+    [JsonProperty("酒馆老板是否提示指导语", Order = 22)]
+    public bool HelpTextForDD2Bartender { get; set; } = true;
+    [JsonProperty("油漆工打开喷漆商店", Order = 22)]
+    public bool OpenShopForPainter { get; set; } = true;
+    [JsonProperty("油漆工打开壁纸商店", Order = 22)]
+    public bool OpenShopForWall { get; set; } = false;
+    [JsonProperty("树妖打开商店", Order = 22)]
+    public bool OpenShopForDryad { get; set; } = true;
+    [JsonProperty("树妖检查环境", Order = 22)]
+    public bool CheckBiomes { get; set; } = true;
+    [JsonProperty("哥布林打开商店", Order = 22)]
+    public bool OpenShopForGoblin { get; set; } = false;
+    [JsonProperty("哥布林打开重铸界面", Order = 22)]
+    public bool InReforgeMenu { get; set; } = true;
+    [JsonProperty("发型师卖头发", Order = 22)]
+    public bool OpenHairWindow { get; set; } = true;
+    [JsonProperty("发型师打开商店", Order = 22)]
+    public bool OpenShopForStylist { get; set; } = false;
     [JsonProperty("税务官自定义奖励", Order = 22)]
-    public bool TaxCollectorCustomReward { get; set; }
+    public bool TaxCollectorCustomReward { get; set; } = false;
     [JsonProperty("税务官奖励列表", Order = 22)]
     public List<RewardItem> TaxCollectorRewards { get; set; } = new List<RewardItem>();
 
@@ -169,8 +202,6 @@ internal class Configuration
         TrashSyncInterval = 10;
         TrashItems = new List<TrashData>();
         CustomTeleportPoints = new Dictionary<string, Vector2>();
-        ClearAnglerQuests = true;
-        ClearQuestsKey = Keys.F;
         NPCAutoHeal = false;
         NPCAutoHealKey = Keys.None;
         NPCHealVel = 1;
@@ -224,6 +255,35 @@ internal class Configuration
         AutoTalkKey = Keys.Y;
         AutoTalkNPCWaitTimes = 30;
         AutoTalkRange = 2;
+        TalkingNpcImmortal = true;
+        ClearAnglerQuests = true;
+        ClearQuestsKey = Keys.F;
+        ClearFish = false;
+        SwapMusicing = true;
+        OpenShopForPartyGirl = true;
+        HelpTextForGuide = true;
+        InGuideCraftMenu = true;
+        OpenShopForDD2Bartender = true; 
+        HelpTextForDD2Bartender = true;
+        OpenShopForPainter = true;
+        OpenShopForWall = false;
+        OpenShopForDryad = true;
+        CheckBiomes = true;
+        OpenShopForGoblin = false;
+        InReforgeMenu = true;
+        OpenHairWindow = true;
+        OpenShopForStylist = false;
+        TaxCollectorCustomReward = false;
+        TaxCollectorRewards = new List<RewardItem> 
+        { 
+            new RewardItem() 
+            { 
+                Enabled = true, 
+                ItemID = ItemID.PlatinumCoin, 
+                Stack = 1, 
+                Chance = 100
+            } 
+        };
     }
     #endregion
 

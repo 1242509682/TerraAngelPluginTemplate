@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Reflection;
 using Microsoft.Xna.Framework;
 using TerraAngel;
 using TerraAngel.Input;
@@ -9,6 +10,10 @@ using Terraria.GameContent;
 using Terraria.GameContent.Achievements;
 using Terraria.GameContent.Events;
 using Terraria.ID;
+using Terraria.Localization;
+using Terraria.Map;
+using Terraria.Net;
+using Terraria.UI.Gamepad;
 using static MyPlugin.MyPlugin;
 using static MyPlugin.UITool;
 
@@ -399,7 +404,7 @@ internal class Utils
     #endregion
 
     #region 给予玩家物品的方法 (简化版)
-    public static void GiveItem(Player plr, int type, int stack)
+    public static void GiveItem(Player plr, int type, int stack, bool Gift = false)
     {
         if (stack <= 0) return;
 
@@ -448,7 +453,11 @@ internal class Utils
         {
             int spawnStack = Math.Min(maxStack, stack);
             stack -= spawnStack;
-            plr.QuickSpawnItem(new EntitySource_DebugCommand(), type, spawnStack);
+            if (!Gift)
+                plr.QuickSpawnItem(new EntitySource_DebugCommand(), type, spawnStack);
+            else
+                plr.QuickSpawnItem(new EntitySource_Gift(Main.npc[plr.talkNPC]), type, spawnStack);
+
         }
     }
     #endregion
@@ -1730,6 +1739,7 @@ internal class Utils
     #endregion
 
     #region 触发NPC对话
+    public static readonly Dictionary<int, long> TalkTimes = new Dictionary<int, long>(); // 存储每个NPC的最近对话时间
     public static void AutoNPCTalks(NPC npc, int whoAmI)
     {
         var plr = Main.LocalPlayer;
@@ -1741,6 +1751,12 @@ internal class Utils
         float distanceSq = npc.DistanceSQ(plr.Center);
         float maxDistanceSq = Config.AutoTalkRange * Config.AutoTalkRange * 256; // 格数转像素平方 (16^2=256)
 
+        // 使正在对话的NPC无敌
+        if (Config.TalkingNpcImmortal)
+        {
+            TalkingNpcImmortal(npc, whoAmI, plr);
+        }
+
         // 检查距离是否在范围内
         if (distanceSq > maxDistanceSq)
         {
@@ -1749,6 +1765,22 @@ internal class Utils
             {
                 TalkTimes.Remove(whoAmI);
             }
+
+            // 检查当前对话的NPC是否是这个NPC，如果是则关闭对话框
+            if (plr.talkNPC == whoAmI)
+            {
+                // 关闭对话框
+                plr.SetTalkNPC(-1, Main.netMode is 2);
+
+                // 如果是渔夫 则清理聊天物品(避免任务鱼图标出现在下个npc的聊天窗口)
+                if (npc.type == NPCID.Angler)
+                    Main.npcChatCornerItem = 0;
+
+                // 网络同步
+                if (Main.netMode is 2)
+                    NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
+            }
+
             return;
         }
 
@@ -1764,12 +1796,12 @@ internal class Utils
         if (now - TalkTimes[whoAmI] < Config.AutoTalkNPCWaitTimes) return;
 
         // 检查是否是最接近的NPC（使用统一范围）
-        if (!Utils.IsClosestNPC(plr, npc, Config.AutoTalkRange))
+        if (!IsClosestNPC(plr, npc, Config.AutoTalkRange))
         {
             return;
         }
 
-        // 触发对话
+        // 触发对话 (排除城镇宠物、城镇史莱姆)
         if (plr.talkNPC != -1 || NPCID.Sets.IsTownPet[npc.type] || NPCID.Sets.IsTownSlime[npc.type]) return;
 
         plr.SetTalkNPC(npc.whoAmI, Main.netMode is 2);
@@ -1779,11 +1811,36 @@ internal class Utils
             NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
 
         // 播放音效
-        SoundEngine.PlaySound(SoundID.LiquidsWaterLava);
-        ClientLoader.Chat.WriteLine($"玩家 {plr.name} 正在与 {Lang.GetNPCNameValue(npc.type)} 自动对话", color);
+        SoundEngine.PlaySound(SoundID.MenuOpen);
+        ClientLoader.Chat.WriteLine($"{Lang.GetNPCNameValue(npc.type)} 正在与玩家 {plr.name} 自动对话", color);
 
         // 更新对话时间
         TalkTimes[whoAmI] = now;
+    }
+    #endregion
+
+    #region 对话的NPC无敌
+    public static void TalkingNpcImmortal(NPC npc, int whoAmI, Player plr)
+    {
+        if (plr.talkNPC != -1)
+        {
+            npc.immortal = npc.whoAmI == plr.talkNPC;
+
+            if (Main.netMode is 2)
+            {
+                npc.netUpdate = true;
+                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
+            }
+        }
+        else
+        {
+            npc.immortal = false;
+            if (Main.netMode is 2)
+            {
+                npc.netUpdate = true;
+                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, whoAmI);
+            }
+        }
     }
     #endregion
 
@@ -1799,10 +1856,10 @@ internal class Utils
     #endregion
 
     #region 检查是否是最接近玩家的NPC
-    public static bool IsClosestNPC(Player plr, NPC currentNPC, int tileRange)
+    public static bool IsClosestNPC(Player plr, NPC TalkNpc, int tileRange)
     {
-        int closestIndex = -1;  // 使用-1表示未找到
-        float closestDistanceSq = float.MaxValue;
+        int whoIAre = -1;  // 使用-1表示未找到
+        float sq = float.MaxValue;
 
         // 提前计算最大允许的平方距离
         float maxAllowedSq = (tileRange * 16) * (tileRange * 16);
@@ -1815,37 +1872,19 @@ internal class Utils
                 continue;
 
             // 使用内置方法计算距离平方
-            float distanceSq = npc.DistanceSQ(plr.Center);
+            float DistanceSq = npc.DistanceSQ(plr.Center);
 
             // 双重检查：在范围内且更近
-            if (distanceSq <= maxAllowedSq && distanceSq < closestDistanceSq)
+            if (DistanceSq <= maxAllowedSq && DistanceSq < sq)
             {
-                closestDistanceSq = distanceSq;
-                closestIndex = i;
+                sq = DistanceSq;
+                whoIAre = i;
             }
         }
 
         // 有效检测：找到的NPC是当前NPC
-        return closestIndex != -1 && Main.npc[closestIndex].whoAmI == currentNPC.whoAmI;
+        return whoIAre != -1 && Main.npc[whoIAre].whoAmI == TalkNpc.whoAmI;
     }
-    #endregion
-
-    #region 专门处理油漆工商店打开逻辑
-    public static bool OpenPainterShop = true;
-    private static void OpenPainterShops()
-    {
-        // 先打开油漆商店 (ID 15)
-        if (OpenPainterShop)
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, new object[] { 15 });
-            OpenPainterShop = false;
-        }
-        else
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, new object[] { 25 });
-            OpenPainterShop = true;
-        }
-    } 
     #endregion
 
     #region 自动对话消息方法
@@ -1863,11 +1902,19 @@ internal class Utils
                 break;
 
             case NPCID.Guide: //向导
-                NPCEventSystem.HelpTextMethod?.Invoke(null, null);
+                OpenGuideCraftMenu();
                 break;
 
             case NPCID.OldMan: //老人
                 HandleOldManInteraction();
+                break;
+
+            case NPCID.Stylist: // 发型师
+                OpenHairWindowOrOpenShop();
+                break;
+
+            case NPCID.PartyGirl: // 派对女孩
+                SwapMusic();
                 break;
 
             case NPCID.TaxCollector: //税收官
@@ -1876,6 +1923,18 @@ internal class Utils
 
             case NPCID.Painter: //油漆工
                 OpenPainterShops();
+                break;
+
+            case NPCID.GoblinTinkerer: //哥布林工匠
+                OpenGoblinShop();
+                break;
+
+            case NPCID.DD2Bartender: // 酒馆老板
+                OpenShopForDD2Bartender(plr);
+                break;
+
+            case NPCID.Dryad: // 树妖
+                OpenDryadShop(plr);
                 break;
 
             default:
@@ -1895,24 +1954,19 @@ internal class Utils
     {
         NPCID.Merchant => 1,
         NPCID.ArmsDealer => 2,
-        NPCID.Dryad => 3,
         NPCID.Demolitionist => 4,
         NPCID.Clothier => 5,
-        NPCID.GoblinTinkerer => 6,
         NPCID.Wizard => 7,
         NPCID.Mechanic => 8,
         NPCID.SantaClaus => 9,
         NPCID.Truffle => 10,
         NPCID.Steampunker => 11,
         NPCID.DyeTrader => 12,
-        NPCID.PartyGirl => 13,
         NPCID.Cyborg => 14,
         NPCID.WitchDoctor => 16,
         NPCID.Pirate => 17,
-        NPCID.Stylist => 18,
         NPCID.TravellingMerchant => 19,
         NPCID.SkeletonMerchant => 20,
-        NPCID.DD2Bartender => 21,
         NPCID.Golfer => 22,
         NPCID.BestiaryGirl => 23,
         NPCID.Princess => 24,
@@ -1920,7 +1974,159 @@ internal class Utils
     };
     #endregion
 
-    #region 渔夫交互逻辑（完成钓鱼任务）
+    #region 处理向导逻辑（进入"制作"指导界面）
+    private static void OpenGuideCraftMenu()
+    {
+        if (Config.HelpTextForGuide) // 新手提示
+        {
+            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
+        }
+
+        if (Config.InGuideCraftMenu) //打开制作栏
+        {
+            Main.playerInventory = true;
+            SoundEngine.PlaySound(12);
+            Main.InGuideCraftMenu = true;
+            UILinkPointNavigator.GoToDefaultPage();
+        }
+    }
+    #endregion
+
+    #region 处理酒馆老板逻辑
+    private static void OpenShopForDD2Bartender(Player plr)
+    {
+        if (Config.HelpTextForDD2Bartender) // 新手提示
+        {
+            SoundEngine.PlaySound(12);
+            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
+            Main.npcChatText = Lang.BartenderHelpText(Main.npc[plr.talkNPC]);
+        }
+
+        if (Config.OpenShopForDD2Bartender) //打开商店
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [21]);
+        }
+    }
+    #endregion
+
+    #region 处理树妖逻辑(打开商店和检查环境)
+    private static void OpenDryadShop(Player plr)
+    {
+        if (Config.OpenShopForDryad) // 打开商店
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [3]);
+        }
+
+        if (Config.CheckBiomes) //检查环境
+        {
+            SoundEngine.PlaySound(12);
+            Main.npcChatText = Lang.GetDryadWorldStatusDialog(out var worldIsEntirelyPure);
+            if (Main.CanDryadPlayStardewAnimation(plr, Main.npc[plr.talkNPC]))
+            {
+                NPC.PreventJojaColaDialog = true;
+                NPC.RerollDryadText = 2;
+                plr.ConsumeItem(5275, reverseOrder: true);
+                if (Main.netMode == 1)
+                {
+                    NetMessage.SendData(144);
+                }
+                else
+                {
+                    NPC.HaveDryadDoStardewAnimation();
+                }
+
+                Main.npcChatText = Language.GetTextValue("StardewTalk.PlayerGivesCola");
+            }
+            else if (worldIsEntirelyPure)
+            {
+                AchievementsHelper.HandleSpecialEvent(plr, 27);
+            }
+        }
+    }
+    #endregion
+
+    #region 处理派对女孩(切换音乐和打开商店)
+    private static void SwapMusic()
+    {
+        // 打开商店
+        if (Config.OpenShopForPartyGirl)
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [13]);
+        }
+
+        // 切换音乐
+        if (Config.SwapMusicing)
+        {
+            SoundEngine.PlaySound(12);
+            Main.npcChatText = ""; //不打开聊天栏
+            var SwapMusicField = typeof(Main).GetField("swapMusic", BindingFlags.NonPublic | BindingFlags.Static)!;
+            bool OldValue = (bool)SwapMusicField.GetValue(null)!;
+            bool NewValue = !OldValue;
+            SwapMusicField.SetValue(null, NewValue);
+            string status = NewValue ? "启用" : "禁用";
+            ClientLoader.Chat.WriteLine($"音乐切换状态: {status}", Color.Green);
+        }
+    }
+    #endregion
+
+    #region 处理发型师打开头发窗口或商店
+    private static void OpenHairWindowOrOpenShop()
+    {
+        // 2选1(否则会对话冲突)
+        if (Config.OpenHairWindow) // 打开头发购买窗口
+        {
+            Main.OpenHairWindow();
+            Config.OpenShopForStylist = false;
+        }
+
+        if (Config.OpenShopForStylist) //打开商店
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [18]);
+            Config.OpenHairWindow = false;
+        }
+    }
+    #endregion
+
+    #region 处理哥布林商店与重铸
+    private static void OpenGoblinShop()
+    {
+        if (Config.OpenShopForGoblin) // 打开商店
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [6]);
+            Config.InReforgeMenu = false;
+        }
+
+        if (Config.InReforgeMenu) // 打开重铸按钮
+        {
+            Main.playerInventory = true;
+            Main.npcChatText = "";
+            SoundEngine.PlaySound(12);
+            Main.InReforgeMenu = true;
+            UILinkPointNavigator.GoToDefaultPage();
+            Config.OpenShopForGoblin = false;
+        }
+    }
+    #endregion
+
+    #region 处理油漆工2种商店打开逻辑
+    private static void OpenPainterShops()
+    {
+        // 2选1
+        if (Config.OpenShopForPainter) // 喷漆商店
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [15]);
+            Config.OpenShopForWall = false;
+        }
+
+        if (Config.OpenShopForWall) // 壁纸商店
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [25]);
+            Config.OpenShopForPainter = false;
+        }
+    }
+    #endregion
+
+    #region 处理渔夫任务逻辑
     private static void HandleAnglerInteraction(Player plr)
     {
         Main.npcChatCornerItem = 0;
@@ -1932,7 +2138,10 @@ internal class Utils
             int Index = plr.FindItem(Main.anglerQuestItemNetIDs[Main.anglerQuest]);
             if (Index != -1)
             {
-                if (!Config.ClearAnglerQuests)
+
+                // 未开启清理渔夫任务 与 开启后不清任务鱼则消耗物品
+                if (!Config.ClearAnglerQuests ||
+                    (Config.ClearAnglerQuests && Config.ClearFish))
                 {
                     plr.inventory[Index].stack--;
                     if (plr.inventory[Index].stack <= 0)
@@ -1970,6 +2179,7 @@ internal class Utils
             }
             else
             {
+                // 清理钓鱼任务
                 ClearAnglerQuests();
 
                 if (Main.netMode is 1)
@@ -1978,6 +2188,11 @@ internal class Utils
                 }
 
                 AchievementsHelper.HandleAnglerService();
+
+                // 自动关闭对话框
+                plr.SetTalkNPC(-1, Main.netMode is 2);
+                if (Main.netMode is 2)
+                    NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
             }
         }
     }
@@ -2019,7 +2234,7 @@ internal class Utils
     }
     #endregion
 
-    #region 护士交互逻辑
+    #region 护士治疗逻辑
     private static void HandleNurseInteraction(Player plr)
     {
         SoundEngine.PlaySound(SoundID.MenuTick);
@@ -2044,6 +2259,10 @@ internal class Utils
                 // 成就和音效
                 AchievementsHelper.HandleNurseService(healCost);
                 SoundEngine.PlaySound(SoundID.Item4);
+
+                plr.SetTalkNPC(-1, Main.netMode is 2); // 自动关闭对话栏
+                if (Main.netMode is 2)
+                    NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
             }
             else
             {
@@ -2143,7 +2362,7 @@ internal class Utils
     }
     #endregion
 
-    #region 税收官交互逻辑（发钱）
+    #region 税收官发钱逻辑
     private static void HandleTaxCollectorInteraction(Player plr)
     {
         // 如果启用了自定义随机奖励
@@ -2158,12 +2377,12 @@ internal class Utils
                 {
                     if (reward.Enabled && Main.rand.Next(100) < reward.Chance)
                     {
-                        GiveItem(plr, reward.ItemID, reward.Quantity);
+                        GiveItem(plr, reward.ItemID, reward.Stack, true);
                         receivedAny = true;
 
                         // 显示获得信息
                         string itemName = Lang.GetItemNameValue(reward.ItemID);
-                        ClientLoader.Chat.WriteLine($"获得了 {itemName} x{reward.Quantity}", Color.Gold);
+                        ClientLoader.Chat.WriteLine($"获得了 {itemName} x{reward.Stack}", Color.Gold);
                     }
                 }
 
@@ -2192,7 +2411,6 @@ internal class Utils
         }
 
         int taxMoney = (int)(plr.taxMoney / plr.currentShoppingSettings.PriceAdjustment);
-        var source = new EntitySource_Gift(Main.npc[plr.talkNPC]);
 
         while (taxMoney > 0)
         {
@@ -2228,7 +2446,7 @@ internal class Utils
                 _ => 1
             });
 
-            GiveItem(plr, itemType, amount);
+            GiveItem(plr, itemType, amount, true);
         }
 
         Main.npcChatText = Lang.dialog(Main.rand.Next(380, 382));
@@ -2254,7 +2472,7 @@ internal class Utils
                 Config.TaxCollectorRewards.Add(new RewardItem
                 {
                     ItemID = heldItem.type,
-                    Quantity = heldItem.stack,
+                    Stack = heldItem.stack,
                     Enabled = true
                 });
 
