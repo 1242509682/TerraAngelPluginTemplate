@@ -302,270 +302,270 @@ v1.0.0
   "忽略工作站要求": false,
   "自定义配方列表": [
     {
-      "UniqueID": "67f51fa8-3a80-412e-9818-326e2b56feac",
-      "Index": 2940,
-      "ResultItem": 9,
-      "ResultStack": 10,
-      "Ingredients": [
+      "UID": "31333d2e-fd4a-4fa0-9f0d-cd203883b43d",
+      "配方索引": -1,
+      "合成物品": 9,
+      "合成物品数量": 10,
+      "组成材料": [
         {
-          "ItemId": 27,
-          "Stack": 1
+          "物品ID": 27,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "9b5c4a6a-4a64-4efa-a9eb-d67fd9207ef9",
-      "Index": 2941,
-      "ResultItem": 18,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "3e2440f9-c04f-4df0-9e0c-88a667d456a7",
+      "配方索引": -1,
+      "合成物品": 18,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 393,
-          "Stack": 1
+          "物品ID": 393,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "7bcde735-bc1f-49fe-bf78-b0b249cf29c0",
-      "Index": 2942,
-      "ResultItem": 393,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "45a649bc-f4ce-4666-bc72-c5b9189d4ab2",
+      "配方索引": -1,
+      "合成物品": 393,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 18,
-          "Stack": 1
+          "物品ID": 18,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "3171fb34-3964-4dba-ab52-c71ab7379aa3",
-      "Index": 2943,
-      "ResultItem": 327,
-      "ResultStack": 5,
-      "Ingredients": [
+      "UID": "c4fa98c1-de3a-4c2e-b8eb-db3d88815483",
+      "配方索引": -1,
+      "合成物品": 327,
+      "合成物品数量": 5,
+      "组成材料": [
         {
-          "ItemId": 329,
-          "Stack": 1
+          "物品ID": 329,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "939bd73b-cb9a-4dec-b0bc-f931194ac1fb",
-      "Index": 2944,
-      "ResultItem": 4271,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "f8127a86-af5a-47ce-b92d-2bebde2ec7d5",
+      "配方索引": -1,
+      "合成物品": 4271,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 29,
-          "Stack": 5
+          "物品ID": 29,
+          "物品数量": 5
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "83d66bda-9a9e-45ff-a3f0-f24cb2df4d3e",
-      "Index": 2945,
-      "ResultItem": 1291,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "48157b18-9947-4ef8-a695-04f9237b9596",
+      "配方索引": -1,
+      "合成物品": 1291,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 29,
-          "Stack": 1
+          "物品ID": 29,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "3a09f8eb-40f5-41b9-9625-ba1314ec9591",
-      "Index": 2946,
-      "ResultItem": 2423,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "570fdac7-4891-4d7d-b624-0f31cd53d163",
+      "配方索引": -1,
+      "合成物品": 2423,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 2121,
-          "Stack": 5
+          "物品ID": 2121,
+          "物品数量": 5
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "06c49404-371f-4088-be34-c0ddb7df9dbb",
-      "Index": 2947,
-      "ResultItem": 53,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "62243e37-0f80-4af5-9e13-a51c0bbbf875",
+      "配方索引": -1,
+      "合成物品": 53,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 751,
-          "Stack": 10
+          "物品ID": 751,
+          "物品数量": 10
         },
         {
-          "ItemId": 31,
-          "Stack": 1
+          "物品ID": 31,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "90c2de8b-4f33-4b7e-818a-38bcd233d913",
-      "Index": 2948,
-      "ResultItem": 194,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "c3547606-9bc1-4562-8890-8a9b17b5c3ea",
+      "配方索引": -1,
+      "合成物品": 194,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 195,
-          "Stack": 1
+          "物品ID": 195,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "77775098-41ff-4684-a367-d609b33b4556",
-      "Index": 2949,
-      "ResultItem": 195,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "a8268f72-0b9d-4614-b9c7-f42649ebfd2a",
+      "配方索引": -1,
+      "合成物品": 195,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 194,
-          "Stack": 1
+          "物品ID": 194,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "51ec6698-5cdf-4ec8-ac65-73c26627a00f",
-      "Index": 2950,
-      "ResultItem": 3093,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "95978c2f-9228-456b-9830-1dbddce6494f",
+      "配方索引": -1,
+      "合成物品": 3093,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 307,
-          "Stack": 1
+          "物品ID": 307,
+          "物品数量": 1
         },
         {
-          "ItemId": 308,
-          "Stack": 1
+          "物品ID": 308,
+          "物品数量": 1
         },
         {
-          "ItemId": 309,
-          "Stack": 1
+          "物品ID": 309,
+          "物品数量": 1
         },
         {
-          "ItemId": 310,
-          "Stack": 1
+          "物品ID": 310,
+          "物品数量": 1
         },
         {
-          "ItemId": 311,
-          "Stack": 1
+          "物品ID": 311,
+          "物品数量": 1
         },
         {
-          "ItemId": 312,
-          "Stack": 1
+          "物品ID": 312,
+          "物品数量": 1
         },
         {
-          "ItemId": 2357,
-          "Stack": 1
+          "物品ID": 2357,
+          "物品数量": 1
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "9cd6d48b-4430-40bb-a4ed-ce84552b98fb",
-      "Index": 2951,
-      "ResultItem": 313,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "3bd4e346-cf0a-4607-b432-a5f4b2af7773",
+      "配方索引": -1,
+      "合成物品": 313,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 307,
-          "Stack": 3
+          "物品ID": 307,
+          "物品数量": 3
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "2ff05b76-7df6-4440-9cb3-da0ab7d90d9c",
-      "Index": 2952,
-      "ResultItem": 314,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "2ea6bb42-7624-4d8f-9e12-3356b75c4563",
+      "配方索引": -1,
+      "合成物品": 314,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 308,
-          "Stack": 3
+          "物品ID": 308,
+          "物品数量": 3
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "9c3ec525-1005-4cad-aab8-6934191d23fd",
-      "Index": 2953,
-      "ResultItem": 316,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "13f06750-5926-4424-9a1d-b87bd261b1dc",
+      "配方索引": -1,
+      "合成物品": 316,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 310,
-          "Stack": 3
+          "物品ID": 310,
+          "物品数量": 3
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "b2b0fb12-5153-4f6e-83c7-5fce853ba027",
-      "Index": 2954,
-      "ResultItem": 317,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "346379dc-588c-4149-8f10-8ab671a0c206",
+      "配方索引": -1,
+      "合成物品": 317,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 311,
-          "Stack": 3
+          "物品ID": 311,
+          "物品数量": 3
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "43fa441c-2e45-4e60-8c1a-e6cd307dc6d4",
-      "Index": 2955,
-      "ResultItem": 318,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "570a4637-8da0-4b21-b8f6-228cdf97e6a5",
+      "配方索引": -1,
+      "合成物品": 318,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 312,
-          "Stack": 3
+          "物品ID": 312,
+          "物品数量": 3
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     },
     {
-      "UniqueID": "15b00195-8b0b-444e-a889-d91998042359",
-      "Index": 2956,
-      "ResultItem": 2358,
-      "ResultStack": 1,
-      "Ingredients": [
+      "UID": "646a500a-38be-44b9-a618-8ea53b3550e9",
+      "配方索引": -1,
+      "合成物品": 2358,
+      "合成物品数量": 1,
+      "组成材料": [
         {
-          "ItemId": 2357,
-          "Stack": 3
+          "物品ID": 2357,
+          "物品数量": 3
         }
       ],
-      "RequiredTile": [],
-      "IsAlchemyRecipe": false
+      "合成站(还没写)": [],
+      "炼药属性(还没写)": false
     }
   ],
   "NPC自动对话按键": 89,
@@ -629,11 +629,11 @@ v1.0.0
       ],
       "开启自定义商店": true,
       "替换原始物品": false,
-      "商店NPC名称": "商人(商店)",
+      "商店NPC名称": "",
       "商店NPC类型": 17
     }
   ],
   "修改传送枪弹幕距离": true,
-  "传送枪弹幕销毁距离": 134400.0
+  "传送枪弹幕销毁距离": 64000.0
 }
 ```

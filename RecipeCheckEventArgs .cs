@@ -1,4 +1,5 @@
 ﻿using MonoMod.RuntimeDetour;
+using Newtonsoft.Json;
 using System.Linq;
 using System.Reflection;
 using Terraria;
@@ -566,18 +567,27 @@ public class RecipeCheckEventArgs : EventArgs
 #region 配方数据结构
 public class CustomRecipeData
 {
+    [JsonProperty("UID", Order = 0)]
     public string UniqueID { get; set; } = Guid.NewGuid().ToString();
+    [JsonProperty("配方索引", Order = 1)]
     public int Index { get; set; } = -1; //配方索引
+    [JsonProperty("合成物品", Order = 2)]
     public int ResultItem { get; set; } //合成物品
+    [JsonProperty("合成物品数量", Order = 3)]
     public int ResultStack { get; set; } = 1; //合成物品数量
+    [JsonProperty("组成材料", Order = 4)]
     public List<IngredientData> Ingredients { get; set; } = new List<IngredientData>(); //材料
+    [JsonProperty("合成站(还没写)", Order = 5)]
     public List<int> RequiredTile { get; set; } = new List<int>(); //合成站
+    [JsonProperty("炼药属性(还没写)", Order = 5)]
     public bool IsAlchemyRecipe { get; set; } //炼药标识
 }
 
 public class IngredientData
 {
+    [JsonProperty("物品ID", Order = 0)]
     public int ItemId { get; set; }
+    [JsonProperty("物品数量", Order = 0)]
     public int Stack { get; set; } = 1;
 }
 #endregion
