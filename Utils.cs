@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using Newtonsoft.Json;
 using System.Numerics;
 using System.Reflection;
 using TerraAngel;
@@ -816,30 +817,55 @@ internal class Utils
     #endregion
 
     #region 记录死亡位置（在玩家死亡时调用）
-    public static long LastDeadTime = 0;
+    public static Dictionary<int, long> LastDeadTime = new Dictionary<int, long>(); // 按地图ID存储最后死亡时间
     public static void RecordDeathPoint(Player plr)
     {
-        // 只在死亡状态下 复活时间为0秒时记录
+        int WorldID = Main.worldID;
+
+        // 初始化当前地图的最后死亡时间
+        if (!LastDeadTime.ContainsKey(WorldID))
+        {
+            LastDeadTime[WorldID] = 0;
+        }
+
         var now = Main.GameUpdateCount;
-        if (!plr.dead || now - LastDeadTime < 300) return;
+
+        // 只在死亡状态下 复活时间为0秒时记录
+        if (!plr.dead || now - LastDeadTime[WorldID] < 300)
+            return;
 
         Vector2 point = plr.position;
 
+        // 获取当前地图的死亡位置列表
+        List<Vector2> CurrentDeaths = GetCurrentWorldDeaths(WorldID);
+
         // 检查是否已经存在相同或非常接近的位置
-        bool Exists = DeathPositions.Any(pos =>
+        bool exists = CurrentDeaths.Any(pos =>
             Math.Abs(pos.X - point.X) < 16 &&
             Math.Abs(pos.Y - point.Y) < 16);
 
         // 如果不重复，则添加新位置
-        if (!Exists)
+        if (!exists)
         {
-            // 添加当前死亡位置
-            DeathPositions.Add(point);
+            CurrentDeaths.Add(point);
             ClientLoader.Chat.WriteLine($"已记录死亡位置 ({(int)point.X / 16}, {(int)point.Y / 16})", Color.Yellow);
 
-            LastDeadTime = now;
+            // 更新最后死亡时间
+            LastDeadTime[WorldID] = now;
         }
     }
+    #endregion
+
+    #region 获取当前地图的死亡位置列表
+    public static List<Vector2> GetCurrentWorldDeaths(int worldID)
+    {
+        if (!DeathPositions.TryGetValue(worldID, out var deaths))
+        {
+            deaths = new List<Vector2>();
+            DeathPositions[worldID] = deaths;
+        }
+        return deaths;
+    } 
     #endregion
 
     #region 定位传送方法实现
@@ -1242,15 +1268,49 @@ internal class Utils
     // 添加自定义传送点
     public static void AddCustomPoint()
     {
-        Config.CustomTeleportPoints[NewPointName] = Main.LocalPlayer.position;
+        int currentWorldID = Main.worldID;
+
+        // 如果当前地图ID不存在，创建新字典
+        if (!Config.CustomTeleportPoints.ContainsKey(currentWorldID))
+        {
+            Config.CustomTeleportPoints[currentWorldID] = new Dictionary<string, Vector2>();
+        }
+
+        // 添加点到当前地图
+        Config.CustomTeleportPoints[currentWorldID][NewPointName] = Main.LocalPlayer.position;
         Config.Write();
 
         // 播放添加成功音效
         SoundEngine.PlaySound(SoundID.Item29);
-        ClientLoader.Chat.WriteLine($"已添加传送点: {NewPointName}", Color.Green);
+        ClientLoader.Chat.WriteLine($"已添加传送点到地图{currentWorldID}: {NewPointName}", Color.Green);
 
         // 重置表单
         NewPointName = "";
+    }
+
+    // 新方法：获取当前地图的所有传送点（用于UI显示等）
+    public static Dictionary<string, Vector2> GetCurrentWorldPoints()
+    {
+        int currentWorldID = Main.worldID;
+        if (Config.CustomTeleportPoints.TryGetValue(currentWorldID, out var points))
+        {
+            return points;
+        }
+        return new Dictionary<string, Vector2>();
+    }
+
+    // 新方法：删除当前地图的传送点
+    public static void RemoveCustomPoint(string pointName)
+    {
+        int currentWorldID = Main.worldID;
+        if (Config.CustomTeleportPoints.ContainsKey(currentWorldID))
+        {
+            if (Config.CustomTeleportPoints[currentWorldID].Remove(pointName))
+            {
+                Config.Write();
+                ClientLoader.Chat.WriteLine($"已删除传送点: {pointName}", Color.Orange);
+            }
+        }
     }
     #endregion
 

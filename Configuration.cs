@@ -78,7 +78,7 @@ internal class Configuration
     public List<TrashData> TrashItems { get; set; } = new List<TrashData>();
 
     [JsonProperty("自定义传送点", Order = 15)]
-    public Dictionary<string, Vector2> CustomTeleportPoints = new Dictionary<string, Vector2>();
+    public Dictionary<int,Dictionary<string, Vector2>> CustomTeleportPoints = new Dictionary<int, Dictionary<string, Vector2>>();
 
     [JsonProperty("NPC自动回血", Order = 17)]
     public bool NPCAutoHeal { get; set; } = false;
@@ -212,7 +212,7 @@ internal class Configuration
         AutoTrashKey = Keys.C;
         TrashSyncInterval = 10;
         TrashItems = new List<TrashData>();
-        CustomTeleportPoints = new Dictionary<string, Vector2>();
+        CustomTeleportPoints = new Dictionary<int, Dictionary<string, Vector2>>();
         NPCAutoHeal = false;
         NPCAutoHealKey = Keys.None;
         NPCHealVel = 1;

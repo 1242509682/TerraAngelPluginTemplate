@@ -1990,14 +1990,23 @@ public class UITool : Tool
 
         // 死亡地点按钮（修改为打开选择窗口）
         ImGui.SameLine();
-        if (DeathPositions.Count > 0)
+
+        // 获取当前地图的死亡记录数量
+        int WorldID = Main.worldID;
+        int deathCount = 0;
+        if (DeathPositions.TryGetValue(WorldID, out var Deaths))
+        {
+            deathCount = Deaths.Count;
+        }
+
+        if (deathCount > 0)
         {
             if (ImGui.Button("死亡", new Vector2(Width, 40)))
             {
                 ShowDeathTeleportWindow = true;
             }
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip($"传送到死亡地点 ({DeathPositions.Count}个记录)");
+                ImGui.SetTooltip($"传送到死亡地点 ({deathCount}个记录)");
         }
         else
         {
@@ -2006,7 +2015,7 @@ public class UITool : Tool
             ImGui.Button("死亡", new Vector2(Width, 40));
             ImGui.EndDisabled();
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("没有死亡记录");
+                ImGui.SetTooltip("当前地图没有死亡记录");
         }
 
         // 自定义按钮
@@ -2088,28 +2097,38 @@ public class UITool : Tool
     #endregion
 
     #region 死亡地点选择窗口
-    public static List<Vector2> DeathPositions = new List<Vector2>(); // 存储多个死亡位置
+    // 修改数据结构：按地图ID存储死亡位置
+    public static Dictionary<int, List<Vector2>> DeathPositions = new Dictionary<int, List<Vector2>>();
     private void DrawDeathTeleportWindow(Player plr)
     {
         ImGui.SetNextWindowSize(new Vector2(400, 400), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("选择死亡地点", ref ShowDeathTeleportWindow, ImGuiWindowFlags.NoCollapse))
         {
-            ImGui.Text($"已记录 {DeathPositions.Count} 个死亡地点");
+            int WorldID = Main.worldID; // 获取当前地图ID
+            ImGui.Text($"当前地图ID: {WorldID}");
+
+            // 获取当前地图的死亡位置列表
+            List<Vector2> WorldDeaths = Utils.GetCurrentWorldDeaths(WorldID);
+
+            ImGui.Text($"已记录 {WorldDeaths.Count} 个死亡地点");
             ImGui.SameLine();
             if (ImGui.Button("清空列表"))
             {
-                DeathPositions.Clear();
-                ClientLoader.Chat.WriteLine("已清空所有死亡地点记录", Color.Yellow);
+                if (DeathPositions.ContainsKey(WorldID))
+                {
+                    DeathPositions.Remove(WorldID);
+                    ClientLoader.Chat.WriteLine("已清空当前地图的所有死亡地点记录", Color.Yellow);
+                }
             }
             ImGui.Separator();
 
+            // 反转列表以显示最近的死亡位置在最上面
+            var Pos = new List<Vector2>(WorldDeaths);
+            Pos.Reverse();
 
-            var reversedPositions = new List<Vector2>(DeathPositions);
-            reversedPositions.Reverse();
-
-            for (int i = 0; i < reversedPositions.Count; i++)
+            for (int i = 0; i < Pos.Count; i++)
             {
-                Vector2 pos = reversedPositions[i];
+                Vector2 pos = Pos[i];
                 int x = (int)pos.X / 16;
                 int y = (int)pos.Y / 16;
 
@@ -2123,8 +2142,8 @@ public class UITool : Tool
 
                 if (ImGui.Button($"删除##del{i}"))
                 {
-                    int originalIndex = DeathPositions.Count - 1 - i;
-                    DeathPositions.RemoveAt(originalIndex);
+                    int OrigIndex = WorldDeaths.Count - 1 - i;
+                    WorldDeaths.RemoveAt(OrigIndex);
                     break; // 修改集合后立即跳出
                 }
             }
@@ -2141,6 +2160,11 @@ public class UITool : Tool
         ImGui.SetNextWindowSize(new Vector2(450, 500), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("自定义传送点管理", ref ShowCustomTeleportWindow, ImGuiWindowFlags.NoCollapse))
         {
+            int WorldID = Main.worldID; // 获取当前地图ID
+
+            // 显示当前地图ID
+            ImGui.Text($"当前地图ID: {WorldID}");
+
             // 添加新传送点区域
             ImGui.Text("添加新传送点:");
             ImGui.Separator();
@@ -2183,22 +2207,32 @@ public class UITool : Tool
                 CustomPointSearch = "";
             }
 
-            // 获取过滤后的传送点
-            var filteredPoints = Config.CustomTeleportPoints
+            // 获取当前地图的所有传送点
+            Dictionary<string, Vector2> WorldPoints = new Dictionary<string, Vector2>();
+            if (Config.CustomTeleportPoints.TryGetValue(WorldID, out var pointsDict))
+            {
+                WorldPoints = pointsDict;
+            }
+
+            // 获取过滤后的传送点（只搜索当前地图）
+            var filteredPoints = WorldPoints
                 .Where(p => string.IsNullOrWhiteSpace(CustomPointSearch) ||
                             p.Key.Contains(CustomPointSearch, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(p => p.Key)
                 .ToList();
 
             // 显示传送点数量
-            ImGui.Text($"找到 {filteredPoints.Count} 个自定义传送点");
+            ImGui.Text($"找到 {filteredPoints.Count} 个自定义传送点（当前地图）");
 
             ImGui.SameLine();
-            if (ImGui.Button("清空列表"))
+            if (ImGui.Button("清空当前地图列表"))
             {
-                Config.CustomTeleportPoints.Clear();
-                Config.Write();
-                ClientLoader.Chat.WriteLine("已清空所有传送点", Color.Yellow);
+                if (Config.CustomTeleportPoints.ContainsKey(WorldID))
+                {
+                    Config.CustomTeleportPoints.Remove(WorldID);
+                    Config.Write();
+                    ClientLoader.Chat.WriteLine("已清空当前地图的所有传送点", Color.Yellow);
+                }
             }
 
             // 传送点列表
@@ -2236,9 +2270,14 @@ public class UITool : Tool
 
                     if (ImGui.Button($"删除##{point.Key}"))
                     {
-                        Config.CustomTeleportPoints.Remove(point.Key);
-                        Config.Write();
-                        ClientLoader.Chat.WriteLine($"已删除传送点: {point.Key}", Color.Yellow);
+                        if (Config.CustomTeleportPoints.TryGetValue(WorldID, out var worldPoints))
+                        {
+                            if (worldPoints.Remove(point.Key))
+                            {
+                                Config.Write();
+                                ClientLoader.Chat.WriteLine($"已删除传送点: {point.Key}", Color.Yellow);
+                            }
+                        }
                     }
 
                     ImGui.NextColumn();
@@ -2250,11 +2289,11 @@ public class UITool : Tool
             {
                 if (string.IsNullOrWhiteSpace(CustomPointSearch))
                 {
-                    ImGui.Text("没有自定义传送点，请添加新的传送点");
+                    ImGui.Text("当前地图没有自定义传送点，请添加新的传送点");
                 }
                 else
                 {
-                    ImGui.Text($"没有找到包含 '{CustomPointSearch}' 的传送点");
+                    ImGui.Text($"当前地图没有找到包含 '{CustomPointSearch}' 的传送点");
                 }
             }
 
