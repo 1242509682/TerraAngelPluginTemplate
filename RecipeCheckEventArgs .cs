@@ -1,4 +1,5 @@
 ﻿using MonoMod.RuntimeDetour;
+using System.Linq;
 using System.Reflection;
 using Terraria;
 using Terraria.ID;
@@ -16,7 +17,7 @@ public static class RecipeHooks
     // 钩子
     private static Hook? FindRecipesHook;
     public static event Action<RecipeCheckEventArgs>? OnRecipeCheck; // 配方检查事件
-    public static event Action? OnPostFindRecipes; //  配方查找后事件
+    public static event Action? AddCustomRecipes; // 添加自定义配方(配方查找前调用)
 
     #region 注册与卸载钩子方法
     public static void Register()
@@ -54,7 +55,7 @@ public static class RecipeHooks
     {
         FindRecipesHook?.Dispose();
         OnRecipeCheck = null;
-        OnPostFindRecipes = null;
+        AddCustomRecipes = null;
     }
     #endregion
 
@@ -92,7 +93,7 @@ public static class RecipeHooks
         Recipe.ClearAvailableRecipes();
 
         // 先添加自定义配方
-        OnPostFindRecipes?.Invoke();
+        AddCustomRecipes?.Invoke();
 
         // 处理向导物品的配方
         if (!Main.guideItem.IsAir && !string.IsNullOrEmpty(Main.guideItem.Name))
@@ -109,7 +110,7 @@ public static class RecipeHooks
         CollectItemsToCraftWithFrom?.Invoke(plr);
 
         // 获取原版收集的物品数据
-        var collectedItems = GetCollectedItems();
+        var HasItems = GetCollectedItems();
 
         // 遍历所有配方
         for (int i = 0; i < Recipe.maxRecipes; i++)
@@ -120,28 +121,19 @@ public static class RecipeHooks
             if (recipe.createItem.type == 0) continue;
 
             // 检查工作站条件
-            bool meetsStationConditions = PlayerMeetsTileRequirements != null && PlayerMeetsTileRequirements(plr, recipe);
+            bool MeetsTileConditions = PlayerMeetsTileRequirements!(plr, recipe);
 
             // 检查环境条件
-            bool meetsEnvironmentConditions = PlayerMeetsEnvironmentConditions != null && PlayerMeetsEnvironmentConditions(plr, recipe);
+            bool MeetsEnvironmentConditions = PlayerMeetsEnvironmentConditions!(plr, recipe);
 
             // 检查材料是否足够
-            bool meetsMaterialConditions = Recipe.CollectedEnoughItemsToCraftRecipeNew(recipe);
+            bool MeetsMaterialConditions = Recipe.CollectedEnoughItemsToCraftRecipeNew(recipe);
 
             // 初始条件检查结果
-            bool meetsConditions = meetsStationConditions &&
-                                  meetsEnvironmentConditions &&
-                                  meetsMaterialConditions;
+            bool MeetsConditions = MeetsTileConditions && MeetsEnvironmentConditions && MeetsMaterialConditions;
 
             // 创建事件参数
-            var args = new RecipeCheckEventArgs(
-                recipe,
-                plr,
-                meetsConditions,
-                meetsStationConditions,
-                i,
-                collectedItems
-            );
+            var args = new RecipeCheckEventArgs(recipe, i, plr, MeetsConditions, MeetsTileConditions, MeetsMaterialConditions, MeetsEnvironmentConditions, HasItems);
 
             // 触发自定义配方检查事件
             OnRecipeCheck?.Invoke(args);
@@ -244,12 +236,12 @@ public static class RecipeHooks
     }
 
     // 移除配方
-    public static void RemoveRecipe(int recipeIndex)
+    public static void RemoveRecipe(int Index)
     {
-        if (recipeIndex >= 0 && recipeIndex < Recipe.maxRecipes)
+        if (Index >= 0 && Index < Recipe.maxRecipes)
         {
-            Main.recipe[recipeIndex] = new Recipe();
-            Main.availableRecipe[recipeIndex] = 0;
+            Main.recipe[Index] = new Recipe();
+            Main.availableRecipe[Index] = 0;
         }
     }
 
@@ -299,7 +291,7 @@ public static class RecipeHooks
     #endregion
 
     #region 复用已收集的物品
-    public static bool HasResultItemForRecipe(Recipe recipe, Dictionary<int, int> collectedItems)
+    public static bool HasResultItemForRecipe(Recipe recipe, Dictionary<int, int> HasItems)
     {
         foreach (Item item in recipe.requiredItem)
         {
@@ -308,12 +300,12 @@ public static class RecipeHooks
             // 检查物品组
             if (RecipeGroup.recipeGroups != null)
             {
-                foreach (var group in RecipeGroup.recipeGroups.Values)
+                foreach (var Group in RecipeGroup.recipeGroups.Values)
                 {
-                    if (group.ValidItems.Contains(item.type))
+                    if (Group.ValidItems.Contains(item.type))
                     {
-                        int groupId = group.RegisteredId;
-                        if (collectedItems.TryGetValue(groupId, out int groupCount) && groupCount >= item.stack)
+                        int GroupId = Group.RegisteredId;
+                        if (HasItems.TryGetValue(GroupId, out int GroupCount) && GroupCount >= item.stack)
                         {
                             return true;
                         }
@@ -322,8 +314,7 @@ public static class RecipeHooks
             }
 
             // 检查普通物品
-            if (!collectedItems.TryGetValue(item.type, out int availableCount) ||
-                availableCount < item.stack)
+            if (!HasItems.TryGetValue(item.type, out int itemCount) || itemCount < item.stack)
             {
                 return false;
             }
@@ -336,14 +327,14 @@ public static class RecipeHooks
     private static Dictionary<int, int> GetCollectedItems()
     {
         // 通过反射获取 Recipe._ownedItems 字段
-        var field = typeof(Recipe).GetField("_ownedItems",
+        var ownedItems = typeof(Recipe).GetField("_ownedItems",
             BindingFlags.NonPublic | BindingFlags.Static);
 
-        return (Dictionary<int, int>)field?.GetValue(null)! ?? new Dictionary<int, int>();
+        return (Dictionary<int, int>)ownedItems?.GetValue(null)! ?? new Dictionary<int, int>();
     }
     #endregion
 
-    #region 检查是否存在相同配方
+    #region 检查是否存在与原版相同配方
     public static bool ExistsRecipe(CustomRecipeData data)
     {
         for (int i = 0; i < Recipe.maxRecipes; i++)
@@ -462,6 +453,7 @@ public static class RecipeHooks
         // 初始化材料数组
         recipe.requiredItem = new Item[Recipe.maxRequirements];
         recipe.requiredTile = new int[Recipe.maxRequirements];
+
         for (int i = 0; i < Recipe.maxRequirements; i++)
         {
             recipe.requiredItem[i] = new Item();
@@ -491,7 +483,7 @@ public static class RecipeHooks
         }
 
         // 炼金配方标记
-        recipe.alchemy = data.RequiredTile.Contains(TileID.Bottles);
+        recipe.alchemy = data.IsAlchemyRecipe ||  data.RequiredTile.Contains(TileID.Bottles) || data.RequiredTile.Contains(TileID.AlchemyTable);
 
         return recipe;
     }
@@ -549,37 +541,38 @@ public static class RecipeHooks
 #region 事件参数类
 public class RecipeCheckEventArgs : EventArgs
 {
+    public int Index { get; } // 配方索引
     public Recipe Recipe { get; }
     public Player Player { get; }
-    public bool MeetsConditions { get; set; }
-    public bool MeetsStationConditions { get; set; }
-    public int RecipeIndex { get; }
-    public Dictionary<int, int> CollectedItems { get; } // 添加收集的物品数据
-
-    public RecipeCheckEventArgs(Recipe recipe, Player player, bool meetsConditions, bool meetsStationConditions, int recipeIndex, Dictionary<int, int> collectedItems)
+    public bool MeetsConditions { get; set; } // 符合所有条件
+    public bool MeetsTileConditions { get; set; } // 符合合成站条件
+    public bool MeetsMaterialConditions { get; set; } //符合材料条件
+    public bool MeetsEnvironmentConditions { get; set; } //符合环境条件
+    public Dictionary<int, int> HasItem { get; } // 添加收集的物品数据
+    public RecipeCheckEventArgs(Recipe recipe, int recipeIndex, Player player, bool meetsConditions, bool meetsTileConditions, bool meetsMaterialConditions, bool meetsEnvironmentConditions, Dictionary<int, int> hasItem)
     {
-        Recipe = recipe;
-        Player = player;
-        MeetsConditions = meetsConditions;
-        MeetsStationConditions = meetsStationConditions;
-        RecipeIndex = recipeIndex;
-        CollectedItems = collectedItems;
+        this.Recipe = recipe;
+        this.Index = recipeIndex;
+        this.Player = player;
+        this.MeetsConditions = meetsConditions;
+        this.MeetsTileConditions = meetsTileConditions;
+        this.MeetsMaterialConditions = meetsMaterialConditions;
+        this.MeetsEnvironmentConditions = meetsEnvironmentConditions;
+        this.HasItem = hasItem;
     }
 }
 #endregion
 
 #region 配方数据结构
-
-// 用于存储自定义配方数据
 public class CustomRecipeData
 {
     public string UniqueID { get; set; } = Guid.NewGuid().ToString();
-    public int Index { get; set; } = -1;
-    public int ResultItem { get; set; }
-    public int ResultStack { get; set; } = 1;
-    public List<IngredientData> Ingredients { get; set; } = new List<IngredientData>();
-    public List<int> RequiredTile { get; set; } = new List<int>();
-    public bool IsAlchemyRecipe { get; set; }
+    public int Index { get; set; } = -1; //配方索引
+    public int ResultItem { get; set; } //合成物品
+    public int ResultStack { get; set; } = 1; //合成物品数量
+    public List<IngredientData> Ingredients { get; set; } = new List<IngredientData>(); //材料
+    public List<int> RequiredTile { get; set; } = new List<int>(); //合成站
+    public bool IsAlchemyRecipe { get; set; } //炼药标识
 }
 
 public class IngredientData

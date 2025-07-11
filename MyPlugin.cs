@@ -1,4 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
+using System;
+using System.Numerics;
 using TerraAngel;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
@@ -14,7 +16,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 1, 3);
+    public Version Version => new(1, 1, 4);
     #endregion
 
     #region 注册与卸载
@@ -23,10 +25,13 @@ public class MyPlugin(string path) : Plugin(path)
         // 加载世界事件
         WorldGen.Hooks.OnWorldLoad += OnWorldLoad;
 
+        // 传送枪弹幕AI样式最大距离修改
+        FixPortalDistanceArgs.Register();
+
         // 注册配方事件
         RecipeHooks.Register();
         RecipeHooks.OnRecipeCheck += OnRecipeCheck; // 配方检查事件
-        RecipeHooks.OnPostFindRecipes += OnPostFindRecipes; // 配方查找后事件
+        RecipeHooks.AddCustomRecipes += OnAddCustomRecipes; // 配方查找后事件
 
         // 注册图格编辑事件
         TileEditEventSystem.Register();
@@ -66,10 +71,13 @@ public class MyPlugin(string path) : Plugin(path)
         // 卸载加载世界事件
         WorldGen.Hooks.OnWorldLoad -= OnWorldLoad;
 
+        // 传送枪弹幕AI样式最大距离修改
+        FixPortalDistanceArgs.Dispose();
+
         // 卸载配方事件
         RecipeHooks.Dispose();
         RecipeHooks.OnRecipeCheck -= OnRecipeCheck;
-        RecipeHooks.OnPostFindRecipes -= OnPostFindRecipes;
+        RecipeHooks.AddCustomRecipes -= OnAddCustomRecipes;
 
         //卸载图格编辑事件
         TileEditEventSystem.Dispose();
@@ -93,11 +101,11 @@ public class MyPlugin(string path) : Plugin(path)
     #region 配置管理
     internal static Configuration Config = new();
     public static Color color = new(240, 250, 150);
-    private void ReloadConfig(TerraAngel.UI.ClientWindows.Console.ConsoleWindow.CmdStr x)
+    public static void ReloadConfig(TerraAngel.UI.ClientWindows.Console.ConsoleWindow.CmdStr x = null!)
     {
         Config = Configuration.Read();
         Config.Write();
-        ClientLoader.Console.WriteLine($"[{Name}] 配置文件已重载", color);
+        ClientLoader.Console.WriteLine($"[{typeof(MyPlugin).Namespace}] 配置文件已重载", color);
     }
     #endregion
 
@@ -241,7 +249,7 @@ public class MyPlugin(string path) : Plugin(path)
         // 自动对话处理
         if (Config.AutoTalkNPC && npc.townNPC)
         {
-            Utils.AutoNPCTalks(npc,e.whoAmI);
+            Utils.AutoNPCTalks(npc, e.whoAmI);
         }
     }
     #endregion
@@ -284,16 +292,16 @@ public class MyPlugin(string path) : Plugin(path)
         if (!Config.Enabled || !Config.CustomRecipesEnabled) return;
 
         // 隐藏原版配方：如果当前配方结果物品在自定义物品列表中，但不是自定义配方
-        if (CustomRecipeItems.Contains(e.Recipe.createItem.type) && !CustomRecipeIndexes.Contains(e.RecipeIndex))
+        if (CustomRecipeItems.Contains(e.Recipe.createItem.type) && !CustomRecipeIndexes.Contains(e.Index))
         {
             e.MeetsConditions = false; // 强制不满足条件 只显示自定义配方
             return;
         }
 
         // 自定义配方处理逻辑 
-        if (Config.CustomRecipes.Any(r => r.Index == e.RecipeIndex))
+        if (Config.CustomRecipes.Count > 0 && Config.CustomRecipes.Any(r => r.Index == e.Index))
         {
-            e.MeetsConditions = RecipeHooks.HasResultItemForRecipe(e.Recipe, e.CollectedItems);
+            e.MeetsConditions = RecipeHooks.HasResultItemForRecipe(e.Recipe, e.HasItem);
             return;
         }
 
@@ -305,17 +313,17 @@ public class MyPlugin(string path) : Plugin(path)
         }
 
         // 如果开启"忽略工作站要求"且工作站条件不满足
-        if (Config.IgnoreStationRequirements && !e.MeetsStationConditions)
+        if (Config.IgnoreStationRequirements && !e.MeetsTileConditions)
         {
             // 只要有材料就允许合成
-            e.MeetsConditions = Recipe.CollectedEnoughItemsToCraftRecipeNew(e.Recipe);
+            e.MeetsConditions = e.MeetsMaterialConditions;
             return;
         }
     }
     #endregion
 
-    #region 配方查找后事件（添加自定义配方）
-    private void OnPostFindRecipes()
+    #region 配方查找前事件（添加自定义配方）
+    private void OnAddCustomRecipes()
     {
         if (!Config.Enabled || !Config.CustomRecipesEnabled) return;
 

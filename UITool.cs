@@ -39,6 +39,10 @@ public class UITool : Tool
     {
         var plr = Main.player[Main.myPlayer];
 
+        // 传送枪距离设置
+        bool modifyPortalDistance = Config.ModifyPortalDistance; // 修改传送枪距离开关
+        int portalMaxDistance = (int)(Config.PortalMaxDistance / 16f); // 转换为格数
+
         bool enabled = Config.Enabled; //插件总开关
         bool Heal = Config.Heal; //回血开关
         int HealVal = Config.HealVal; //回血值
@@ -77,6 +81,7 @@ public class UITool : Tool
         int waitTime = Config.AutoTalkNPCWaitTimes;  // NPC自动对话等待时间
         int NpcRange = Config.AutoTalkRange; // 检测格数
         bool TalkingNpcImmortal = Config.TalkingNpcImmortal;
+
         // 在NPC管理区域开始时定义所有NPC设置变量
         bool helpTextForGuide = Config.HelpTextForGuide;
         bool inGuideCraftMenu = Config.InGuideCraftMenu;
@@ -93,6 +98,7 @@ public class UITool : Tool
         bool openShopForPainter = Config.OpenShopForPainter;
         bool openShopForWall = Config.OpenShopForWall;
         bool taxCollectorCustomReward = Config.TaxCollectorCustomReward;
+        bool NurseMute = Config.NurseMute;
 
         // 绘制插件设置界面
         ImGui.Checkbox("启用羽学插件", ref enabled);
@@ -336,6 +342,36 @@ public class UITool : Tool
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
 
+                // 传送枪距离设置
+                ImGui.Checkbox("修改传送枪距离", ref modifyPortalDistance);
+                if (modifyPortalDistance)
+                {
+                    // 将浮点数转换为整数格数
+                    int portalMaxDistanceBlocks = (int)(Config.PortalMaxDistance / 16f);
+
+                    ImGui.Text("最大距离:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+
+                    // 使用整数滑块
+                    if (ImGui.SliderInt("##PortalMaxDistance", ref portalMaxDistanceBlocks, 800, 8400, "%d 格"))
+                    {
+                        // 确保最小值至少为800格
+                        portalMaxDistanceBlocks = Math.Max(portalMaxDistanceBlocks, 800);
+
+                        // 转换回像素距离
+                        Config.PortalMaxDistance = portalMaxDistanceBlocks * 16f;
+
+                        ClientLoader.Chat.WriteLine($"传送枪距离已设置为 {portalMaxDistanceBlocks} 格", Color.Green);
+                    }
+
+                    // 显示当前设置信息
+                    ImGui.SameLine();
+                    ImGui.TextDisabled($"(当前: {portalMaxDistanceBlocks} 格)");
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip($"原版距离为800格\n当前设置为{portalMaxDistanceBlocks}格");
+                }
+
                 // 社交栏饰品开关
                 ImGui.Checkbox("社交栏饰品生效", ref socialEnabled);
                 ImGui.SameLine();
@@ -518,8 +554,18 @@ public class UITool : Tool
                                                       ref openHairWindow, ref openShopForStylist,
                                                       ref openShopForPainter, ref openShopForWall,
                                                       ref AutoClearAngel, ref ClearFish,
-                                                      ref taxCollectorCustomReward);
+                                                      ref taxCollectorCustomReward, ref NurseMute);
                     }
+
+                    // NPC商店编辑器
+                    ImGui.SameLine();
+                    if (ImGui.Button("NPC商店编辑器"))
+                    {
+                        NPCShopEditorUI.ToggleWindow();
+                    }
+
+                    // 绘制商店编辑器窗口
+                    NPCShopEditorUI.Draw();
 
                     // 显示当前对话状态
                     ImGui.Separator();
@@ -598,6 +644,7 @@ public class UITool : Tool
 
         Config.ClearAnglerQuests = AutoClearAngel; // 清除钓鱼任务开关
         Config.ClearFish = ClearFish; //消耗任务鱼开关
+        Config.NurseMute = NurseMute; // 护士禁言
         Config.HelpTextForGuide = helpTextForGuide;
         Config.InGuideCraftMenu = inGuideCraftMenu;
         Config.OpenShopForPartyGirl = openShopForPartyGirl;
@@ -613,6 +660,15 @@ public class UITool : Tool
         Config.OpenShopForPainter = openShopForPainter;
         Config.OpenShopForWall = openShopForWall;
         Config.TaxCollectorCustomReward = taxCollectorCustomReward; // 税收官自定义奖励开关
+
+        // 强制最小值为800格
+        if (modifyPortalDistance && portalMaxDistance < 800)
+        {
+            portalMaxDistance = 800;
+            Config.PortalMaxDistance = portalMaxDistance * 16f;
+        }
+        // 保存设置
+        Config.ModifyPortalDistance = modifyPortalDistance;
 
         // 保存按钮
         ImGui.Separator();
@@ -645,7 +701,7 @@ public class UITool : Tool
                                               ref bool openHairWindow, ref bool openShopForStylist,
                                               ref bool openShopForPainter, ref bool openShopForWall,
                                               ref bool AutoClearAngel, ref bool ClearFish,
-                                              ref bool taxCollectorCustomReward)
+                                              ref bool taxCollectorCustomReward, ref bool NurseMute)
     {
         ImGui.Begin("NPC行为设置", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse);
 
@@ -656,6 +712,13 @@ public class UITool : Tool
         {
             ImGui.Checkbox("显示指导语提示", ref helpTextForGuide);
             ImGui.Checkbox("打开制作栏", ref inGuideCraftMenu);
+            ImGui.TreePop();
+        }
+
+        // 护士设置
+        if (ImGui.TreeNodeEx("护士", ImGuiTreeNodeFlags.Framed))
+        {
+            ImGui.Checkbox("护士禁言", ref NurseMute);
             ImGui.TreePop();
         }
 
@@ -692,9 +755,25 @@ public class UITool : Tool
             if (taxCollectorCustomReward)
             {
                 // 添加物品按钮
+                ImGui.BeginGroup();
                 if (ImGui.Button("从手上添加物品"))
                 {
                     Utils.AddRewardFromHeldItem();
+                }
+
+                ImGui.SameLine();
+                if (ImGui.Button("搜索添加物品"))
+                {
+                    showTaxRewardSearch = true;
+                    taxRewardSearchText = "";
+                    tempTaxRewardStack = 1;
+                }
+                ImGui.EndGroup();
+
+                // 物品搜索窗口
+                if (showTaxRewardSearch)
+                {
+                    DrawTaxRewardSearch();
                 }
 
                 // 管理列表按钮
@@ -740,9 +819,6 @@ public class UITool : Tool
         if (ImGui.TreeNodeEx("哥布林工匠", ImGuiTreeNodeFlags.Framed))
         {
             // 使用互斥的单选按钮
-            ImGui.Text("选择行为:");
-            ImGui.Indent();
-
             if (ImGui.RadioButton("打开商店", openShopForGoblin))
             {
                 // 选择打开商店时，关闭重铸界面
@@ -756,9 +832,6 @@ public class UITool : Tool
                 openShopForGoblin = false;
                 inReforgeMenu = true;
             }
-
-            ImGui.Unindent();
-
             ImGui.TreePop();
         }
 
@@ -766,9 +839,6 @@ public class UITool : Tool
         if (ImGui.TreeNodeEx("发型师", ImGuiTreeNodeFlags.Framed))
         {
             // 使用互斥的单选按钮
-            ImGui.Text("选择行为:");
-            ImGui.Indent();
-
             if (ImGui.RadioButton("打开发型窗口", openHairWindow))
             {
                 // 选择发型窗口时，关闭商店
@@ -782,8 +852,6 @@ public class UITool : Tool
                 openHairWindow = false;
                 openShopForStylist = true;
             }
-
-            ImGui.Unindent();
             ImGui.TreePop();
         }
 
@@ -791,9 +859,6 @@ public class UITool : Tool
         if (ImGui.TreeNodeEx("油漆工", ImGuiTreeNodeFlags.Framed))
         {
             // 使用互斥的单选按钮
-            ImGui.Text("选择行为:");
-            ImGui.Indent();
-
             if (ImGui.RadioButton("打开喷漆商店", openShopForPainter))
             {
                 // 选择喷漆商店时，关闭壁纸商店
@@ -807,17 +872,108 @@ public class UITool : Tool
                 openShopForPainter = false;
                 openShopForWall = true;
             }
-
-            ImGui.Unindent();
             ImGui.TreePop();
         }
 
+        ImGui.End();
+    }
+    #endregion
+
+    #region 渲染税收官搜索添加物品窗口
+    private static string taxRewardSearchText = "";
+    private static bool ShowRewardEditor = false;
+    private static int tempTaxRewardStack = 1;
+    private static void DrawTaxRewardSearch()
+    {
+        ImGui.SetNextWindowSize(new Vector2(450, 500), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("添加税收官奖励物品", ref showTaxRewardSearch, ImGuiWindowFlags.NoCollapse))
+        {
+            // 搜索框
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "搜索物品:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(200);
+            ImGui.InputText("##TaxRewardSearch", ref taxRewardSearchText, 100);
+
+            // 数量设置
+            ImGui.Text("数量:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(100);
+            ImGui.InputInt("##TaxRewardStack", ref tempTaxRewardStack);
+            tempTaxRewardStack = Math.Max(1, tempTaxRewardStack);
+
+            ImGui.BeginChild("TaxRewardItemList", new Vector2(0, 400), ImGuiChildFlags.Borders);
+
+            // 使用搜索逻辑过滤物品
+            var filteredItems = ContentSamples.ItemsByType.Where(kvp =>
+            {
+                if (kvp.Value == null || kvp.Key <= 0) return false;
+                if (string.IsNullOrWhiteSpace(taxRewardSearchText)) return true;
+
+                return kvp.Value.Name.Contains(taxRewardSearchText, StringComparison.OrdinalIgnoreCase) ||
+                       kvp.Key.ToString().Contains(taxRewardSearchText);
+            });
+
+            foreach (var kvp in filteredItems)
+            {
+                Item item = kvp.Value;
+                if (item.type == 0 || item.Name == null) continue;
+
+                // 检查物品是否已存在
+                bool alreadyExists = Config.TaxCollectorRewards.Any(r => r.ItemID == item.type);
+
+                // 设置颜色提示
+                if (alreadyExists)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.5f, 0.5f, 1f));
+                }
+
+                if (ImGui.Selectable($"{item.Name} (ID:{item.type})##TaxReward", false,
+                    alreadyExists ? ImGuiSelectableFlags.Disabled : ImGuiSelectableFlags.None))
+                {
+                    // 添加物品到奖励列表（排除重复）
+                    if (!alreadyExists)
+                    {
+                        Config.TaxCollectorRewards.Add(new RewardItem
+                        {
+                            ItemID = item.type,
+                            Stack = tempTaxRewardStack,
+                            Enabled = true
+                        });
+
+                        // 重新计算概率
+                        Utils.ToActiveRate();
+
+                        ClientLoader.Chat.WriteLine($"已添加: {item.Name}", Color.Green);
+                        showTaxRewardSearch = false;
+                    }
+                }
+
+                if (alreadyExists)
+                {
+                    ImGui.PopStyleColor();
+                    ImGui.SameLine();
+                    ImGui.TextColored(new Vector4(1f, 0.5f, 0.5f, 1f), "(已添加)");
+                }
+
+                // 工具提示显示物品信息
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text($"ID: {item.type}");
+                    ImGui.Text($"名称: {item.Name}");
+                    ImGui.Text($"类型: {item.type}");
+                    ImGui.Text($"稀有度: {item.rare}");
+                    ImGui.EndTooltip();
+                }
+            }
+            ImGui.EndChild();
+        }
         ImGui.End();
     } 
     #endregion
 
     #region 税收官随机奖励编辑器窗口
-    private static bool ShowRewardEditor = false;
+    private static bool showTaxRewardSearch = false;
     private void DrawRewardEditorWindow()
     {
         ImGui.Begin("税收官奖励物品管理", ref ShowRewardEditor, ImGuiWindowFlags.AlwaysAutoResize);
@@ -1387,7 +1543,7 @@ public class UITool : Tool
     private bool ShowItemSelectorForResult = false;
     private bool ShowItemSelectorForIngredient = false;
     private string ItemSearchText = "";
-    private void DrawItemSelector(ref int selectedItemId)
+    private void DrawItemSelector(ref int SelectedItemId)
     {
         // 合并控制变量
         bool showWindow = ShowItemSelectorForResult || ShowItemSelectorForIngredient;
@@ -1403,23 +1559,25 @@ public class UITool : Tool
 
             ImGui.BeginChild("ItemList", new Vector2(0, 400), ImGuiChildFlags.Borders);
 
-            var filteredItems = ContentSamples.ItemsByType.Where(kvp =>
+            // 筛选物品ID
+            var FilteredItems = ContentSamples.ItemsByType.Where(item =>
             {
-                if (kvp.Value == null || kvp.Key <= 0) return false;
+                if (item.Value == null || item.Key <= 0) return false;
                 if (string.IsNullOrWhiteSpace(ItemSearchText)) return true;
 
-                return kvp.Value.Name.Contains(ItemSearchText, StringComparison.OrdinalIgnoreCase) ||
-                       kvp.Key.ToString().Contains(ItemSearchText);
+                return item.Value.Name.Contains(ItemSearchText, StringComparison.OrdinalIgnoreCase) ||
+                       item.Key.ToString().Contains(ItemSearchText);
             });
 
-            foreach (var kvp in filteredItems)
+            // 选择到的物品
+            foreach (var Filt in FilteredItems)
             {
-                Item item = kvp.Value;
+                Item item = Filt.Value;
                 if (item.type == 0 || item.Name == null) continue;
 
-                if (ImGui.Selectable($"{item.Name} (ID:{item.type})", selectedItemId == item.type))
+                if (ImGui.Selectable($"{item.Name} (ID:{item.type})", SelectedItemId == item.type))
                 {
-                    selectedItemId = item.type;
+                    SelectedItemId = item.type;
                     ShowItemSelectorForResult = false;
                     ShowItemSelectorForIngredient = false;
                 }
@@ -3117,7 +3275,7 @@ public class UITool : Tool
 
             // 基础属性
             ImGui.Separator();
-            ImGui.Text("基础属性:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "基础属性:");
 
             int damage = EditItem.Damage;
             ImGui.InputInt("伤害", ref damage);
@@ -3147,9 +3305,9 @@ public class UITool : Tool
             ImGui.InputInt("渔饵力", ref bait);
             EditItem.bait = bait;
 
-            int fishingPole = EditItem.fishingPole; // 添加钓鱼竿等级属性
+            int fishingPole = EditItem.FishingPole; // 添加钓鱼竿等级属性
             ImGui.InputInt("渔力", ref fishingPole);
-            EditItem.fishingPole = fishingPole;
+            EditItem.FishingPole = fishingPole;
 
             int pick = EditItem.pick; // 添加镐力属性
             ImGui.InputInt("镐力", ref pick);
@@ -3177,7 +3335,7 @@ public class UITool : Tool
 
             // 射击属性
             ImGui.Separator();
-            ImGui.Text("射击属性:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "射击属性:");
             int shoot = EditItem.Shoot;
             ImGui.InputInt("弹幕ID", ref shoot);
             EditItem.Shoot = shoot;
@@ -3187,8 +3345,7 @@ public class UITool : Tool
 
             // 使用属性
             ImGui.Separator();
-            ImGui.Text("使用属性:");
-
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "使用属性:");
             int useTime = EditItem.UseTime;
             ImGui.InputInt("使用时间", ref useTime);
             EditItem.UseTime = useTime;
@@ -3219,7 +3376,7 @@ public class UITool : Tool
 
             // 武器类型
             ImGui.Separator();
-            ImGui.Text("物品类型:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "物品类型:");
             bool melee = EditItem.Melee;
             ImGui.Checkbox("近战", ref melee);
             EditItem.Melee = melee;
@@ -3269,7 +3426,7 @@ public class UITool : Tool
             EditItem.legSlot = legSlot;
 
             ImGui.Separator();
-            ImGui.Text("使用类型:");
+            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "使用类型:");
             bool autoReuse = EditItem.AutoReuse;
             ImGui.Checkbox("自动挥舞", ref autoReuse);
             EditItem.AutoReuse = autoReuse;

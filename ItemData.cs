@@ -12,7 +12,7 @@ public class ItemData
     public byte Prefix { get; set; }
     public int Crit { get; set; }
     public float KnockBack { get; set; }
-    public int fishingPole { get; set; } // 钓鱼竿等级
+    public int FishingPole { get; set; } // 钓鱼竿等级
     public int bait { get; set; } //鱼饵值
     public int pick { get; set; } // 镐力
     public int axe { get; set; } // 斧力
@@ -49,6 +49,7 @@ public class ItemData
     public bool consumable { get; set; } // 是否为消耗品
     public bool material { get; set; } // 是否为材料
 
+    #region 将泰拉瑞亚物品转换为配置文件
     public static ItemData FromItem(Item item)
     {
         return new ItemData
@@ -62,7 +63,7 @@ public class ItemData
             Crit = item.crit,
             KnockBack = item.knockBack,
             bait = item.bait, // 鱼饵值
-            fishingPole = item.fishingPole, // 钓鱼竿等级
+            FishingPole = item.fishingPole, // 钓鱼竿等级
             pick = item.pick, // 镐力
             axe = item.axe, // 斧力
             hammer = item.hammer, // 锤力
@@ -97,12 +98,14 @@ public class ItemData
             wornArmor = item.wornArmor, // 是否为穿戴的护甲
         };
     }
+    #endregion
 
+    #region 配置文件应用到对应泰拉瑞亚物品
     public void ApplyTo(Item item)
     {
         // 确保只应用于相同类型的物品
         if (item.type != Type) return;
-        
+
         item.damage = Damage;
         item.defense = Defense;
         item.stack = Stack;
@@ -110,7 +113,7 @@ public class ItemData
         item.crit = Crit;
         item.knockBack = KnockBack;
         item.bait = bait;
-        item.fishingPole = fishingPole; // 钓鱼竿等级
+        item.fishingPole = FishingPole; // 钓鱼竿等级
         item.pick = pick; // 镐力
         item.axe = axe; // 斧力
         item.hammer = hammer; // 锤力
@@ -146,5 +149,6 @@ public class ItemData
         item.bodySlot = bodySlot; // 身体装备栏
         item.legSlot = legSlot; // 腿部装备栏
 
-    }
+    } 
+    #endregion
 }

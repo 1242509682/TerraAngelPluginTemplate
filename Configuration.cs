@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using System.Numerics;
 using TerraAngel;
+using Terraria;
 using Terraria.ID;
 
 namespace MyPlugin;
@@ -109,18 +110,18 @@ internal class Configuration
     public List<VeinMinerItem> VeinMinerList { get; set; } = new List<VeinMinerItem>();
 
     [JsonProperty("进入世界收藏背包物品", Order = 20)]
-    public bool FavoriteItemForJoinWorld { get; set; } = true;
+    public bool FavoriteItemForJoinWorld { get; set; } = false;
 
+    [JsonProperty("添加自定义配方", Order = 21)]
+    public bool CustomRecipesEnabled { get; set; } = true;
     [JsonProperty("解锁所有配方", Order = 21)]
     public bool UnlockAllRecipes { get; set; } = false;
     [JsonProperty("忽略工作站要求", Order = 21)]
     public bool IgnoreStationRequirements { get; set; } = false;
-    [JsonProperty("添加自定义配方", Order = 21)]
-    public bool CustomRecipesEnabled { get; set; } = true;
     [JsonProperty("自定义配方列表", Order = 21)]
     public List<CustomRecipeData> CustomRecipes { get; set; } = new List<CustomRecipeData>();
 
-
+    #region NPC自动对话
     [JsonProperty("NPC自动对话", Order = 22)]
     public bool AutoTalkNPC { get; set; } = true;
     [JsonProperty("NPC自动对话按键", Order = 22)]
@@ -137,6 +138,8 @@ internal class Configuration
     public Keys ClearQuestsKey = Keys.F;
     [JsonProperty("消耗任务鱼", Order = 22)]
     public bool ClearFish { get; set; } = false;
+    [JsonProperty("护士禁言", Order = 22)]
+    public bool NurseMute { get; set; } = false;
     [JsonProperty("派对女孩切换音乐", Order = 22)]
     public bool SwapMusicing { get; set; } = true;
     [JsonProperty("派对女孩打开商店", Order = 22)]
@@ -169,6 +172,14 @@ internal class Configuration
     public bool TaxCollectorCustomReward { get; set; } = false;
     [JsonProperty("税务官奖励列表", Order = 22)]
     public List<RewardItem> TaxCollectorRewards { get; set; } = new List<RewardItem>();
+    [JsonProperty("自定义NPC商店表", Order = 23)]
+    public List<ShopItem> Shop = new List<ShopItem>();
+    #endregion
+
+    [JsonProperty("修改传送枪弹幕距离", Order = 23)]
+    public bool ModifyPortalDistance { get; set; } = true;
+    [JsonProperty("传送枪弹幕销毁距离", Order = 23)]
+    public float PortalMaxDistance { get; set; } = 4000f * 16;
 
     #region 预设参数方法
     public void SetDefault()
@@ -214,42 +225,9 @@ internal class Configuration
         VeinMinerEnabled = false;
         VeinMinerKey = Keys.V;
         VeinMinerCount = 500;
-        VeinMinerList = new List<VeinMinerItem>() 
-        {
-            new VeinMinerItem(6, "铁矿"),
-            new VeinMinerItem(7, "铜矿"),
-            new VeinMinerItem(8, "金矿"),
-            new VeinMinerItem(9, "银矿"),
-            new VeinMinerItem(22, "魔矿"),
-            new VeinMinerItem(37, "陨石"),
-            new VeinMinerItem(48, "尖刺"),
-            new VeinMinerItem(56, "黑曜石"),
-            new VeinMinerItem(58, "狱石"),
-            new VeinMinerItem(63, "蓝玉石块"),
-            new VeinMinerItem(64, "红玉石块"),
-            new VeinMinerItem(65, "翡翠石块"),
-            new VeinMinerItem(66, "黄玉石块"),
-            new VeinMinerItem(67, "紫晶石块"),
-            new VeinMinerItem(68, "钻石石块"),
-            new VeinMinerItem(107, "钴矿"),
-            new VeinMinerItem(108, "秘银矿"),
-            new VeinMinerItem(111, "精金矿"),
-            new VeinMinerItem(166, "锡矿"),
-            new VeinMinerItem(167, "铅矿"),
-            new VeinMinerItem(168, "钨矿"),
-            new VeinMinerItem(169, "铂金矿"),
-            new VeinMinerItem(204, "猩红矿"),
-            new VeinMinerItem(211, "叶绿矿"),
-            new VeinMinerItem(221, "钯金矿"),
-            new VeinMinerItem(222, "山铜矿"),
-            new VeinMinerItem(223, "钛金矿"),
-            new VeinMinerItem(229, "蜂蜜块"),
-            new VeinMinerItem(230, "松脆蜂蜜块"),
-            new VeinMinerItem(232, "木尖刺"),
-            new VeinMinerItem(404, "沙漠化石"),
-        };
+        VeinMinerList = VeinMinerItemSetDefault();
 
-        FavoriteItemForJoinWorld = true;
+        FavoriteItemForJoinWorld = false;
 
         AutoTalkNPC = true;
         AutoTalkKey = Keys.Y;
@@ -259,11 +237,12 @@ internal class Configuration
         ClearAnglerQuests = true;
         ClearQuestsKey = Keys.F;
         ClearFish = false;
+        NurseMute = false;
         SwapMusicing = true;
         OpenShopForPartyGirl = true;
         HelpTextForGuide = true;
         InGuideCraftMenu = true;
-        OpenShopForDD2Bartender = true; 
+        OpenShopForDD2Bartender = true;
         HelpTextForDD2Bartender = true;
         OpenShopForPainter = true;
         OpenShopForWall = false;
@@ -274,16 +253,17 @@ internal class Configuration
         OpenHairWindow = true;
         OpenShopForStylist = false;
         TaxCollectorCustomReward = false;
-        TaxCollectorRewards = new List<RewardItem> 
-        { 
-            new RewardItem() 
-            { 
-                Enabled = true, 
-                ItemID = ItemID.PlatinumCoin, 
-                Stack = 1, 
-                Chance = 100
-            } 
-        };
+        TaxCollectorRewards = TaxCollectorRewardsSetDefault();
+
+        CustomRecipesEnabled = true;
+        UnlockAllRecipes = false;
+        IgnoreStationRequirements = false;
+        CustomRecipes = CustomRecipeSetDefault();
+
+        Shop = ShopItemSetDefault();
+
+        ModifyPortalDistance = true;
+        PortalMaxDistance = 4000 * 16f;
     }
     #endregion
 
@@ -335,5 +315,410 @@ internal class Configuration
             return backConfig;
         }
     }
+    #endregion
+
+    #region 自定义配方默认参数
+    public static List<CustomRecipeData> CustomRecipeSetDefault()
+    {
+        return new List<CustomRecipeData>()
+        {
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Wood, // 10个木材
+               ResultStack = 10,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.Acorn, //橡实
+                       Stack = 1,
+                   }
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.DepthMeter, // 深度计
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.Compass, // 罗盘
+                       Stack = 1,
+                   }
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Compass, // 罗盘
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.DepthMeter, // 深度计
+                       Stack = 1,
+                   }
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.GoldenKey,  // 5个金钥匙
+               ResultStack = 5,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.ShadowKey, // 暗影钥匙
+                       Stack = 1,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.BloodMoonStarter,  // 血泪
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.LifeCrystal, // 3个生命水晶
+                       Stack = 5,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.LifeFruit,  // 生命果
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.LifeCrystal, // 生命水晶
+                       Stack = 1,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.FrogLeg, // 蛙腿
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.Frog, //5个青蛙合成
+                       Stack = 5,
+                   }
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.CloudinaBottle,  // 云朵瓶
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.Cloud, // 10个云块
+                       Stack = 10,
+                   },
+
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.Bottle, // 1个空瓶
+                       Stack = 1,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.MushroomGrassSeeds,  // 蘑菇草种子
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.JungleGrassSeeds, // 丛林草种子
+                       Stack = 1,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.JungleGrassSeeds,  // 丛林草种子
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.MushroomGrassSeeds,  // 蘑菇草种子
+                       Stack = 1,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.HerbBag,  // 草药袋
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.DaybloomSeeds, // 太阳花种子
+                       Stack = 1,
+                   },
+
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.MoonglowSeeds, // 月光草种子
+                       Stack = 1,
+                   },
+
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.BlinkrootSeeds, // 闪耀根种子
+                       Stack = 1,
+                   },
+
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.DeathweedSeeds, // 死亡草种子
+                       Stack = 1,
+                   },
+
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.WaterleafSeeds, // 幌菊种子
+                       Stack = 1,
+                   },
+
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.FireblossomSeeds, // 火焰花种子
+                       Stack = 1,
+                   },
+
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.ShiverthornSeeds, // 寒颤棘种子
+                       Stack = 1,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Daybloom,  // 太阳花
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.DaybloomSeeds, // 太阳花种子
+                       Stack = 3,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Moonglow,  // 月光草
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.MoonglowSeeds, // 月光草种子
+                       Stack = 3,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Deathweed,  // 死亡草
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.DeathweedSeeds, // 死亡草种子
+                       Stack = 3,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Waterleaf,  // 幌菊
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.WaterleafSeeds, // 幌菊种子
+                       Stack = 3,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Fireblossom,  // 火焰花
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.FireblossomSeeds, // 火焰花种子
+                       Stack = 3,
+                   },
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ResultItem = ItemID.Shiverthorn,  // 寒颤棘
+               ResultStack = 1,
+               Ingredients = new List<IngredientData>()
+               {
+                   new IngredientData()
+                   {
+                       ItemId = ItemID.ShiverthornSeeds, // 寒颤棘种子
+                       Stack = 3,
+                   },
+               }
+           },
+        };
+    }
+    #endregion
+
+    #region 连锁挖矿默认参数
+    public static List<VeinMinerItem> VeinMinerItemSetDefault()
+    {
+        return new List<VeinMinerItem>()
+        {
+            new VeinMinerItem(6, "铁矿"),
+            new VeinMinerItem(7, "铜矿"),
+            new VeinMinerItem(8, "金矿"),
+            new VeinMinerItem(9, "银矿"),
+            new VeinMinerItem(22, "魔矿"),
+            new VeinMinerItem(37, "陨石"),
+            new VeinMinerItem(48, "尖刺"),
+            new VeinMinerItem(56, "黑曜石"),
+            new VeinMinerItem(58, "狱石"),
+            new VeinMinerItem(63, "蓝玉石块"),
+            new VeinMinerItem(64, "红玉石块"),
+            new VeinMinerItem(65, "翡翠石块"),
+            new VeinMinerItem(66, "黄玉石块"),
+            new VeinMinerItem(67, "紫晶石块"),
+            new VeinMinerItem(68, "钻石石块"),
+            new VeinMinerItem(107, "钴矿"),
+            new VeinMinerItem(108, "秘银矿"),
+            new VeinMinerItem(111, "精金矿"),
+            new VeinMinerItem(166, "锡矿"),
+            new VeinMinerItem(167, "铅矿"),
+            new VeinMinerItem(168, "钨矿"),
+            new VeinMinerItem(169, "铂金矿"),
+            new VeinMinerItem(204, "猩红矿"),
+            new VeinMinerItem(211, "叶绿矿"),
+            new VeinMinerItem(221, "钯金矿"),
+            new VeinMinerItem(222, "山铜矿"),
+            new VeinMinerItem(223, "钛金矿"),
+            new VeinMinerItem(229, "蜂蜜块"),
+            new VeinMinerItem(230, "松脆蜂蜜块"),
+            new VeinMinerItem(232, "木尖刺"),
+            new VeinMinerItem(404, "沙漠化石"),
+        };
+    }
+    #endregion
+
+    #region 税收官随机奖励默认参数
+    public static List<RewardItem> TaxCollectorRewardsSetDefault()
+    {
+        return new List<RewardItem>()
+        {
+            new RewardItem()
+            {
+                Enabled = true,
+                ItemID = ItemID.PlatinumCoin,
+                Stack = 1,
+                Chance = 100
+            }
+        };
+
+    }
+    #endregion
+
+    #region 自定义商店默认参数
+    public static List<ShopItem> ShopItemSetDefault()
+    {
+        return new List<ShopItem>()
+        {
+            new ShopItem()
+            {
+                Enabled = true,
+                Name = "",
+                NpcType = NPCID.Merchant,
+                item = new List<CShopItemInfo>()
+                {
+                    new CShopItemInfo()
+                    {
+                        id = ItemID.Wood,
+                        prefix = 0,
+                        stack = 20,
+                        price = 100,
+                    },
+
+                    new CShopItemInfo()
+                    {
+                        id = ItemID.BottledWater,
+                        prefix = 0,
+                        stack = 20,
+                        price = 400,
+                    },
+
+                    new CShopItemInfo()
+                    {
+                        id = ItemID.FallenStar,
+                        prefix = 0,
+                        stack = 1,
+                        price = 400,
+                        unlock = new List<string>()
+                        {
+                            "克眼"
+                        }
+                    }
+                }
+            }
+        };
+
+    }
+    #endregion
+
+    #region 查找商店物品来自NPC
+    public int FindShopItem(int npcID)
+    {
+        for (int i = 0; i < Shop.Count; i++)
+        {
+            if (Shop[i].NpcType == npcID)
+            {
+                return i;
+            }
+        }
+        return -1;
+    } 
     #endregion
 }

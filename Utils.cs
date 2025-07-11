@@ -1,6 +1,6 @@
-﻿using System.Numerics;
+﻿using Microsoft.Xna.Framework;
+using System.Numerics;
 using System.Reflection;
-using Microsoft.Xna.Framework;
 using TerraAngel;
 using TerraAngel.Input;
 using Terraria;
@@ -8,11 +8,10 @@ using Terraria.Audio;
 using Terraria.DataStructures;
 using Terraria.GameContent;
 using Terraria.GameContent.Achievements;
+using Terraria.GameContent.Bestiary;
 using Terraria.GameContent.Events;
 using Terraria.ID;
 using Terraria.Localization;
-using Terraria.Map;
-using Terraria.Net;
 using Terraria.UI.Gamepad;
 using static MyPlugin.MyPlugin;
 using static MyPlugin.UITool;
@@ -152,7 +151,7 @@ internal class Utils
     // 检查NPC是否解锁于怪物图鉴
     public static bool BestiaryEntry(int npcId)
     {
-        return (int)Main.BestiaryDB.FindEntryByNPCID(npcId).UIInfoProvider.GetEntryUICollectionInfo().UnlockState > 0;
+        return Main.BestiaryDB.FindEntryByNPCID(npcId).UIInfoProvider.GetEntryUICollectionInfo().UnlockState > BestiaryEntryUnlockState.NotKnownAtAll_0;
     }
     #endregion
 
@@ -1804,8 +1803,12 @@ internal class Utils
         // 触发对话 (排除城镇宠物、城镇史莱姆)
         if (plr.talkNPC != -1 || NPCID.Sets.IsTownPet[npc.type] || NPCID.Sets.IsTownSlime[npc.type]) return;
 
+        //注册怪物图鉴
+        Main.BestiaryTracker.Chats.RegisterChatStartWith(npc);
+        // 设置玩家的对话NPC索引
         plr.SetTalkNPC(npc.whoAmI, Main.netMode is 2);
-        TalkText(plr);
+        // 给玩家发送内容
+        SendTalkText(plr, npc.whoAmI);
 
         if (Main.netMode is 2)
             NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
@@ -1888,7 +1891,7 @@ internal class Utils
     #endregion
 
     #region 自动对话消息方法
-    public static void TalkText(Player plr)
+    public static void SendTalkText(Player plr, int NpcIndex)
     {
         var npcType = Main.npc[plr.talkNPC].type;
         switch (npcType)
@@ -1909,47 +1912,144 @@ internal class Utils
                 HandleOldManInteraction();
                 break;
 
-            case NPCID.Stylist: // 发型师
-                OpenHairWindowOrOpenShop();
-                break;
-
-            case NPCID.PartyGirl: // 派对女孩
-                SwapMusic();
-                break;
-
             case NPCID.TaxCollector: //税收官
                 HandleTaxCollectorInteraction(plr);
                 break;
 
+            case NPCID.Stylist: // 发型师
+                OpenHairWindowOrOpenShop(plr, NpcIndex);
+                break;
+
+            case NPCID.PartyGirl: // 派对女孩
+                SwapMusic(plr,NpcIndex);
+                break;
+
             case NPCID.Painter: //油漆工
-                OpenPainterShops();
+                OpenPainterShops(plr, NpcIndex);
                 break;
 
             case NPCID.GoblinTinkerer: //哥布林工匠
-                OpenGoblinShop();
+                OpenGoblinShop(plr, NpcIndex);
                 break;
 
             case NPCID.DD2Bartender: // 酒馆老板
-                OpenShopForDD2Bartender(plr);
+                OpenShopForDD2Bartender(plr, NpcIndex);
                 break;
 
             case NPCID.Dryad: // 树妖
-                OpenDryadShop(plr);
+                OpenDryadShop(plr, NpcIndex);
                 break;
 
             default:
-                // 商店NPC统一处理
+                // 其他没特殊功能的商店NPC统一处理
                 int shopID = GetNPCShopID(npcType);
                 if (shopID > 0)
                 {
                     NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [shopID]);
+                    MoreShopItem(plr, NpcIndex, npcType);
                 }
                 break;
         }
     }
+    #endregion                                                                                                                                                        
+
+    #region 更多商店物品
+    public static void MoreShopItem(Player plr, int NpcIndex, int npcType)
+    {
+        ReloadConfig();
+
+        int ShopIndex = Config.FindShopItem(npcType);
+        if (ShopIndex == -1 || !Config.Shop[ShopIndex].Enabled) return;
+
+        if (string.IsNullOrEmpty(Config.Shop[ShopIndex].Name))
+        {
+            Config.Shop[ShopIndex].Name = Lang.GetNPCNameValue(npcType) + "(商店)";
+            Config.Write();
+        }
+
+        // 使用Main实例访问shop数组
+        Chest[] shops = Main.instance.shop;
+        if (shops == null || shops.Length <= Main.npcShop) return;
+
+        Item[] shopItem = shops[Main.npcShop].item;
+
+        int slot = 0;
+        if (Config.Shop[ShopIndex].ReplaceOriginal)
+        {
+            for (int i = 0; i < shopItem.Length; i++)
+            {
+                shopItem[i].TurnToAir(); // 清空槽位
+                
+                // 网络同步
+                if (Main.netMode is 2)
+                {
+                    // 发送物品同步包
+                    NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Main.myPlayer, Main.npcShop, i);
+                    NetMessage.SendData(MessageID.ShopOverride, -1, -1, null, Main.myPlayer, Main.npcShop, i);
+                }
+            }
+
+            slot = 0;
+        }
+        else
+        {
+            // 找一个空槽位
+            slot = -1;
+            for (int i = 0; i < shopItem.Length; i++)
+            {
+                if (!shopItem[i].active)
+                {
+                    slot = i;
+                    break;
+                }
+            }
+            // 如果没有空槽位，直接返回
+            if (slot == -1) return;
+        }
+
+        // 添加自定义物品
+        List<CShopItemInfo> Unlock = Config.Shop[ShopIndex].FilterByUnlock(plr.whoAmI);
+        for (int j = 0; j < Unlock.Count && slot < shopItem.Length; j++)
+        {
+            CShopItemInfo item = Unlock[j];
+            UpdateSlot(slot, item, shopItem);
+            slot++;
+        }
+    }
     #endregion
 
-    #region 获取NPC对应的商店ID
+    #region 更新NPC商店物品方法
+    public static void UpdateSlot(int slotIndex, CShopItemInfo item, Item[] shopItems)
+    {
+        // 确保槽位有效
+        if (slotIndex < 0 || slotIndex >= shopItems.Length) return;
+
+        // 创建新物品实例
+        Item newItem = new Item();
+        newItem.SetDefaults(item.id);
+        newItem.stack = (item.stack <= 0) ? 1 : item.stack;
+        newItem.Prefix(item.prefix);
+
+        // 设置自定义价格
+        if (item.price > 0)
+        {
+            newItem.shopCustomPrice = item.price;
+        }
+
+        // 替换商店槽位
+        shopItems[slotIndex] = newItem;
+
+        // 网络同步
+        if (Main.netMode is 2)
+        {
+            // 发送物品同步包
+            NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null,Main.myPlayer, Main.npcShop, slotIndex);
+            NetMessage.SendData(MessageID.ShopOverride, - 1, -1, null, Main.myPlayer, Main.npcShop, slotIndex);
+        }
+    }
+    #endregion
+
+    #region 获取其他NPC对应的商店ID
     private static int GetNPCShopID(int npcType) => npcType switch
     {
         NPCID.Merchant => 1,
@@ -1974,47 +2074,13 @@ internal class Utils
     };
     #endregion
 
-    #region 处理向导逻辑（进入"制作"指导界面）
-    private static void OpenGuideCraftMenu()
-    {
-        if (Config.HelpTextForGuide) // 新手提示
-        {
-            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
-        }
-
-        if (Config.InGuideCraftMenu) //打开制作栏
-        {
-            Main.playerInventory = true;
-            SoundEngine.PlaySound(12);
-            Main.InGuideCraftMenu = true;
-            UILinkPointNavigator.GoToDefaultPage();
-        }
-    }
-    #endregion
-
-    #region 处理酒馆老板逻辑
-    private static void OpenShopForDD2Bartender(Player plr)
-    {
-        if (Config.HelpTextForDD2Bartender) // 新手提示
-        {
-            SoundEngine.PlaySound(12);
-            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
-            Main.npcChatText = Lang.BartenderHelpText(Main.npc[plr.talkNPC]);
-        }
-
-        if (Config.OpenShopForDD2Bartender) //打开商店
-        {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [21]);
-        }
-    }
-    #endregion
-
-    #region 处理树妖逻辑(打开商店和检查环境)
-    private static void OpenDryadShop(Player plr)
+    #region 处理树妖逻辑打开商店和检查环境
+    private static void OpenDryadShop(Player plr, int NpcIndex, short npcType = NPCID.Dryad, int shopID = 3)
     {
         if (Config.OpenShopForDryad) // 打开商店
         {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [3]);
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [shopID]);
+            MoreShopItem(plr, NpcIndex, npcType);
         }
 
         if (Config.CheckBiomes) //检查环境
@@ -2045,13 +2111,32 @@ internal class Utils
     }
     #endregion
 
-    #region 处理派对女孩(切换音乐和打开商店)
-    private static void SwapMusic()
+    #region 处理酒馆老板打开商店和新手提示
+    private static void OpenShopForDD2Bartender(Player plr, int NpcIndex, short npcType = NPCID.DD2Bartender, int shopID = 21)
+    {
+        if (Config.HelpTextForDD2Bartender) // 新手提示
+        {
+            SoundEngine.PlaySound(12);
+            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
+            Main.npcChatText = Lang.BartenderHelpText(Main.npc[plr.talkNPC]);
+        }
+
+        if (Config.OpenShopForDD2Bartender) //打开商店
+        {
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [shopID]);
+            MoreShopItem(plr, NpcIndex, npcType);
+        }
+    }
+    #endregion
+
+    #region 处理派对女孩打开商店和切换音乐
+    private static void SwapMusic(Player plr, int NpcIndex, short npcType = NPCID.PartyGirl, int shopID = 13)
     {
         // 打开商店
         if (Config.OpenShopForPartyGirl)
         {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [13]);
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [shopID]);
+            MoreShopItem(plr, NpcIndex, npcType);
         }
 
         // 切换音乐
@@ -2069,8 +2154,8 @@ internal class Utils
     }
     #endregion
 
-    #region 处理发型师打开头发窗口或商店
-    private static void OpenHairWindowOrOpenShop()
+    #region 处理发型师打开商店或头发窗口
+    private static void OpenHairWindowOrOpenShop(Player plr, int NpcIndex, short npcType = NPCID.Stylist, int shopID = 18)
     {
         // 2选1(否则会对话冲突)
         if (Config.OpenHairWindow) // 打开头发购买窗口
@@ -2081,18 +2166,20 @@ internal class Utils
 
         if (Config.OpenShopForStylist) //打开商店
         {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [18]);
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [shopID]);
+            MoreShopItem(plr, NpcIndex, npcType);
             Config.OpenHairWindow = false;
         }
     }
     #endregion
 
-    #region 处理哥布林商店与重铸
-    private static void OpenGoblinShop()
+    #region 处理哥布林打开商店与重铸
+    private static void OpenGoblinShop(Player plr, int NpcIndex, short npcType = NPCID.DD2Bartender, int shopID = 6)
     {
         if (Config.OpenShopForGoblin) // 打开商店
         {
-            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [6]);
+            NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [shopID]);
+            MoreShopItem(plr, NpcIndex, npcType);
             Config.InReforgeMenu = false;
         }
 
@@ -2109,19 +2196,39 @@ internal class Utils
     #endregion
 
     #region 处理油漆工2种商店打开逻辑
-    private static void OpenPainterShops()
+    private static void OpenPainterShops(Player plr, int NpcIndex, short npcType = NPCID.Painter)
     {
         // 2选1
         if (Config.OpenShopForPainter) // 喷漆商店
         {
             NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [15]);
+            MoreShopItem(plr, NpcIndex, npcType);
             Config.OpenShopForWall = false;
         }
 
         if (Config.OpenShopForWall) // 壁纸商店
         {
             NPCEventSystem.OpenShopMethod?.Invoke(Main.instance, [25]);
+            MoreShopItem(plr, NpcIndex, npcType);
             Config.OpenShopForPainter = false;
+        }
+    }
+    #endregion
+
+    #region 处理向导逻辑（进入"制作"指导界面）
+    private static void OpenGuideCraftMenu()
+    {
+        if (Config.HelpTextForGuide) // 新手提示
+        {
+            NPCEventSystem.HelpTextMethod?.Invoke(null, null);
+        }
+
+        if (Config.InGuideCraftMenu) //打开制作栏
+        {
+            Main.playerInventory = true;
+            SoundEngine.PlaySound(12);
+            Main.InGuideCraftMenu = true;
+            UILinkPointNavigator.GoToDefaultPage();
         }
     }
     #endregion
@@ -2139,7 +2246,7 @@ internal class Utils
             if (Index != -1)
             {
 
-                // 未开启清理渔夫任务 与 开启后不清任务鱼则消耗物品
+                // 未开启清理渔夫任务 与 开启清任务鱼则消耗物品
                 if (!Config.ClearAnglerQuests ||
                     (Config.ClearAnglerQuests && Config.ClearFish))
                 {
@@ -2275,6 +2382,12 @@ internal class Utils
             // 避免无话可说时不打开对话栏
             int dialogIndex = ChildSafety.Disabled ? Main.rand.Next(3) : Main.rand.Next(1, 3);
             Main.npcChatText = Lang.dialog(55 + dialogIndex);
+        }
+
+        // 禁言
+        if (Config.NurseMute)
+        {
+            Main.npcChatText = "";
         }
     }
 
