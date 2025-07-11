@@ -158,9 +158,6 @@ v1.0.0
   "自动垃圾桶同步间隔": 10,
   "自动垃圾桶表": [],
   "自定义传送点": {},
-  "清除钓鱼任务按键": 70,
-  "清除钓鱼任务间隔(帧)": 120,
-  "清除钓鱼任务": false,
   "NPC自动回血按键": 0,
   "NPC自动回血": false,
   "普通NPC回血百分比": 1.0,
@@ -299,20 +296,272 @@ v1.0.0
       "ItemName": "沙漠化石"
     }
   ],
-  "进入世界收藏背包物品": true,
+  "进入世界收藏背包物品": false,
+  "添加自定义配方": true,
   "解锁所有配方": false,
   "忽略工作站要求": false,
-  "添加自定义配方": true,
   "自定义配方列表": [
     {
-      "UniqueID": "5f987edc-49ad-40ac-b0b6-361c1c47bbc9",
-      "Index": -1,
-      "ResultItem": 8,
+      "UniqueID": "67f51fa8-3a80-412e-9818-326e2b56feac",
+      "Index": 2940,
+      "ResultItem": 9,
+      "ResultStack": 10,
+      "Ingredients": [
+        {
+          "ItemId": 27,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "9b5c4a6a-4a64-4efa-a9eb-d67fd9207ef9",
+      "Index": 2941,
+      "ResultItem": 18,
       "ResultStack": 1,
       "Ingredients": [
         {
-          "ItemId": 2,
+          "ItemId": 393,
           "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "7bcde735-bc1f-49fe-bf78-b0b249cf29c0",
+      "Index": 2942,
+      "ResultItem": 393,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 18,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "3171fb34-3964-4dba-ab52-c71ab7379aa3",
+      "Index": 2943,
+      "ResultItem": 327,
+      "ResultStack": 5,
+      "Ingredients": [
+        {
+          "ItemId": 329,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "939bd73b-cb9a-4dec-b0bc-f931194ac1fb",
+      "Index": 2944,
+      "ResultItem": 4271,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 29,
+          "Stack": 5
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "83d66bda-9a9e-45ff-a3f0-f24cb2df4d3e",
+      "Index": 2945,
+      "ResultItem": 1291,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 29,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "3a09f8eb-40f5-41b9-9625-ba1314ec9591",
+      "Index": 2946,
+      "ResultItem": 2423,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 2121,
+          "Stack": 5
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "06c49404-371f-4088-be34-c0ddb7df9dbb",
+      "Index": 2947,
+      "ResultItem": 53,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 751,
+          "Stack": 10
+        },
+        {
+          "ItemId": 31,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "90c2de8b-4f33-4b7e-818a-38bcd233d913",
+      "Index": 2948,
+      "ResultItem": 194,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 195,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "77775098-41ff-4684-a367-d609b33b4556",
+      "Index": 2949,
+      "ResultItem": 195,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 194,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "51ec6698-5cdf-4ec8-ac65-73c26627a00f",
+      "Index": 2950,
+      "ResultItem": 3093,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 307,
+          "Stack": 1
+        },
+        {
+          "ItemId": 308,
+          "Stack": 1
+        },
+        {
+          "ItemId": 309,
+          "Stack": 1
+        },
+        {
+          "ItemId": 310,
+          "Stack": 1
+        },
+        {
+          "ItemId": 311,
+          "Stack": 1
+        },
+        {
+          "ItemId": 312,
+          "Stack": 1
+        },
+        {
+          "ItemId": 2357,
+          "Stack": 1
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "9cd6d48b-4430-40bb-a4ed-ce84552b98fb",
+      "Index": 2951,
+      "ResultItem": 313,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 307,
+          "Stack": 3
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "2ff05b76-7df6-4440-9cb3-da0ab7d90d9c",
+      "Index": 2952,
+      "ResultItem": 314,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 308,
+          "Stack": 3
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "9c3ec525-1005-4cad-aab8-6934191d23fd",
+      "Index": 2953,
+      "ResultItem": 316,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 310,
+          "Stack": 3
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "b2b0fb12-5153-4f6e-83c7-5fce853ba027",
+      "Index": 2954,
+      "ResultItem": 317,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 311,
+          "Stack": 3
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "43fa441c-2e45-4e60-8c1a-e6cd307dc6d4",
+      "Index": 2955,
+      "ResultItem": 318,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 312,
+          "Stack": 3
+        }
+      ],
+      "RequiredTile": [],
+      "IsAlchemyRecipe": false
+    },
+    {
+      "UniqueID": "15b00195-8b0b-444e-a889-d91998042359",
+      "Index": 2956,
+      "ResultItem": 2358,
+      "ResultStack": 1,
+      "Ingredients": [
+        {
+          "ItemId": 2357,
+          "Stack": 3
         }
       ],
       "RequiredTile": [],
@@ -320,8 +569,71 @@ v1.0.0
     }
   ],
   "NPC自动对话按键": 89,
+  "清除钓鱼任务按键": 70,
   "NPC自动对话": true,
   "NPC自动对话的最小格数": 2,
-  "NPC自动对话等待秒数": 3
+  "NPC自动对话等待帧数": 30,
+  "自动对话NPC无敌": true,
+  "清除钓鱼任务": true,
+  "消耗任务鱼": false,
+  "护士禁言": false,
+  "派对女孩切换音乐": true,
+  "派对女孩打开商店": true,
+  "向导是否提示指导语": true,
+  "向导打开制作栏": true,
+  "酒馆老板打开商店": true,
+  "酒馆老板是否提示指导语": true,
+  "油漆工打开喷漆商店": true,
+  "油漆工打开壁纸商店": false,
+  "树妖打开商店": true,
+  "树妖检查环境": true,
+  "哥布林打开商店": false,
+  "哥布林打开重铸界面": true,
+  "发型师卖头发": true,
+  "发型师打开商店": false,
+  "税务官自定义奖励": false,
+  "税务官奖励列表": [
+    {
+      "启用物品": true,
+      "物品ID": 74,
+      "物品数量": 1,
+      "物品概率": 100
+    }
+  ],
+  "自定义NPC商店表": [
+    {
+      "自定义物品表": [
+        {
+          "物品ID": 9,
+          "物品前缀": 0,
+          "物品数量": 20,
+          "物品价格": 20,
+          "物品进度": []
+        },
+        {
+          "物品ID": 126,
+          "物品前缀": 0,
+          "物品数量": 20,
+          "物品价格": 30,
+          "物品进度": []
+        },
+        {
+          "物品ID": 75,
+          "物品前缀": 0,
+          "物品数量": 1,
+          "物品价格": 2500,
+          "物品进度": [
+            "克眼"
+          ]
+        }
+      ],
+      "开启自定义商店": true,
+      "替换原始物品": false,
+      "商店NPC名称": "商人(商店)",
+      "商店NPC类型": 17
+    }
+  ],
+  "修改传送枪弹幕距离": true,
+  "传送枪弹幕销毁距离": 134400.0
 }
 ```

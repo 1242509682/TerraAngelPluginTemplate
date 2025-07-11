@@ -679,7 +679,7 @@ internal class Configuration
                         id = ItemID.Wood,
                         prefix = 0,
                         stack = 20,
-                        price = 100,
+                        price = 20,
                     },
 
                     new CShopItemInfo()
@@ -687,7 +687,7 @@ internal class Configuration
                         id = ItemID.BottledWater,
                         prefix = 0,
                         stack = 20,
-                        price = 400,
+                        price = 30,
                     },
 
                     new CShopItemInfo()
@@ -695,7 +695,7 @@ internal class Configuration
                         id = ItemID.FallenStar,
                         prefix = 0,
                         stack = 1,
-                        price = 400,
+                        price = 2500,
                         unlock = new List<string>()
                         {
                             "克眼"
