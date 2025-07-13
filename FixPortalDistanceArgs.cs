@@ -2,7 +2,6 @@
 using MonoMod.Cil;
 using MonoMod.RuntimeDetour;
 using System.Reflection;
-using TerraAngel;
 using Terraria;
 using static MyPlugin.MyPlugin;
 
@@ -20,7 +19,6 @@ internal class FixPortalDistanceArgs
         MethodInfo aiMethod = typeof(Projectile).GetMethod("AI", BindingFlags.Public | BindingFlags.Instance)!;
         if (aiMethod != null)
         {
-            ClientLoader.Chat.WriteLine("传送枪距离修改程序已成功注册");
             PortalAIHook = new ILHook(aiMethod, FixPortalDistance);
         }
     }
@@ -72,16 +70,6 @@ internal class FixPortalDistanceArgs
                 // 其他弹幕保持原版距离
                 return DefaultMaxDistance;
             });
-
-            
-            if (Config.ModifyPortalDistance)
-            {
-                ClientLoader.Chat.WriteLine($"已成功修改传送枪距离为 {Config.PortalMaxDistance / 16} 格",color);
-            }
-            else
-            {
-                ClientLoader.Chat.WriteLine("传送枪距离修改已禁用，使用原版800格距离",color);
-            }
         }
     }
     #endregion

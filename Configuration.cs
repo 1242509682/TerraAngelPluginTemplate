@@ -107,7 +107,7 @@ internal class Configuration
     [JsonProperty("连锁挖矿上限", Order = 19)]
     public int VeinMinerCount { get; set; } = 500;
     [JsonProperty("连锁图格表", Order = 19)]
-    public List<VeinMinerItem> VeinMinerList { get; set; } = new List<VeinMinerItem>();
+    public List<MinerItem> VeinMinerList { get; set; } = new List<MinerItem>();
 
     [JsonProperty("进入世界收藏背包物品", Order = 20)]
     public bool FavoriteItemForJoinWorld { get; set; } = false;
@@ -328,11 +328,7 @@ internal class Configuration
                ResultStack = 10,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.Acorn, //橡实
-                       Stack = 1,
-                   }
+                   new IngredientData(ItemID.Acorn,1)
                }
            },
 
@@ -342,12 +338,14 @@ internal class Configuration
                ResultStack = 1,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.Compass, // 罗盘
-                       Stack = 1,
-                   }
+                   new IngredientData(ItemID.Compass,1)
+               },
+
+               RequiredTile = new List<int>()
+               {
+                   114 // 工匠作坊
                }
+
            },
 
            new CustomRecipeData()
@@ -356,11 +354,12 @@ internal class Configuration
                ResultStack = 1,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.DepthMeter, // 深度计
-                       Stack = 1,
-                   }
+                   new IngredientData(ItemID.DepthMeter,1)
+               },
+
+               RequiredTile = new List<int>()
+               {
+                   114 // 工匠作坊
                }
            },
 
@@ -370,11 +369,12 @@ internal class Configuration
                ResultStack = 5,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.ShadowKey, // 暗影钥匙
-                       Stack = 1,
-                   },
+                   new IngredientData(ItemID.ShadowKey,1)
+               },
+
+               RequiredTile = new List<int>()
+               {
+                   77 //地狱熔炉
                }
            },
 
@@ -384,11 +384,12 @@ internal class Configuration
                ResultStack = 1,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.LifeCrystal, // 3个生命水晶
-                       Stack = 5,
-                   },
+                   new IngredientData(ItemID.LifeCrystal,5)
+               },
+
+               unlock = new List<string>()
+               {
+                   "血月"
                }
            },
 
@@ -398,11 +399,12 @@ internal class Configuration
                ResultStack = 1,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.LifeCrystal, // 生命水晶
-                       Stack = 1,
-                   },
+                   new IngredientData(ItemID.LifeCrystal,1)
+               },
+
+               RequiredTile = new List<int>()
+               {
+                   303 //丛林蜥蜴熔炉
                }
            },
 
@@ -412,11 +414,12 @@ internal class Configuration
                ResultStack = 1,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.Frog, //5个青蛙合成
-                       Stack = 5,
-                   }
+                   new IngredientData(ItemID.Frog,5)
+               },
+
+               RequiredTile = new List<int>()
+               {
+                   114 // 工匠作坊
                }
            },
 
@@ -426,17 +429,13 @@ internal class Configuration
                ResultStack = 1,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.Cloud, // 10个云块
-                       Stack = 10,
-                   },
+                   new IngredientData(ItemID.Cloud,10),
+                   new IngredientData(ItemID.Bottle,1)
+               },
 
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.Bottle, // 1个空瓶
-                       Stack = 1,
-                   },
+               RequiredTile = new List<int>()
+               {
+                   114 // 工匠作坊
                }
            },
 
@@ -444,13 +443,10 @@ internal class Configuration
            {
                ResultItem = ItemID.MushroomGrassSeeds,  // 蘑菇草种子
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.JungleGrassSeeds, // 丛林草种子
-                       Stack = 1,
-                   },
+                   new IngredientData(ItemID.JungleGrassSeeds,1)
                }
            },
 
@@ -458,13 +454,10 @@ internal class Configuration
            {
                ResultItem = ItemID.JungleGrassSeeds,  // 丛林草种子
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.MushroomGrassSeeds,  // 蘑菇草种子
-                       Stack = 1,
-                   },
+                   new IngredientData(ItemID.MushroomGrassSeeds,1)
                }
            },
 
@@ -472,49 +465,16 @@ internal class Configuration
            {
                ResultItem = ItemID.HerbBag,  // 草药袋
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.DaybloomSeeds, // 太阳花种子
-                       Stack = 1,
-                   },
-
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.MoonglowSeeds, // 月光草种子
-                       Stack = 1,
-                   },
-
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.BlinkrootSeeds, // 闪耀根种子
-                       Stack = 1,
-                   },
-
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.DeathweedSeeds, // 死亡草种子
-                       Stack = 1,
-                   },
-
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.WaterleafSeeds, // 幌菊种子
-                       Stack = 1,
-                   },
-
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.FireblossomSeeds, // 火焰花种子
-                       Stack = 1,
-                   },
-
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.ShiverthornSeeds, // 寒颤棘种子
-                       Stack = 1,
-                   },
+                   new IngredientData(ItemID.DaybloomSeeds,1),
+                   new IngredientData(ItemID.MoonglowSeeds,1),
+                   new IngredientData(ItemID.BlinkrootSeeds,1),
+                   new IngredientData(ItemID.DeathweedSeeds,1),
+                   new IngredientData(ItemID.WaterleafSeeds,1),
+                   new IngredientData(ItemID.FireblossomSeeds,1),
+                   new IngredientData(ItemID.ShiverthornSeeds,1)
                }
            },
 
@@ -524,25 +484,19 @@ internal class Configuration
                ResultStack = 1,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.DaybloomSeeds, // 太阳花种子
-                       Stack = 3,
-                   },
+                   new IngredientData(ItemID.DaybloomSeeds,3)
                }
+
            },
 
            new CustomRecipeData()
            {
                ResultItem = ItemID.Moonglow,  // 月光草
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.MoonglowSeeds, // 月光草种子
-                       Stack = 3,
-                   },
+                   new IngredientData(ItemID.MoonglowSeeds,3)
                }
            },
 
@@ -550,13 +504,10 @@ internal class Configuration
            {
                ResultItem = ItemID.Deathweed,  // 死亡草
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.DeathweedSeeds, // 死亡草种子
-                       Stack = 3,
-                   },
+                   new IngredientData(ItemID.DeathweedSeeds,3)
                }
            },
 
@@ -564,13 +515,10 @@ internal class Configuration
            {
                ResultItem = ItemID.Waterleaf,  // 幌菊
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.WaterleafSeeds, // 幌菊种子
-                       Stack = 3,
-                   },
+                   new IngredientData(ItemID.WaterleafSeeds,3)
                }
            },
 
@@ -578,13 +526,10 @@ internal class Configuration
            {
                ResultItem = ItemID.Fireblossom,  // 火焰花
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.FireblossomSeeds, // 火焰花种子
-                       Stack = 3,
-                   },
+                   new IngredientData(ItemID.FireblossomSeeds,3)
                }
            },
 
@@ -592,13 +537,10 @@ internal class Configuration
            {
                ResultItem = ItemID.Shiverthorn,  // 寒颤棘
                ResultStack = 1,
+               IsAlchemyRecipe = true,
                Ingredients = new List<IngredientData>()
                {
-                   new IngredientData()
-                   {
-                       ItemId = ItemID.ShiverthornSeeds, // 寒颤棘种子
-                       Stack = 3,
-                   },
+                   new IngredientData(ItemID.ShiverthornSeeds,3)
                }
            },
         };
@@ -606,41 +548,41 @@ internal class Configuration
     #endregion
 
     #region 连锁挖矿默认参数
-    public static List<VeinMinerItem> VeinMinerItemSetDefault()
+    public static List<MinerItem> VeinMinerItemSetDefault()
     {
-        return new List<VeinMinerItem>()
+        return new List<MinerItem>()
         {
-            new VeinMinerItem(6, "铁矿"),
-            new VeinMinerItem(7, "铜矿"),
-            new VeinMinerItem(8, "金矿"),
-            new VeinMinerItem(9, "银矿"),
-            new VeinMinerItem(22, "魔矿"),
-            new VeinMinerItem(37, "陨石"),
-            new VeinMinerItem(48, "尖刺"),
-            new VeinMinerItem(56, "黑曜石"),
-            new VeinMinerItem(58, "狱石"),
-            new VeinMinerItem(63, "蓝玉石块"),
-            new VeinMinerItem(64, "红玉石块"),
-            new VeinMinerItem(65, "翡翠石块"),
-            new VeinMinerItem(66, "黄玉石块"),
-            new VeinMinerItem(67, "紫晶石块"),
-            new VeinMinerItem(68, "钻石石块"),
-            new VeinMinerItem(107, "钴矿"),
-            new VeinMinerItem(108, "秘银矿"),
-            new VeinMinerItem(111, "精金矿"),
-            new VeinMinerItem(166, "锡矿"),
-            new VeinMinerItem(167, "铅矿"),
-            new VeinMinerItem(168, "钨矿"),
-            new VeinMinerItem(169, "铂金矿"),
-            new VeinMinerItem(204, "猩红矿"),
-            new VeinMinerItem(211, "叶绿矿"),
-            new VeinMinerItem(221, "钯金矿"),
-            new VeinMinerItem(222, "山铜矿"),
-            new VeinMinerItem(223, "钛金矿"),
-            new VeinMinerItem(229, "蜂蜜块"),
-            new VeinMinerItem(230, "松脆蜂蜜块"),
-            new VeinMinerItem(232, "木尖刺"),
-            new VeinMinerItem(404, "沙漠化石"),
+            new MinerItem(6, "铁矿"),
+            new MinerItem(7, "铜矿"),
+            new MinerItem(8, "金矿"),
+            new MinerItem(9, "银矿"),
+            new MinerItem(22, "魔矿"),
+            new MinerItem(37, "陨石"),
+            new MinerItem(48, "尖刺"),
+            new MinerItem(56, "黑曜石"),
+            new MinerItem(58, "狱石"),
+            new MinerItem(63, "蓝玉石块"),
+            new MinerItem(64, "红玉石块"),
+            new MinerItem(65, "翡翠石块"),
+            new MinerItem(66, "黄玉石块"),
+            new MinerItem(67, "紫晶石块"),
+            new MinerItem(68, "钻石石块"),
+            new MinerItem(107, "钴矿"),
+            new MinerItem(108, "秘银矿"),
+            new MinerItem(111, "精金矿"),
+            new MinerItem(166, "锡矿"),
+            new MinerItem(167, "铅矿"),
+            new MinerItem(168, "钨矿"),
+            new MinerItem(169, "铂金矿"),
+            new MinerItem(204, "猩红矿"),
+            new MinerItem(211, "叶绿矿"),
+            new MinerItem(221, "钯金矿"),
+            new MinerItem(222, "山铜矿"),
+            new MinerItem(223, "钛金矿"),
+            new MinerItem(229, "蜂蜜块"),
+            new MinerItem(230, "松脆蜂蜜块"),
+            new MinerItem(232, "木尖刺"),
+            new MinerItem(404, "沙漠化石"),
         };
     }
     #endregion

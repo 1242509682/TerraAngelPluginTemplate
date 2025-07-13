@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using System.Linq;
 using System.Reflection;
 using Terraria;
+using Terraria.GameContent.Events;
 using Terraria.ID;
 using static MyPlugin.MyPlugin;
 
@@ -25,29 +26,17 @@ public static class RecipeHooks
     {
         // 反射获取私有方法委托
         // 检查玩家是否满足环境条件（如血月、夜晚等）
-        PlayerMeetsEnvironmentConditions = CreateDelegate<Func<Player, Recipe, bool>>(
-            typeof(Recipe), "PlayerMeetsEnvironmentConditions",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        PlayerMeetsEnvironmentConditions = CreateDelegate<Func<Player, Recipe, bool>>(typeof(Recipe), "PlayerMeetsEnvironmentConditions", BindingFlags.NonPublic | BindingFlags.Static);
 
         // 检查玩家是否满足工作站条件
-        PlayerMeetsTileRequirements = CreateDelegate<Func<Player, Recipe, bool>>(
-            typeof(Recipe), "PlayerMeetsTileRequirements",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        PlayerMeetsTileRequirements = CreateDelegate<Func<Player, Recipe, bool>>(typeof(Recipe), "PlayerMeetsTileRequirements", BindingFlags.NonPublic | BindingFlags.Static);
 
         // 收集玩家可用于合成的物品
-        CollectItemsToCraftWithFrom = CreateDelegate<Action<Player>>(
-            typeof(Recipe), "CollectItemsToCraftWithFrom",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        CollectItemsToCraftWithFrom = CreateDelegate<Action<Player>>(typeof(Recipe), "CollectItemsToCraftWithFrom", BindingFlags.NonPublic | BindingFlags.Static);
 
         // 查找配方（用于决定配方是否显示）
-        MethodInfo findRecipes = typeof(Recipe).GetMethod("FindRecipes",
-            BindingFlags.Public | BindingFlags.Static,
-            [typeof(bool)])!;
-
-        if (findRecipes != null)
-        {
-            FindRecipesHook = new Hook(findRecipes, OnFindRecipes);
-        }
+        MethodInfo findRecipes = typeof(Recipe).GetMethod("FindRecipes", BindingFlags.Public | BindingFlags.Static, [typeof(bool)])!;
+        FindRecipesHook = new Hook(findRecipes, OnFindRecipes);
     }
     #endregion
 
@@ -259,6 +248,14 @@ public static class RecipeHooks
         return -1;
     }
 
+    // 分配自定义配方索引
+    public static void AddRecipeIndex(CustomRecipeData data, int index)
+    {
+        data.Index = index;
+        CustomRecipeIndexes.Add(index);
+        CustomRecipeItems.Add(data.ResultItem);
+    }
+
     // 重建配方方法
     public static void RebuildCustomRecipes()
     {
@@ -306,10 +303,11 @@ public static class RecipeHooks
                     if (Group.ValidItems.Contains(item.type))
                     {
                         int GroupId = Group.RegisteredId;
-                        if (HasItems.TryGetValue(GroupId, out int GroupCount) && GroupCount >= item.stack)
+                        if (!HasItems.TryGetValue(GroupId, out int GroupCount) || GroupCount < item.stack)
                         {
-                            return true;
+                            continue;
                         }
+                        return true;
                     }
                 }
             }
@@ -321,7 +319,7 @@ public static class RecipeHooks
             }
         }
         return true;
-    } 
+    }
     #endregion
 
     #region 检查玩家是否有足够材料制作配方
@@ -448,43 +446,88 @@ public static class RecipeHooks
     public static Recipe CreateRecipeFromData(CustomRecipeData data)
     {
         Recipe recipe = new Recipe();
+
+        // 设置结果物品
         recipe.createItem.SetDefaults(data.ResultItem);
         recipe.createItem.stack = data.ResultStack;
 
-        // 初始化材料数组
-        recipe.requiredItem = new Item[Recipe.maxRequirements];
-        recipe.requiredTile = new int[Recipe.maxRequirements];
-
-        for (int i = 0; i < Recipe.maxRequirements; i++)
-        {
-            recipe.requiredItem[i] = new Item();
-        }
-
-        // 设置材料
-        int itemIndex = 0;
+        // 使用 SetIngredients 设置材料 - 支持多个材料
+        List<int> Ingredients = new List<int>();
         foreach (var ingredient in data.Ingredients)
         {
-            if (itemIndex >= Recipe.maxRequirements) break;
+            // 跳过无效材料
+            if (ingredient.ItemId <= 0 || ingredient.Stack <= 0) continue;
 
-            recipe.requiredItem[itemIndex] = new Item();
-            recipe.requiredItem[itemIndex].SetDefaults(ingredient.ItemId);
-            recipe.requiredItem[itemIndex].stack = ingredient.Stack;
-            itemIndex++;
+            Ingredients.Add(ingredient.ItemId);
+            Ingredients.Add(ingredient.Stack);
         }
 
-        // 设置合成站
-        int tileIndex = 0;
+        // 确保至少有一个有效材料
+        if (Ingredients.Count > 0)
+        {
+            recipe.SetIngredients(Ingredients.ToArray());
+        }
+
+        // 使用 SetCraftingStation 设置合成站 - 支持多个合成站
+        List<int> RequiredTile = new List<int>();
         foreach (int tileId in data.RequiredTile)
         {
-            if (tileIndex >= Recipe.maxRequirements) break;
-            if (tileId <= 0) continue; // 跳过无效ID（包括0）
+            // 跳过无效的 TileID (0 或负数)
+            if (tileId <= 0) continue;
 
-            recipe.requiredTile[tileIndex] = tileId;
-            tileIndex++;
+            // 跳过重复的合成站
+            if (!RequiredTile.Contains(tileId))
+            {
+                RequiredTile.Add(tileId);
+            }
         }
 
-        // 炼金配方标记
-        recipe.alchemy = data.IsAlchemyRecipe ||  data.RequiredTile.Contains(TileID.Bottles) || data.RequiredTile.Contains(TileID.AlchemyTable);
+        // 确保至少有一个合成站
+        if (RequiredTile.Count > 0)
+        {
+            recipe.SetCraftingStation(RequiredTile.ToArray());
+        }
+
+        // 配方合成环境
+        foreach (string unlock in data.unlock)
+        {
+            switch (unlock) 
+            {
+                case "水":
+                    recipe.needWater = true;
+                    break;
+                case "岩浆":
+                    recipe.needLava = true;
+                    break;
+                case "蜂蜜":
+                    recipe.needHoney = true;
+                    break;
+                case "雪原":
+                    recipe.needSnowBiome = true;
+                    break;
+                case "墓地":
+                    recipe.needGraveyardBiome = true;
+                    break;
+                case "天顶":
+                    recipe.needEverythingSeed = true;
+                    break;
+                case "腐化":
+                    recipe.corruption = true;
+                    break;
+                case "猩红":
+                    recipe.crimson = true;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        // 添加炼金台特殊处理
+        bool hasBottles = RequiredTile.Contains(TileID.Bottles);
+        bool hasAlchemyTable = RequiredTile.Contains(TileID.AlchemyTable);
+
+        // 设置炼金配方标记
+        recipe.alchemy = data.IsAlchemyRecipe || hasBottles || hasAlchemyTable;
 
         return recipe;
     }
@@ -496,37 +539,39 @@ public static class RecipeHooks
         CustomRecipeData myRecipe = new()
         {
             ResultItem = recipe.createItem.type,
-            ResultStack = recipe.createItem.stack
+            ResultStack = recipe.createItem.stack,
+            IsAlchemyRecipe = recipe.alchemy
         };
 
         // 添加材料
         foreach (var ingredient in recipe.requiredItem)
         {
-            if (ingredient.type > 0 && ingredient.stack > 0)
+            // 跳过无效材料
+            if (ingredient.IsAir || ingredient.type <= 0 || ingredient.stack <= 0)
             {
-                myRecipe.Ingredients.Add(new IngredientData
-                {
-                    ItemId = ingredient.type,
-                    Stack = ingredient.stack
-                });
+                continue;
             }
+
+            // 添加材料到配方
+            myRecipe.Ingredients.Add(new IngredientData(ingredient.type, ingredient.stack));
         }
 
-        // 设置合成站
-        if (recipe.requiredTile != null && recipe.requiredTile.Length > 0)
+        // 添加所有合成站
+        foreach (int tileId in recipe.requiredTile)
         {
-            foreach (int tileId in recipe.requiredTile)
-            {
-                if (tileId > 0)
-                {
-                    myRecipe.RequiredTile.Add(tileId);
-                    break;
-                }
-            }
+            // 跳过无效的图格ID
+            if (tileId <= 0) continue;
+
+            // 确保不添加重复的合成站
+            myRecipe.RequiredTile.Add(tileId);
         }
 
-        // 如果是炼金配方
-        myRecipe.IsAlchemyRecipe = recipe.alchemy;
+        // 添加环境
+        List<string> addedUnlocked = GetEnvironmentName(recipe);
+        if (addedUnlocked.Count > 0)
+        {
+            myRecipe.unlock.AddRange(addedUnlocked);
+        }
 
         // 添加到自定义配方列表
         Config.CustomRecipes.Add(myRecipe);
@@ -535,6 +580,47 @@ public static class RecipeHooks
         // 设置为编辑状态
         UITool.EditingRecipe = myRecipe;
         UITool.IsNewRecipe = false;
+    }
+    #endregion
+
+    #region 获取原版配方所需的环境名称
+    private static List<string> GetEnvironmentName(Recipe recipe)
+    {
+        List<string> addedUnlocked = [];
+        if (recipe.needWater)
+        {
+            addedUnlocked.Add("水");
+        }
+        if (recipe.needHoney)
+        {
+            addedUnlocked.Add("蜂蜜");
+        }
+        if (recipe.needLava)
+        {
+            addedUnlocked.Add("岩浆");
+        }
+        if (recipe.needSnowBiome)
+        {
+            addedUnlocked.Add("雪原");
+        }
+        if (recipe.needGraveyardBiome)
+        {
+            addedUnlocked.Add("墓地");
+        }
+        if (recipe.needEverythingSeed)
+        {
+            addedUnlocked.Add("天顶");
+        }
+        if (recipe.corruption)
+        {
+            addedUnlocked.Add("腐化");
+        }
+        if (recipe.crimson)
+        {
+            addedUnlocked.Add("猩红");
+        }
+
+        return addedUnlocked;
     }
     #endregion
 }
@@ -577,17 +663,224 @@ public class CustomRecipeData
     public int ResultStack { get; set; } = 1; //合成物品数量
     [JsonProperty("组成材料", Order = 4)]
     public List<IngredientData> Ingredients { get; set; } = new List<IngredientData>(); //材料
-    [JsonProperty("合成站(还没写)", Order = 5)]
+    [JsonProperty("合成站", Order = 5)]
     public List<int> RequiredTile { get; set; } = new List<int>(); //合成站
-    [JsonProperty("炼药属性(还没写)", Order = 5)]
+    [JsonProperty("合成环境", Order = 6)]
+    public List<string> unlock = new List<string>();
+    [JsonProperty("炼药属性", Order = 7)]
     public bool IsAlchemyRecipe { get; set; } //炼药标识
+
+    #region 判断解锁配方
+    public static bool IsRecipeUnlocked(CustomRecipeData recipe)
+    {
+        Player plr = Main.player[Main.myPlayer];
+        foreach (string condition in recipe.unlock)
+        {
+            // 进度和环境条件检查
+            if (!CheckCondition(condition, plr)) 
+                return false;
+        }
+
+        return true;
+    }
+    #endregion
+
+    #region 检查条件
+    public static bool CheckCondition(string condition, Player plr)
+    {
+        switch (condition)
+        {
+            case "史莱姆王":
+            case "史王":
+                return NPC.downedSlimeKing;
+            case "克眼":
+            case "克苏鲁之眼":
+                return NPC.downedBoss1;
+            case "巨鹿":
+            case "鹿角怪":
+                return NPC.downedDeerclops;
+            case "克脑":
+            case "世吞":
+            case "世界吞噬者":
+            case "克苏鲁之脑":
+            case "世界吞噬怪":
+                return NPC.downedBoss2;
+            case "蜂王":
+                return NPC.downedQueenBee;
+            case "骷髅王":
+                return NPC.downedBoss3;
+            case "困难模式":
+            case "肉后":
+            case "血肉墙":
+                return Main.hardMode;
+            case "毁灭者":
+                return NPC.downedMechBoss1;
+            case "双子魔眼":
+                return NPC.downedMechBoss2;
+            case "机械骷髅王":
+                return NPC.downedMechBoss3;
+            case "世纪之花":
+            case "花后":
+            case "世花":
+                return NPC.downedPlantBoss;
+            case "石后":
+            case "石巨人":
+                return NPC.downedGolemBoss;
+            case "史后":
+            case "史莱姆皇后":
+                return NPC.downedQueenSlime;
+            case "光之女皇":
+            case "光女":
+                return NPC.downedEmpressOfLight;
+            case "猪鲨":
+            case "猪龙鱼公爵":
+                return NPC.downedFishron;
+            case "教徒":
+            case "拜月教邪教徒":
+                return NPC.downedAncientCultist;
+            case "月亮领主":
+                return NPC.downedMoonlord;
+            case "哀木":
+                return NPC.downedHalloweenTree;
+            case "南瓜王":
+                return NPC.downedHalloweenKing;
+            case "常绿尖叫怪":
+                return NPC.downedChristmasTree;
+            case "冰雪女王":
+                return NPC.downedChristmasIceQueen;
+            case "圣诞坦克":
+                return NPC.downedChristmasSantank;
+            case "火星飞碟":
+                return NPC.downedMartians;
+            case "小丑":
+                return NPC.downedClown;
+            case "日耀柱":
+                return NPC.downedTowerSolar;
+            case "星旋柱":
+                return NPC.downedTowerVortex;
+            case "星云柱":
+                return NPC.downedTowerNebula;
+            case "星尘柱":
+                return NPC.downedTowerStardust;
+            case "一王后":
+                return NPC.downedMechBossAny;
+            case "三王后":
+                return NPC.downedMechBoss1 && NPC.downedMechBoss2 && NPC.downedMechBoss3;
+            case "一柱后":
+                return NPC.downedTowerNebula || NPC.downedTowerSolar || NPC.downedTowerStardust || NPC.downedTowerVortex;
+            case "四柱后":
+                return NPC.downedTowerNebula && NPC.downedTowerSolar && NPC.downedTowerStardust && NPC.downedTowerVortex;
+            case "哥布林入侵":
+                return NPC.downedGoblins;
+            case "海盗入侵":
+                return NPC.downedPirates;
+            case "霜月":
+                return NPC.downedFrost;
+            case "血月":
+                return Main.bloodMoon;
+            case "雨天":
+                return Main.raining;
+            case "白天":
+                return Main.dayTime;
+            case "晚上":
+                return !Main.dayTime;
+            case "大风天":
+                return Main.IsItAHappyWindyDay;
+            case "万圣节":
+                return Main.halloween;
+            case "圣诞节":
+                return Main.xMas;
+            case "派对":
+                return BirthdayParty.PartyIsUp;
+            case "2020":
+                return Main.drunkWorld;
+            case "2021":
+                return Main.tenthAnniversaryWorld;
+            case "ftw":
+                return Main.getGoodWorld;
+            case "ntb":
+                return Main.notTheBeesWorld;
+            case "dst":
+                return Main.dontStarveWorld;
+            case "颠倒":
+                return Main.remixWorld;
+            case "陷阱":
+                return Main.noTrapsWorld;
+            case "天顶":
+                return Main.zenithWorld;
+            case "森林":
+                return plr.ShoppingZone_Forest;
+            case "丛林":
+                return plr.ZoneJungle;
+            case "沙漠":
+                return plr.ZoneDesert;
+            case "雪原":
+                return plr.ZoneSnow;
+            case "洞穴":
+                return plr.ZoneUnderworldHeight;
+            case "海洋":
+                return plr.ZoneBeach;
+            case "神圣":
+                return plr.ZoneHallow;
+            case "蘑菇":
+                return plr.ZoneGlowshroom;
+            case "腐化":
+            case "腐化之地":
+                return plr.ZoneCorrupt;
+            case "猩红":
+            case "猩红之地":
+                return plr.ZoneCrimson;
+            case "地牢":
+                return plr.ZoneDungeon;
+            case "墓地":
+                return plr.ZoneGraveyard;
+            case "蜂巢":
+                return plr.ZoneHive;
+            case "神庙":
+                return plr.ZoneLihzhardTemple;
+            case "沙尘暴":
+                return plr.ZoneSandstorm;
+            case "天空":
+                return plr.ZoneSkyHeight;
+            case "满月":
+                return Main.moonPhase == 0;
+            case "亏凸月":
+                return Main.moonPhase == 1;
+            case "下弦月":
+                return Main.moonPhase == 2;
+            case "残月":
+                return Main.moonPhase == 3;
+            case "新月":
+                return Main.moonPhase == 4;
+            case "娥眉月":
+                return Main.moonPhase == 5;
+            case "上弦月":
+                return Main.moonPhase == 6;
+            case "盈凸月":
+                return Main.moonPhase == 7;
+            case "水":
+                return plr.adjWater || plr.adjTile[172];
+            case "蜂蜜":
+                return plr.adjHoney;
+            case "岩浆":
+                return plr.adjLava;
+            default:
+                return false;
+        }
+    }
+    #endregion
 }
 
 public class IngredientData
 {
     [JsonProperty("物品ID", Order = 0)]
     public int ItemId { get; set; }
-    [JsonProperty("物品数量", Order = 0)]
-    public int Stack { get; set; } = 1;
+    [JsonProperty("物品数量", Order = 1)]
+    public int Stack { get; set; }
+    public IngredientData(int itemId, int stack)
+    {
+        ItemId = itemId;
+        Stack = stack;
+    }
 }
 #endregion

@@ -23,8 +23,7 @@ internal class ExtraAccessory
     {
         //修改 UpdateEquips 方法（处理装饰栏饰品生效）
         var UpdateEquips = typeof(Player).GetMethod("UpdateEquips", [typeof(int)])!;
-        var NewUpdateEquips = typeof(ExtraAccessory).GetMethod("OnUpdateEquips", BindingFlags.Static | BindingFlags.Public)!;
-        UpdateEquipsHook = new Hook(UpdateEquips, NewUpdateEquips);
+        UpdateEquipsHook = new Hook(UpdateEquips, OnUpdateEquips);
         // 获取 Player 类的私有方法 GrantArmorBenefits 和 GrantPrefixBenefits
         GrantArmorBenefits = typeof(Player).GetMethod("GrantArmorBenefits", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(Item)], null);
         GrantPrefixBenefits = typeof(Player).GetMethod("GrantPrefixBenefits", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(Item)], null);

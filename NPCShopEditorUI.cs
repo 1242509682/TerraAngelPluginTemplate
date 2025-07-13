@@ -628,7 +628,7 @@ public class NPCShopEditorUI
     #endregion
 
     #region 获取所有解锁条件名称
-    private static List<string> GetAllUnlockConditions()
+    public static List<string> GetAllUnlockConditions()
     {
         return new List<string>
         {

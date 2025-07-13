@@ -1,9 +1,9 @@
 ﻿using Microsoft.Xna.Framework;
-using Newtonsoft.Json;
 using System.Numerics;
 using System.Reflection;
 using TerraAngel;
 using TerraAngel.Input;
+using TerraAngel.Utility;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -212,17 +212,12 @@ internal class Utils
     #region 连锁挖矿方法
     public static void VeinMiner(int x, int y)
     {
-        if (!Config.VeinMinerEnabled) return;
-
         try
         {
-            var plr = Main.player[Main.myPlayer];
-            var Tile = Main.tile[x, y];
-            if (plr == null || Tile == null! || !Tile.active()) return;
+            var tile = Main.tile[x, y];
+            if (tile == null! || !tile.active() || !Config.VeinMinerList.Any(x => x.TileID == tile.type)) return;
 
-            if (!Config.VeinMinerList.Any(x => x.TileID == Tile.type)) return;
-
-            var vein = GetVein(new HashSet<Point>(), x, y, Tile.type).Result;
+            var vein = GetVein(new HashSet<Point>(), x, y, tile.type).Result;
             var count = vein.Count;
             if (count == 0 || count > Config.VeinMinerCount) return;
 
@@ -231,16 +226,17 @@ internal class Utils
             string name = $"[i/s{count}:{item.type}] {Lang.GetItemNameValue(item.type)}";
 
             // 给玩家物品
+            var plr = Main.player[Main.myPlayer];
             GiveItem(plr, item.type, count);
-
             foreach (var point in vein)
             {
-                WorldGen.KillTile(point.X, point.Y, false, false, true);
-            }
+                Main.tile[point.X, point.Y].ClearTile();
 
-            if (Main.netMode is 2)
-            {
-                NetMessage.SendData(MessageID.TileManipulation, -1, -1, null, 4, x, y, false.GetHashCode());
+                if (Main.netMode is 2)
+                {
+                    NetMessage.SendTileSquare(-1, point.X, point.Y);
+                    NetMessage.SendData(MessageID.TileManipulation, -1, -1, null, 4, point.X, point.Y, false.GetHashCode());
+                }
             }
 
             ClientLoader.Chat.WriteLine($"【[c/79E365:连锁挖矿]】触发成功: {name}", color);
@@ -255,6 +251,144 @@ internal class Utils
             string mess = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] 发生异常：{ex.Message}\n堆栈信息：{ex.StackTrace}\n";
             File.AppendAllText(Path, mess);
         }
+    }
+    #endregion
+
+    #region 优化后的连锁区域搜索方法
+    private static readonly (int dx, int dy)[] Directions =
+    [
+        (1, 0), (-1, 0), (0, 1), (0, -1),
+        (1, 1), (1, -1), (-1, 1), (-1, -1)
+    ];
+
+    public static Task<HashSet<Point>> GetVein(HashSet<Point> list, int x, int y, int type)
+    {
+        return Task.Run(() =>
+        {
+            // 使用队列实现广度优先搜索(BFS)
+            var queue = new Queue<Point>(Config.VeinMinerCount);
+            queue.Enqueue(new Point(x, y));
+
+            // 使用独立集合跟踪已访问节点
+            var visited = new HashSet<Point>(Config.VeinMinerCount) { new Point(x, y) };
+
+            while (queue.Count > 0 && list.Count < Config.VeinMinerCount)
+            {
+                var point = queue.Dequeue();
+                int curX = point.X, curY = point.Y;
+
+                // 检查当前图格是否符合条件
+                if (curX < 0 || curX >= Main.maxTilesX ||
+                    curY < 0 || curY >= Main.maxTilesY) continue;
+
+                Tile tile = Main.tile[curX, curY];
+                if (tile == null! || !tile.active() || tile.type != type) continue;
+
+                // 添加符合条件的图格
+                list.Add(point);
+
+                // 检查邻居
+                foreach (var (dx, dy) in Directions)
+                {
+                    int newX = curX + dx;
+                    int newY = curY + dy;
+                    var newPoint = new Point(newX, newY);
+
+                    // 跳过已访问节点
+                    if (visited.Contains(newPoint)) continue;
+
+                    // 跳过无效坐标
+                    if (newX < 0 || newX >= Main.maxTilesX ||
+                        newY < 0 || newY >= Main.maxTilesY) continue;
+
+                    // 标记为已访问并加入队列
+                    visited.Add(newPoint);
+                    queue.Enqueue(newPoint);
+                }
+            }
+            return list;
+        });
+    }
+    #endregion
+
+    #region 更新整个世界图格方法
+    public static void UpdateWorld()
+    {
+        if (Main.netMode is 2)
+            foreach (RemoteClient sock in Netplay.Clients.Where(s => s.IsActive))
+                for (int i = Netplay.GetSectionX(0); i <= Netplay.GetSectionX(Main.maxTilesX); i++)
+                    for (int j = Netplay.GetSectionY(0); j <= Netplay.GetSectionY(Main.maxTilesY); j++)
+                        sock.TileSections[i, j] = false;
+    }
+    #endregion
+
+    #region 给予玩家物品的方法 (简化版)
+    public static void GiveItem(Player plr, int type, int stack, bool Gift = false)
+    {
+        if (stack <= 0) return;
+
+        // 获取物品属性
+        Item tempItem = new Item();
+        tempItem.SetDefaults(type);
+        int maxStack = tempItem.maxStack;
+
+        // 尝试存放物品到储物空间
+        bool TryStoreItem(Item[] container)
+        {
+            // 优先堆叠已有物品
+            foreach (Item item in container)
+            {
+                if (item.type == type && item.stack < maxStack)
+                {
+                    int add = Math.Min(maxStack - item.stack, stack);
+                    item.stack += add;
+                    if ((stack -= add) <= 0) return true;
+                }
+            }
+
+            // 在空位创建新堆叠
+            foreach (Item item in container)
+            {
+                if (item.type == 0)
+                {
+                    int newStack = Math.Min(maxStack, stack);
+                    item.SetDefaults(type);
+                    item.stack = newStack;
+                    if ((stack -= newStack) <= 0) return true;
+                }
+            }
+            return false;
+        }
+
+        // 按优先级尝试存放不同储物空间
+        if (TryStoreItem(plr.inventory)) return; // 背包
+        if (TryStoreItem(plr.bank.item)) return; // 存钱罐
+        if (TryStoreItem(plr.bank4.item)) return; // 虚空袋
+        if (TryStoreItem(plr.bank2.item)) return; // 保险箱
+        if (TryStoreItem(plr.bank3.item)) return; // 护卫熔炉
+
+        // 生成剩余物品到世界
+        while (stack > 0)
+        {
+            int spawnStack = Math.Min(maxStack, stack);
+            stack -= spawnStack;
+            if (!Gift)
+                plr.QuickSpawnItem(new EntitySource_DebugCommand(), type, spawnStack);
+            else
+                plr.QuickSpawnItem(new EntitySource_Gift(Main.npc[plr.talkNPC]), type, spawnStack);
+
+        }
+    }
+    #endregion
+
+    #region 获取连锁破坏图格的物品属性
+    public static Item GetItemFromTile(int x, int y)
+    {
+        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _);
+        Item item = new();
+        item.SetDefaults(type);
+        item.stack = stack;
+        return item;
     }
     #endregion
 
@@ -343,133 +477,6 @@ internal class Utils
                  (int)Main.LocalPlayer.position.X / 16,
                  (int)Main.LocalPlayer.position.Y / 16);
         ClientLoader.Chat.WriteLine($"已生成 {spawnNPCAmount} 个 {npc.Name}", Color.Green);
-    }
-    #endregion
-
-    #region 优化后的连锁区域搜索方法
-    private static readonly (int dx, int dy)[] Directions =
-    [
-        (1, 0), (-1, 0), (0, 1), (0, -1),
-        (1, 1), (1, -1), (-1, 1), (-1, -1)
-    ];
-
-    public static Task<HashSet<Point>> GetVein(HashSet<Point> list, int x, int y, int type)
-    {
-        return Task.Run(() =>
-        {
-            // 使用队列实现广度优先搜索(BFS)
-            var queue = new Queue<Point>(Config.VeinMinerCount);
-            queue.Enqueue(new Point(x, y));
-
-            // 使用独立集合跟踪已访问节点
-            var visited = new HashSet<Point>(Config.VeinMinerCount) { new Point(x, y) };
-
-            while (queue.Count > 0 && list.Count < Config.VeinMinerCount)
-            {
-                var point = queue.Dequeue();
-                int curX = point.X, curY = point.Y;
-
-                // 检查当前图格是否符合条件
-                if (curX < 0 || curX >= Main.maxTilesX ||
-                    curY < 0 || curY >= Main.maxTilesY) continue;
-
-                Tile tile = Main.tile[curX, curY];
-                if (tile == null! || !tile.active() || tile.type != type) continue;
-
-                // 添加符合条件的图格
-                list.Add(point);
-
-                // 检查邻居
-                foreach (var (dx, dy) in Directions)
-                {
-                    int newX = curX + dx;
-                    int newY = curY + dy;
-                    var newPoint = new Point(newX, newY);
-
-                    // 跳过已访问节点
-                    if (visited.Contains(newPoint)) continue;
-
-                    // 跳过无效坐标
-                    if (newX < 0 || newX >= Main.maxTilesX ||
-                        newY < 0 || newY >= Main.maxTilesY) continue;
-
-                    // 标记为已访问并加入队列
-                    visited.Add(newPoint);
-                    queue.Enqueue(newPoint);
-                }
-            }
-            return list;
-        });
-    }
-    #endregion
-
-    #region 给予玩家物品的方法 (简化版)
-    public static void GiveItem(Player plr, int type, int stack, bool Gift = false)
-    {
-        if (stack <= 0) return;
-
-        // 获取物品属性
-        Item tempItem = new Item();
-        tempItem.SetDefaults(type);
-        int maxStack = tempItem.maxStack;
-
-        // 尝试存放物品到储物空间
-        bool TryStoreItem(Item[] container)
-        {
-            // 优先堆叠已有物品
-            foreach (Item item in container)
-            {
-                if (item.type == type && item.stack < maxStack)
-                {
-                    int add = Math.Min(maxStack - item.stack, stack);
-                    item.stack += add;
-                    if ((stack -= add) <= 0) return true;
-                }
-            }
-
-            // 在空位创建新堆叠
-            foreach (Item item in container)
-            {
-                if (item.type == 0)
-                {
-                    int newStack = Math.Min(maxStack, stack);
-                    item.SetDefaults(type);
-                    item.stack = newStack;
-                    if ((stack -= newStack) <= 0) return true;
-                }
-            }
-            return false;
-        }
-
-        // 按优先级尝试存放不同储物空间
-        if (TryStoreItem(plr.inventory)) return; // 背包
-        if (TryStoreItem(plr.bank.item)) return; // 存钱罐
-        if (TryStoreItem(plr.bank4.item)) return; // 虚空袋
-        if (TryStoreItem(plr.bank2.item)) return; // 保险箱
-        if (TryStoreItem(plr.bank3.item)) return; // 护卫熔炉
-
-        // 生成剩余物品到世界
-        while (stack > 0)
-        {
-            int spawnStack = Math.Min(maxStack, stack);
-            stack -= spawnStack;
-            if (!Gift)
-                plr.QuickSpawnItem(new EntitySource_DebugCommand(), type, spawnStack);
-            else
-                plr.QuickSpawnItem(new EntitySource_Gift(Main.npc[plr.talkNPC]), type, spawnStack);
-
-        }
-    }
-    #endregion
-
-    #region 获取连锁破坏图格的物品属性
-    public static Item GetItemFromTile(int x, int y)
-    {
-        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _);
-        Item item = new();
-        item.SetDefaults(type);
-        item.stack = stack;
-        return item;
     }
     #endregion
 
@@ -865,7 +872,7 @@ internal class Utils
             DeathPositions[worldID] = deaths;
         }
         return deaths;
-    } 
+    }
     #endregion
 
     #region 定位传送方法实现
@@ -1981,7 +1988,7 @@ internal class Utils
                 break;
 
             case NPCID.PartyGirl: // 派对女孩
-                SwapMusic(plr,NpcIndex);
+                SwapMusic(plr, NpcIndex);
                 break;
 
             case NPCID.Painter: //油漆工
@@ -2016,6 +2023,7 @@ internal class Utils
     #region 更多商店物品
     public static void MoreShopItem(Player plr, int NpcIndex, int npcType)
     {
+        NpcTalk = true;
         ReloadConfig();
 
         int ShopIndex = Config.FindShopItem(npcType);
@@ -2039,7 +2047,7 @@ internal class Utils
             for (int i = 0; i < shopItem.Length; i++)
             {
                 shopItem[i].TurnToAir(); // 清空槽位
-                
+
                 // 网络同步
                 if (Main.netMode is 2)
                 {
@@ -2103,8 +2111,8 @@ internal class Utils
         if (Main.netMode is 2)
         {
             // 发送物品同步包
-            NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null,Main.myPlayer, Main.npcShop, slotIndex);
-            NetMessage.SendData(MessageID.ShopOverride, - 1, -1, null, Main.myPlayer, Main.npcShop, slotIndex);
+            NetMessage.SendData(MessageID.SyncEquipment, -1, -1, null, Main.myPlayer, Main.npcShop, slotIndex);
+            NetMessage.SendData(MessageID.ShopOverride, -1, -1, null, Main.myPlayer, Main.npcShop, slotIndex);
         }
     }
     #endregion
@@ -2695,5 +2703,116 @@ internal class Utils
             ActiveRewards[i].Chance = baseChance + (i < remainder ? 1 : 0);
         }
     }
+    #endregion
+
+    #region 获取合成站名称的辅助方法
+    public static string GetTileName(int tileId)
+    {
+        // 优先使用基础列表
+        if (BaseStations.TryGetValue(tileId, out var baseName))
+            return baseName;
+
+        // 使用自定义名称
+        if (CustomStations.TryGetValue(tileId, out var customName))
+            return customName;
+
+        // 使用游戏内置的本地化名称
+        string localizedName = TileID.Search.GetName(tileId);
+        if (!string.IsNullOrEmpty(localizedName))
+            return localizedName;
+
+        return $"未知图格({tileId})";
+    }
+    #endregion
+
+    #region 基础合成站列表
+    public static readonly Dictionary<int, string> BaseStations = new Dictionary<int, string>
+    {
+        { TileID.WorkBenches, "工作台" },
+        { 114, "工匠作坊" },
+        { TileID.Furnaces, "熔炉" },
+        { TileID.Anvils, "铁砧/铅砧" },
+        { TileID.Hellforge, "地狱熔炉" },
+        { TileID.AlchemyTable, "炼药桌" },
+        { TileID.ImbuingStation, "灌注站" },
+        { TileID.CrystalBall, "水晶球" },
+        { TileID.Autohammer, "自动锤炼机" },
+        { TileID.Loom, "织布机" },
+        { TileID.Sawmill, "锯木机" },
+        { TileID.Kegs, "酒桶" },
+        { TileID.CookingPots, "烹饪锅" },
+        { TileID.Blendomatic, "搅拌机" },
+        { TileID.MeatGrinder, "绞肉机" },
+        { TileID.LesionStation, "病变工作站" },
+        { TileID.SteampunkBoiler, "蒸汽朋克锅炉" },
+        { TileID.GlassKiln, "玻璃窑" },
+        { TileID.Solidifier, "固化机" },
+        { TileID.BoneWelder, "骨焊机" },
+        { TileID.FleshCloningVat, "血肉克隆台" },
+        { TileID.SkyMill, "天磨" },
+        { TileID.LivingLoom, "活木织机" },
+        { TileID.IceMachine, "冰雪机" },
+        { TileID.HeavyWorkBench, "重型工作台" },
+        { 412, "远古操纵机" },
+        { 26, "恶魔祭坛" },
+    };
+    #endregion
+
+    #region 输出选择合成站列表名称
+    public static Dictionary<int, string> StationList()
+    {
+        // 合并自定义合成站
+        var mergedStations = new Dictionary<int, string>(BaseStations);
+        foreach (var custom in CustomStations)
+        {
+            if (!mergedStations.ContainsKey(custom.Key))
+            {
+                mergedStations.Add(custom.Key, custom.Value);
+            }
+        }
+
+        return mergedStations;
+    }
+    #endregion
+
+    #region 获取环境条件的详细说明
+    public static string GetEnvironmentTooltip(string condition)
+    {
+        switch (condition)
+        {
+            case "困难模式": return "击败肉山后解锁";
+            case "血月": return "血月事件期间";
+            case "白天": return "游戏时间4:30 AM - 7:30 PM";
+            case "晚上": return "游戏时间7:30 PM - 4:30 AM";
+            case "满月": return "月亮完全可见时";
+            case "水": return "玩家站在水中";
+            case "蜂蜜": return "玩家站在蜂蜜中";
+            case "岩浆": return "玩家站在熔岩中";
+            case "森林": return "玩家处于森林生物群系";
+            case "神圣": return "玩家处于神圣之地";
+            case "腐化": return "玩家处于腐化之地";
+            case "猩红": return "玩家处于猩红之地";
+            case "地牢": return "玩家处于地牢中";
+            case "神庙": return "玩家处于丛林神庙中";
+            case "天空": return "玩家处于高空区域";
+            case "沙尘暴": return "沙漠中发生沙尘暴时";
+            default: return $"满足 {condition} 条件时解锁配方";
+        }
+    }
+    #endregion
+
+    #region 合成环境名称
+    public static readonly List<string> AllEnvironments = new List<string>
+    {
+    "史莱姆王", "克眼", "巨鹿", "克脑", "蜂王", "骷髅王", "困难模式",
+    "毁灭者", "双子魔眼", "机械骷髅王", "世纪之花", "石巨人", "史莱姆皇后",
+    "光之女皇", "猪鲨", "教徒", "月亮领主", "哀木", "南瓜王", "常绿尖叫怪",
+    "冰雪女王", "圣诞坦克", "火星飞碟", "小丑", "哥布林入侵", "海盗入侵",
+    "霜月", "血月", "雨天", "白天", "晚上", "大风天", "万圣节", "圣诞节",
+    "派对", "2020", "2021", "ftw", "ntb", "dst", "颠倒", "陷阱", "天顶",
+    "森林", "丛林", "沙漠", "雪原", "洞穴", "海洋", "神圣", "蘑菇", "腐化",
+    "猩红", "地牢", "墓地", "蜂巢", "神庙", "沙尘暴", "天空", "满月", "亏凸月",
+    "下弦月", "残月", "新月", "娥眉月", "上弦月", "盈凸月", "水", "蜂蜜", "岩浆"
+    }; 
     #endregion
 }

@@ -18,10 +18,9 @@ public class NPCEventSystem
     {
         // 获取NPC.UpdateNPC方法的反射信息
         MethodInfo UpdateNPC = typeof(NPC).GetMethod("UpdateNPC", BindingFlags.Instance | BindingFlags.Public)!;
-        MethodInfo NewUpdateNPC = typeof(NPCEventSystem).GetMethod(nameof(OnUpdateNPC), BindingFlags.Static | BindingFlags.Public)!;
 
         // 创建钩子
-        NpcUpdateHook = new Hook(UpdateNPC, NewUpdateNPC);
+        NpcUpdateHook = new Hook(UpdateNPC, OnUpdateNPC);
 
         // 获取私有方法信息
         OpenShopMethod = typeof(Main).GetMethod("OpenShop", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(int)],null);

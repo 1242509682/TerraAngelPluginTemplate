@@ -1,5 +1,8 @@
 ﻿using MonoMod.RuntimeDetour;
+using System.Buffers;
 using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Terraria;
 
 namespace MyPlugin;
@@ -30,17 +33,14 @@ public class TileEditEventSystem
     private delegate void orig_KillTile(int i, int j, bool fail, bool effectOnly, bool noItem);
     private static void Hook_KillTile(orig_KillTile orig, int i, int j, bool fail, bool effectOnly, bool noItem)
     {
-        // 先执行原始方法
-        orig(i, j, fail, effectOnly, noItem);
-
-        // 然后在原始方法执行后触发事件
+        orig(i, j, fail, effectOnly, noItem); // 执行破坏方法后
         var args = new TileKillEventArgs(i, j, fail, effectOnly, noItem);
         OnTileKill?.Invoke(null, args);
     }
 }
 
 // 简化的事件参数记录类型
-public record TileKillEventArgs(int X,int Y,bool Fail,bool EffectOnly,bool NoItem);
+public record TileKillEventArgs(int X, int Y, bool Fail, bool EffectOnly, bool NoItem);
 
 // 使用图格ID与物品名称的记录类型
-internal record VeinMinerItem(int TileID, string ItemName);
+internal record MinerItem(int TileID, string ItemName);

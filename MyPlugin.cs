@@ -1,7 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
-using System;
-using System.Numerics;
+using Microsoft.Xna.Framework.Input;
 using TerraAngel;
+using TerraAngel.Config;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
 using TerraAngel.Tools;
@@ -16,12 +16,16 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 1, 4);
+    public Version Version => new(1, 1, 5);
     #endregion
 
     #region 注册与卸载
     public override void Load()
     {
+        // 初始化完成提示
+        ClientLoader.Console.WriteLine($"[{Name}] 插件已加载 (v{Version}) 作者: {Author}", color);
+        ClientLoader.Console.WriteLine($"[{Name}] 配置文件位置: {Configuration.FilePath}", Color.LightGoldenrodYellow);
+
         // 加载世界事件
         WorldGen.Hooks.OnWorldLoad += OnWorldLoad;
 
@@ -48,7 +52,7 @@ public class MyPlugin(string path) : Plugin(path)
         IgnoreGravity.Register();
 
         // 读取配置文件
-        ReloadConfig(null!);
+        ReloadConfig();
 
         // 注册UI
         ToolManager.AddTool<UITool>();
@@ -59,12 +63,7 @@ public class MyPlugin(string path) : Plugin(path)
         ClientLoader.Console.AddCommand("heal", Commands.AutoHeal, "按H键强制回血");
         ClientLoader.Console.AddCommand("snpc", Commands.MouseStrikeNPC, "使用物品时伤害鼠标附近怪物");
         ClientLoader.Console.AddCommand("autouse", Commands.AutoUse, "切换自动使用物品功能");
-
-        // 初始化完成提示
-        ClientLoader.Console.WriteLine($"[{Name}] 插件已加载 (v{Version}) 作者: {Author}");
-        ClientLoader.Console.WriteLine($"[{Name}] 配置文件位置: {Configuration.FilePath}");
     }
-
 
     public override void Unload()
     {
@@ -101,20 +100,43 @@ public class MyPlugin(string path) : Plugin(path)
     #region 配置管理
     internal static Configuration Config = new();
     public static Color color = new(240, 250, 150);
-    public static void ReloadConfig(TerraAngel.UI.ClientWindows.Console.ConsoleWindow.CmdStr x = null!)
+    public static bool NpcTalk = false;
+    public static void ReloadConfig(TerraAngel.UI.ClientWindows.Console.ConsoleWindow.CmdStr? x = null)
     {
         Config = Configuration.Read();
         Config.Write();
-        ClientLoader.Console.WriteLine($"[{typeof(MyPlugin).Namespace}] 配置文件已重载", color);
+
+        if (!NpcTalk)
+            ClientLoader.Console.WriteLine($"[{typeof(MyPlugin).Namespace}] 配置文件已重载", Color.LightSkyBlue);
     }
     #endregion
 
     #region 图格编辑事件
+    public static bool TaskRunning { get; set; }
     private void OnTileEdit(object? sender, TileKillEventArgs e)
     {
-        if (!Config.Enabled) return;
+        if (!Config.Enabled)
+        {
+            return;
+        }
 
-        Utils.VeinMiner(e.X, e.Y); // 连锁挖矿方法
+        if (!TaskRunning)
+        {
+            if (Config.VeinMinerEnabled)
+            {
+                var task = Task.Run(() =>
+                {
+                    TaskRunning = true;
+                    Utils.VeinMiner(e.X, e.Y); // 连锁挖矿方法
+                });
+
+                task.ContinueWith(t =>
+                {
+                    TaskRunning = false;
+                    Utils.UpdateWorld();
+                });
+            }
+        }
     }
     #endregion
 
@@ -269,18 +291,7 @@ public class MyPlugin(string path) : Plugin(path)
             ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
         }
 
-        ClientLoader.Console.WriteLine($"地图名称: {Main.worldName}", color);
-        string Size = Utils.GetWorldWorldSize();
-        ClientLoader.Console.WriteLine($"地图大小: {Size}", Color.LimeGreen);
-        string GameMode = Utils.GetWorldGameMode();
-        ClientLoader.Console.WriteLine($"地图难度: {GameMode}", Color.LightSeaGreen);
-        var (MainProg, EventProg) = Utils.GetWorldProgress();
-        ClientLoader.Console.WriteLine($"主要进度: {MainProg}", Color.Gold);
-        ClientLoader.Console.WriteLine($"事件进度: {EventProg}", Color.LightBlue);
-        ClientLoader.Console.WriteLine($"地图ID: {Main.worldID}", Color.LightSkyBlue);
-        ClientLoader.Console.WriteLine($"角色名: {Main.LocalPlayer.name}", Color.LightSalmon);
-        ClientLoader.Console.WriteLine($"玩家IP: {Main.getIP}", Color.LightCoral);
-        ClientLoader.Console.WriteLine($"设备ID: {Main.clientUUID}", Color.LightYellow);
+        WorldInfo();
     }
     #endregion
 
@@ -299,9 +310,16 @@ public class MyPlugin(string path) : Plugin(path)
         }
 
         // 自定义配方处理逻辑 
-        if (Config.CustomRecipes.Count > 0 && Config.CustomRecipes.Any(r => r.Index == e.Index))
+        if (CustomRecipeIndexes.Contains(e.Index))
         {
-            e.MeetsConditions = RecipeHooks.HasResultItemForRecipe(e.Recipe, e.HasItem);
+            // 获取对应的自定义配方数据
+            var customRecipe = Config.CustomRecipes.FirstOrDefault(r => r.Index == e.Index);
+            if (customRecipe != null)
+            {
+                e.MeetsConditions = e.MeetsTileConditions &&
+                CustomRecipeData.IsRecipeUnlocked(customRecipe) &&
+                RecipeHooks.HasResultItemForRecipe(e.Recipe, e.HasItem);
+            }
             return;
         }
 
@@ -331,14 +349,6 @@ public class MyPlugin(string path) : Plugin(path)
         CustomRecipeItems.Clear();
         CustomRecipeIndexes.Clear();
 
-        // 确保配方组系统已重置
-        if (RecipeGroup.recipeGroups == null || RecipeGroup.recipeGroupIDs == null)
-        {
-            RecipeGroup.recipeGroups = new Dictionary<int, RecipeGroup>();
-            RecipeGroup.recipeGroupIDs = new Dictionary<string, int>();
-            RecipeGroup.nextRecipeGroupIndex = 0;
-        }
-
         // 检查所有自定义配方的索引有效性
         foreach (var data in Config.CustomRecipes)
         {
@@ -363,7 +373,7 @@ public class MyPlugin(string path) : Plugin(path)
         foreach (var data in Config.CustomRecipes)
         {
             // 如果配方已经分配了有效索引，跳过
-            if (data.Index != -1) continue;
+            if (full || data.Index != -1) continue;
 
             // 检查是否已存在相同的配方
             if (RecipeHooks.ExistsRecipe(data))
@@ -372,17 +382,11 @@ public class MyPlugin(string path) : Plugin(path)
                 int existing = RecipeHooks.FindExistingRecipeIndex(data);
                 if (existing != -1)
                 {
-                    data.Index = existing;
-
                     // 记录新添加的配方(用于比较原版物品)
-                    CustomRecipeIndexes.Add(existing);
-                    CustomRecipeItems.Add(data.ResultItem);
+                    RecipeHooks.AddRecipeIndex(data, existing);
                     continue;
                 }
             }
-
-            // 如果槽位已满则跳过后续配方
-            if (full) continue;
 
             // 查找空槽位
             int slot = RecipeHooks.FindEmptyRecipeSlot();
@@ -395,15 +399,8 @@ public class MyPlugin(string path) : Plugin(path)
 
             // 创建新配方
             Recipe recipe = RecipeHooks.CreateRecipeFromData(data);
-
-            // 应用到主配方数组
             Main.recipe[slot] = recipe;
-            data.Index = slot;
-
-            // 记录新添加的配方(用于比较原版物品)
-            CustomRecipeIndexes.Add(slot);
-            CustomRecipeItems.Add(data.ResultItem);
-
+            RecipeHooks.AddRecipeIndex(data, slot);
             count++;
         }
 
@@ -412,6 +409,40 @@ public class MyPlugin(string path) : Plugin(path)
         {
             ClientLoader.Chat.WriteLine($"已加载 {count} 个自定义配方", Color.Green);
         }
+    }
+    #endregion
+
+    #region 重载插件方法
+    public static void ReloadPlugins()
+    {
+        // 将重载操作放入主线程队列
+        Main.QueueMainThreadAction(() =>
+        {
+            ClientConfig.WriteToFile();
+            PluginLoader.UnloadPlugins();
+            PluginLoader.LoadAndInitializePlugins();
+            ClientLoader.PluginUI!.NeedsUpdate = true;
+        });
+    }
+    #endregion
+
+    #region 查询世界信息
+    public static void WorldInfo()
+    {
+        ClientLoader.Console.WriteLine($"\n《世界信息》");
+        ClientLoader.Console.WriteLine($"世界名称: {Main.worldName}", color);
+        ClientLoader.Console.WriteLine($"世界种子: {WorldGen.currentWorldSeed}" + "(仅显示客户端最后加载世界的种子)", Color.LightGoldenrodYellow);
+        string Size = Utils.GetWorldWorldSize();
+        ClientLoader.Console.WriteLine($"世界大小: {Size}", Color.LimeGreen);
+        string GameMode = Utils.GetWorldGameMode();
+        ClientLoader.Console.WriteLine($"世界难度: {GameMode}", Color.LightSeaGreen);
+        var (MainProg, EventProg) = Utils.GetWorldProgress();
+        ClientLoader.Console.WriteLine($"主要进度: {MainProg}", Color.Gold);
+        ClientLoader.Console.WriteLine($"事件进度: {EventProg}", Color.LightBlue);
+        ClientLoader.Console.WriteLine($"世界ID: {Main.worldID}", Color.LightSkyBlue);
+        ClientLoader.Console.WriteLine($"角色名: {Main.LocalPlayer.name}", Color.LightSalmon);
+        ClientLoader.Console.WriteLine($"玩家IP: {Main.getIP}", Color.LightCoral);
+        ClientLoader.Console.WriteLine($"设备ID: {Main.clientUUID}", Color.LightYellow);
     }
     #endregion
 
