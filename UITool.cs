@@ -1104,7 +1104,7 @@ public class UITool : Tool
     private int NewIngredientStack = 1; // 新添加的材料数量
     private void RecipeManagerWindow()
     {
-        ImGui.SetNextWindowSize(new Vector2(400, 600), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(500, 600), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("配方管理器", ref ShowRecipeManagerWindow, ImGuiWindowFlags.NoCollapse))
         {
             // 顶部按钮区域
@@ -1200,7 +1200,7 @@ public class UITool : Tool
                 ClientLoader.Chat.WriteLine("已清空所有自定义配方", Color.Green);
             }
 
-            ImGui.BeginChild("RecipeList", new Vector2(250, 300), ImGuiChildFlags.Borders);
+            ImGui.BeginChild("RecipeList", new Vector2(250, 550), ImGuiChildFlags.Borders);
 
             // 应用搜索过滤
             var GetRecipes = Config.CustomRecipes.Where(r =>
@@ -1254,15 +1254,16 @@ public class UITool : Tool
 
             if (EditingRecipe != null)
             {
+                // 《配方编辑器》
                 ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "《配方编辑器》");
                 ImGui.Separator();
 
                 // 结果物品设置
-                ImGui.Text("合成物品:");
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "合成物品:");
                 ImGui.SameLine();
                 Item resultItem = new Item();
                 resultItem.SetDefaults(EditingRecipe.ResultItem);
-                string resultLabel = resultItem.Name != "" ? $"{resultItem.Name} (ID:{EditingRecipe.ResultItem})" : "未选择";
+                string resultLabel = resultItem.Name != "" ? $"{resultItem.Name} ({EditingRecipe.ResultItem})" : "未选择";
                 if (ImGui.Button(resultLabel))
                 {
                     ShowItemSelectorForResult = !ShowItemSelectorForResult;
@@ -1278,56 +1279,21 @@ public class UITool : Tool
 
                 var selectedItemsStack = EditingRecipe.ResultStack;
                 ImGui.SameLine();
+                ImGui.Text("数量");
+                ImGui.SameLine();
                 ImGui.SetNextItemWidth(100);
-                ImGui.InputInt("数量", ref selectedItemsStack);
+                ImGui.InputInt("##ResultStack", ref selectedItemsStack);
                 EditingRecipe.ResultStack = Math.Max(1, selectedItemsStack);
 
-                // ====================== 材料与环境分屏布局 ======================
+                // 材料区域
                 ImGui.Separator();
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "所需材料:");
 
-                // 开始分屏布局
-                ImGui.Columns(2, "MaterialsAndEnv", false);
-                ImGui.SetColumnWidth(0, ImGui.GetWindowWidth() * 0.4f); // 材料列占40%
-                ImGui.SetColumnWidth(1, ImGui.GetWindowWidth() * 0.6f); // 环境列占60%
-
-                // 第一列：材料区域
+                // 添加材料控件
                 ImGui.BeginGroup();
-                ImGui.Text("所需材料:");
-                ImGui.BeginChild("IngredientsList", new Vector2(0, 100), ImGuiChildFlags.Borders);
-                if (EditingRecipe.Ingredients.Count == 0)
-                {
-                    ImGui.TextDisabled("没有添加材料");
-                }
-                else
-                {
-                    for (int i = 0; i < EditingRecipe.Ingredients.Count; i++)
-                    {
-                        var ingredient = EditingRecipe.Ingredients[i];
-                        Item ingItem = new Item();
-                        ingItem.SetDefaults(ingredient.ItemId);
-
-                        ImGui.PushID(i);
-
-                        ImGui.Text($"{ingItem.Name} x{ingredient.Stack}");
-
-                        ImGui.SameLine();
-                        if (ImGui.Button("删除"))
-                        {
-                            EditingRecipe.Ingredients.RemoveAt(i);
-                            i--;
-                        }
-
-                        ImGui.PopID();
-                    }
-                }
-                ImGui.EndChild();
-
-                // 添加材料
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "添加材料:");
-                ImGui.SameLine();
                 Item newIngItem = new Item();
                 newIngItem.SetDefaults(NewIngredientItemId);
-                string newIngLabel = newIngItem.Name != "" ? $"{newIngItem.Name} (ID:{NewIngredientItemId})" : "选择物品";
+                string newIngLabel = newIngItem.Name != "" ? $"{newIngItem.Name} ({NewIngredientItemId})" : "添加材料";
 
                 if (ImGui.Button(newIngLabel))
                 {
@@ -1354,21 +1320,67 @@ public class UITool : Tool
                     NewIngredientItemId = 0;
                     NewIngredientStack = 1;
                 }
-                ImGui.EndGroup();
-
-                // 切换到第二列：环境区域
-                ImGui.NextColumn();
-                ImGui.BeginGroup();
-                ImGui.Text("合成环境:");
-
-                // 显示当前环境条件
-                ImGui.BeginChild("EnvironmentList", new Vector2(0, 100), ImGuiChildFlags.Borders);
-                if (EditingRecipe.unlock.Count == 0)
-                {
-                    ImGui.TextDisabled("无环境要求");
-                }
                 else
                 {
+                    ImGui.TextDisabled("无材料要求");
+                }
+                ImGui.EndGroup();
+
+                // 材料列表
+                if (EditingRecipe.Ingredients.Count > 0)
+                {
+                    ImGui.BeginChild("IngredientsList", new Vector2(0, 100), ImGuiChildFlags.Borders);
+                    for (int i = 0; i < EditingRecipe.Ingredients.Count; i++)
+                    {
+                        var ingredient = EditingRecipe.Ingredients[i];
+                        Item ingItem = new Item();
+                        ingItem.SetDefaults(ingredient.ItemId);
+
+                        ImGui.PushID(i);
+
+                        ImGui.Text($"{ingItem.Name} x{ingredient.Stack}");
+
+                        ImGui.SameLine();
+                        if (ImGui.Button("删除"))
+                        {
+                            EditingRecipe.Ingredients.RemoveAt(i);
+                            i--;
+                        }
+
+                        ImGui.PopID();
+                    }
+                    ImGui.EndChild();
+                }
+
+                // 环境区域
+                ImGui.Separator();
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "所需环境:");
+
+                // 添加环境控件
+                ImGui.BeginGroup();
+                if (ImGui.Button("添加环境"))
+                {
+                    ShowEnvironmentSelector = !ShowEnvironmentSelector;
+                }
+
+                // 清空环境条件按钮
+                ImGui.SameLine();
+                if (ImGui.Button("清空环境"))
+                {
+                    EditingRecipe.unlock.Clear();
+                }
+                ImGui.EndGroup();
+
+                // 显示环境选择器
+                if (ShowEnvironmentSelector)
+                {
+                    DrawEnvironmentSelector();
+                }
+
+                // 环境列表
+                if (EditingRecipe.unlock.Count > 0)
+                {
+                    ImGui.BeginChild("EnvironmentList", new Vector2(0, 100), ImGuiChildFlags.Borders);
                     for (int i = 0; i < EditingRecipe.unlock.Count; i++)
                     {
                         string condition = EditingRecipe.unlock[i];
@@ -1385,50 +1397,17 @@ public class UITool : Tool
 
                         ImGui.PopID();
                     }
-                }
-                ImGui.EndChild();
-
-                // 添加环境条件按钮
-                if (ImGui.Button("添加环境条件"))
-                {
-                    ShowEnvironmentSelector = !ShowEnvironmentSelector;
-                }
-
-                // 清空环境条件按钮
-                ImGui.SameLine();
-                if (ImGui.Button("清空环境条件"))
-                {
-                    EditingRecipe.unlock.Clear();
-                }
-
-                // 显示环境选择器
-                if (ShowEnvironmentSelector)
-                {
-                    DrawEnvironmentSelector();
-                }
-                ImGui.EndGroup();
-
-                // 结束分屏布局
-                ImGui.Columns(1);
-                // ====================== 分屏布局结束 ======================
-
-                // 合成站设置 - 多选支持
-                ImGui.Separator();
-                ImGui.Text("合成站:");
-
-                // 显示当前选择的合成站
-                if (EditingRecipe.RequiredTile.Count() > 0)
-                {
-                    // 使用统一的GetTileName方法获取中文名称
-                    string TileName = string.Join(", ", EditingRecipe.RequiredTile.Select(Utils.GetTileName));
-                    ImGui.TextColored(new Vector4(0.8f, 1.0f, 0.8f, 1.0f), TileName);
+                    ImGui.EndChild();
                 }
                 else
                 {
-                    ImGui.TextDisabled("无合成站需求");
+                    ImGui.TextDisabled("无环境要求");
                 }
 
-                ImGui.SameLine();
+                // 合成站设置 - 多选支持
+                ImGui.Separator();
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "合成站:");
+                ImGui.Separator();
                 if (ImGui.Button("选择合成站"))
                 {
                     ShowTileSelector = !ShowTileSelector;
@@ -1446,6 +1425,57 @@ public class UITool : Tool
                 if (ShowTileSelector)
                 {
                     DrawTileSelector();
+                }
+
+                // 显示当前选择的合成站
+                if (EditingRecipe.RequiredTile.Count > 0)
+                {
+                    ImGui.BeginChild("RequiredTileList", new Vector2(0, 100), ImGuiChildFlags.Borders);
+                    // 使用统一的GetTileName方法获取中文名称
+                    var tileNames = EditingRecipe.RequiredTile.Select(Utils.GetTileName).ToList();
+
+                    // 每4个换一行
+                    int itemsPerRow = 4;
+                    for (int i = 0; i < tileNames.Count; i++)
+                    {
+                        // 每行第一个不需要SameLine
+                        if (i % itemsPerRow != 0)
+                        {
+                            ImGui.SameLine();
+                            ImGui.Text("|");
+                            ImGui.SameLine();
+                        }
+
+                        // 获取名称并显示
+                        string name = tileNames[i];
+
+                        // 检查是否为自定义合成站
+                        bool isCustom = CustomStations.ContainsKey(EditingRecipe.RequiredTile[i]);
+                        if (isCustom)
+                        {
+                            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.8f, 0.4f, 1f)); // 橙色
+                            ImGui.Text(name);
+                            ImGui.PopStyleColor();
+                        }
+                        else
+                        {
+                            ImGui.Text(name);
+                        }
+
+                        // 删除按钮
+                        ImGui.SameLine();
+                        if (ImGui.Button($"删除##tile_{EditingRecipe.RequiredTile[i]}"))
+                        {
+                            EditingRecipe.RequiredTile.RemoveAt(i);
+                            tileNames.RemoveAt(i);
+                            i--; // 调整索引
+                        }
+                        ImGui.EndChild();
+                    }
+                }
+                else
+                {
+                    ImGui.TextDisabled("无合成站需求");
                 }
 
                 // 保存/删除按钮
@@ -1580,6 +1610,7 @@ public class UITool : Tool
     #region 绘制环境选择器窗口
     private bool ShowEnvironmentSelector = false;
     private string SelectedEnvironment = "";
+    private string CustomEnvironment = ""; // 新增专用变量存储自定义条件
     private void DrawEnvironmentSelector()
     {
         ImGui.SetNextWindowSize(new Vector2(300, 400), ImGuiCond.FirstUseEver);
@@ -1599,62 +1630,152 @@ public class UITool : Tool
                 ? Utils.AllEnvironments
                 : Utils.AllEnvironments.Where(c => c.Contains(SelectedEnvironment)).ToList();
 
-            if (filteredConditions.Count == 0)
+            // 将条件分为两组：自定义条件和其他条件
+            var customConditions = filteredConditions
+                .Where(c => c.StartsWith("自定义:"))
+                .OrderBy(c => c)
+                .ToList();
+
+            var otherConditions = filteredConditions
+                .Where(c => !c.StartsWith("自定义:"))
+                .OrderBy(c => c)
+                .ToList();
+
+            // 显示自定义条件组（置顶）
+            if (customConditions.Count > 0)
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.8f, 0f, 1f)); // 橙色标题
+                ImGui.Text("自定义环境条件");
+                ImGui.PopStyleColor();
+
+                foreach (var condition in customConditions)
+                {
+                    DrawConditionItem(condition);
+                }
+
+                ImGui.Separator();
+            }
+
+            // 显示其他条件
+            if (otherConditions.Count == 0 && customConditions.Count == 0)
             {
                 ImGui.TextDisabled("未找到匹配的环境条件");
             }
-            else
+            else if (otherConditions.Count > 0)
             {
-                foreach (var condition in filteredConditions)
+                ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.8f, 0.8f, 1f, 1f)); // 淡蓝色标题
+                ImGui.Text("预设环境条件");
+                ImGui.PopStyleColor();
+
+                foreach (var condition in otherConditions)
                 {
-                    // 检查是否已添加
-                    bool isAdded = EditingRecipe!.unlock.Contains(condition);
-
-                    if (isAdded)
-                        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 1f, 0.5f, 1f));
-
-                    if (ImGui.Selectable(condition))
-                    {
-                        if (!isAdded)
-                        {
-                            EditingRecipe.unlock.Add(condition);
-                        }
-                        else
-                        {
-                            EditingRecipe.unlock.Remove(condition);
-                        }
-                    }
-
-                    if (ImGui.IsItemHovered())
-                    {
-                        string tooltip = Utils.GetEnvironmentTooltip(condition);
-                        if (!string.IsNullOrEmpty(tooltip))
-                            ImGui.SetTooltip(tooltip);
-                    }
-
-                    if (isAdded) ImGui.PopStyleColor();
-                }
-            }
-
-            // 添加自定义条件
-            if (!string.IsNullOrEmpty(SelectedEnvironment) &&
-                !Utils.AllEnvironments.Contains(SelectedEnvironment))
-            {
-                ImGui.Separator();
-                ImGui.Text("自定义条件:");
-                if (ImGui.Button($"添加: {SelectedEnvironment}"))
-                {
-                    if (!EditingRecipe!.unlock.Contains(SelectedEnvironment))
-                    {
-                        EditingRecipe.unlock.Add(SelectedEnvironment);
-                    }
-                    SelectedEnvironment = "";
+                    DrawConditionItem(condition);
                 }
             }
 
             ImGui.EndChild();
+
+            // 添加自定义环境条件按钮
+            ImGui.Separator();
+            ImGui.Text("添加自定义环境条件:");
+
+            // 只显示"获取手持物品"按钮
+            if (ImGui.Button("从手持物品添加环境条件"))
+            {
+                Item heldItem = Main.LocalPlayer.HeldItem;
+                if (heldItem.createTile >= 0)
+                {
+                    // 格式化为"自定义:物品名(ID)"格式
+                    string customEnv = $"自定义:{Lang.GetItemNameValue(heldItem.type)}({heldItem.createTile})";
+
+                    // 添加到配方
+                    if (!EditingRecipe!.unlock.Contains(customEnv))
+                    {
+                        EditingRecipe.unlock.Add(customEnv);
+
+                        // 添加到全局列表供后续使用
+                        if (!Utils.AllEnvironments.Contains(customEnv))
+                        {
+                            Utils.AllEnvironments.Add(customEnv);
+                        }
+
+                        // 提示添加成功
+                        Main.NewText($"已添加环境条件: {customEnv}");
+                    }
+                    else
+                    {
+                        Main.NewText("该环境条件已存在!");
+                    }
+                }
+                else
+                {
+                    // 提示物品无效
+                    Main.NewText("手持物品不是可放置的物块!");
+                }
+            }
+
+            // 添加使用说明
+            ImGui.SameLine();
+            ImGui.TextDisabled("(?)");
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                ImGui.Text("手持一个可放置的物块，点击按钮将其添加为环境条件");
+                ImGui.EndTooltip();
+            }
+
+            // 显示当前自定义条件状态
+            if (!string.IsNullOrEmpty(CustomEnvironment))
+            {
+                ImGui.SameLine();
+                ImGui.TextColored(new Vector4(1, 1, 0, 1), $"将添加: {CustomEnvironment}");
+            }
+
             ImGui.End();
         }
+    }
+
+    // 提取条件项绘制为单独方法
+    private void DrawConditionItem(string condition)
+    {
+        // 检查是否已添加
+        bool isAdded = EditingRecipe!.unlock.Contains(condition);
+
+        // 自定义条件使用不同颜色
+        bool isCustom = condition.StartsWith("自定义:");
+
+        if (isAdded)
+        {
+            if (isCustom)
+                ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 1f, 0.5f, 1f)); // 自定义-已添加：亮绿色
+            else
+                ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 1f, 0.5f, 1f)); // 预设-已添加：绿色
+        }
+        else if (isCustom)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.8f, 0.5f, 1f)); // 自定义-未添加：橙色
+        }
+
+        if (ImGui.Selectable(condition))
+        {
+            if (!isAdded)
+            {
+                EditingRecipe.unlock.Add(condition);
+            }
+            else
+            {
+                EditingRecipe.unlock.Remove(condition);
+            }
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            string tooltip = Utils.GetEnvironmentTooltip(condition);
+            if (!string.IsNullOrEmpty(tooltip))
+                ImGui.SetTooltip(tooltip);
+        }
+
+        if (isAdded || isCustom) ImGui.PopStyleColor();
     }
     #endregion
 
@@ -1771,7 +1892,7 @@ public class UITool : Tool
                 Item item = Filt.Value;
                 if (item.type == 0 || item.Name == null) continue;
 
-                if (ImGui.Selectable($"{item.Name} (ID:{item.type})", SelectedItemId == item.type))
+                if (ImGui.Selectable($"{item.Name} ({item.type})", SelectedItemId == item.type))
                 {
                     SelectedItemId = item.type;
                     ShowItemSelectorForResult = false;
@@ -1794,117 +1915,136 @@ public class UITool : Tool
     #region 配方合成站图格选择器窗口
     private bool ShowTileSelector = false;
     private string TileSearchText = "";
-    private List<int> TileSelectionCache = new List<int>();
     public static Dictionary<int, string> CustomStations = new Dictionary<int, string>();
+
     private void DrawTileSelector()
     {
-        ImGui.SetNextWindowSize(new Vector2(450, 550), ImGuiCond.FirstUseEver);
+        ImGui.SetNextWindowSize(new Vector2(300, 400), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("选择合成站", ref ShowTileSelector, ImGuiWindowFlags.NoCollapse))
         {
-            // 顶部信息区域
-            Dictionary<int, string> Stations = Utils.StationList();
-            if (TileSelectionCache.Count > 0)
-            {
-                ImGui.Text("已选择:");
-                ImGui.SameLine();
-
-                string SelectedStations = string.Join(", ", TileSelectionCache.Select(id => Utils.GetTileName(id)));
-
-                ImGui.TextColored(new Vector4(0.8f, 1.0f, 0.8f, 1.0f), SelectedStations);
-            }
-            else
-            {
-                ImGui.Text("已选择: 无合成站需求");
-            }
-
             // 搜索框
             ImGui.Text("搜索合成站:");
             ImGui.SameLine();
-            ImGui.SetNextItemWidth(250);
+            ImGui.SetNextItemWidth(200);
             ImGui.InputText("##TileSearch", ref TileSearchText, 100);
 
-            ImGui.BeginChild("TileList", new Vector2(0, 380), ImGuiChildFlags.Borders);
-
-            // 过滤常用合成站
-            var GetStations = Stations.Where(s =>
-                string.IsNullOrWhiteSpace(TileSearchText) ||
-                s.Value.Contains(TileSearchText, StringComparison.OrdinalIgnoreCase) ||
-                s.Key.ToString().Contains(TileSearchText)
-            );
-
-            foreach (var station in GetStations)
+            // 添加"获取手持物品"按钮
+            if (ImGui.Button("获取手持物品"))
             {
-                bool isSelected = TileSelectionCache.Contains(station.Key);
-                if (ImGui.Checkbox($"{station.Value}##{station.Key}", ref isSelected))
-                {
-                    if (isSelected)
-                    {
-                        if (!TileSelectionCache.Contains(station.Key))
-                            TileSelectionCache.Add(station.Key);
-                    }
-                    else
-                    {
-                        TileSelectionCache.Remove(station.Key);
-                    }
-                }
-            }
-
-            ImGui.EndChild();
-
-            // 按钮区域
-            ImGui.Separator();
-            if (ImGui.Button("清空选择"))
-            {
-                TileSelectionCache.Clear();
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("确认"))
-            {
-                // 更新当前编辑配方的合成站
-                if (EditingRecipe != null)
-                {
-                    EditingRecipe.RequiredTile.Clear();
-                    EditingRecipe.RequiredTile.AddRange(TileSelectionCache);
-                }
-                TileSelectionCache.Clear();
-                ShowTileSelector = false;
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("取消"))
-            {
-                TileSelectionCache.Clear();
-                ShowTileSelector = false;
-            }
-
-            // 添加手持物品合成站按钮
-            ImGui.SameLine();
-            Item heldItem = Main.LocalPlayer.HeldItem;
-            if (heldItem != null && heldItem.createTile > 0)
-            {
-                string itemName = Lang.GetItemNameValue(heldItem.type);
-                if (ImGui.Button($"添加手持物品: {itemName}"))
+                Item heldItem = Main.LocalPlayer.HeldItem;
+                if (heldItem != null && heldItem.createTile > 0)
                 {
                     int tileID = heldItem.createTile;
-                    string tileName = itemName;
+                    string tileName = Lang.GetItemNameValue(heldItem.type);
 
                     // 添加到自定义缓存
-                    if (!Utils.BaseStations.ContainsKey(tileID))
+                    if (!Utils.BaseStations.ContainsKey(tileID) && !CustomStations.ContainsKey(tileID))
                     {
                         CustomStations.Add(tileID, tileName);
                         Main.NewText($"已添加合成站: {tileName}");
                     }
 
-                    // 自动选中新添加的合成站
-                    if (!TileSelectionCache.Contains(tileID))
+                    // 添加到当前配方
+                    if (EditingRecipe != null && !EditingRecipe.RequiredTile.Contains(tileID))
                     {
-                        TileSelectionCache.Add(tileID);
+                        EditingRecipe.RequiredTile.Add(tileID);
                     }
                 }
+                else
+                {
+                    Main.NewText("手持物品不是可放置的物块!");
+                }
             }
+            ImGui.SameLine();
+            ImGui.TextDisabled("(?)");
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                ImGui.Text("手持一个可放置的物块，点击按钮将其添加为合成站");
+                ImGui.EndTooltip();
+            }
+
+            ImGui.BeginChild("TileList", new Vector2(0, ImGui.GetContentRegionAvail().Y - 10), ImGuiChildFlags.Borders);
+
+            // 获取所有合成站
+            Dictionary<int, string> Stations = Utils.StationList();
+
+            // 应用搜索过滤
+            var filteredStations = Stations
+                .Where(s => string.IsNullOrWhiteSpace(TileSearchText) ||
+                           s.Value.Contains(TileSearchText, StringComparison.OrdinalIgnoreCase) ||
+                           s.Key.ToString().Contains(TileSearchText))
+                .OrderBy(s => s.Value)
+                .ToList();
+
+            if (filteredStations.Count == 0)
+            {
+                ImGui.TextDisabled("未找到匹配的合成站");
+            }
+            else
+            {
+                foreach (var station in filteredStations)
+                {
+                    DrawStationItem(station.Key, station.Value);
+                }
+            }
+
+            ImGui.EndChild();
         }
         ImGui.End();
+    }
+
+    // 简化绘制方法
+    private void DrawStationItem(int tileID, string stationName)
+    {
+        if (EditingRecipe == null) return;
+
+        bool isSelected = EditingRecipe.RequiredTile.Contains(tileID);
+        bool isCustom = CustomStations.ContainsKey(tileID);
+
+        // 设置颜色
+        if (isSelected)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 1f, 0.5f, 1f)); // 已选择：绿色
+        }
+        else if (isCustom)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.8f, 0.4f, 1f)); // 自定义：橙色
+        }
+
+        // 显示名称和ID
+        string label = $"{stationName} [ID:{tileID}]";
+
+        // 使用Selectable
+        if (ImGui.Selectable(label))
+        {
+            if (!isSelected)
+            {
+                EditingRecipe.RequiredTile.Add(tileID);
+            }
+            else
+            {
+                EditingRecipe.RequiredTile.Remove(tileID);
+            }
+        }
+
+        // 悬停提示
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.BeginTooltip();
+            ImGui.Text($"图格ID: {tileID}");
+            if (isCustom)
+            {
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.4f, 1f), "自定义合成站");
+            }
+            else
+            {
+                ImGui.Text("预设合成站");
+            }
+            ImGui.EndTooltip();
+        }
+
+        if (isSelected || isCustom) ImGui.PopStyleColor();
     }
     #endregion
 

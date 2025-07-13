@@ -491,7 +491,7 @@ public static class RecipeHooks
         // 配方合成环境
         foreach (string unlock in data.unlock)
         {
-            switch (unlock) 
+            switch (unlock)
             {
                 case "水":
                     recipe.needWater = true;
@@ -677,7 +677,7 @@ public class CustomRecipeData
         foreach (string condition in recipe.unlock)
         {
             // 进度和环境条件检查
-            if (!CheckCondition(condition, plr)) 
+            if (!CheckCondition(condition, plr))
                 return false;
         }
 
@@ -690,6 +690,31 @@ public class CustomRecipeData
     {
         switch (condition)
         {
+            case string s when s.StartsWith("自定义:"):
+                // 解析自定义格式："物品名(ID)"
+                string cPart = s.Substring(4); // 去掉"自定义:"前缀
+
+                // 检查格式是否正确（包含括号）
+                int openParen = cPart.LastIndexOf('(');
+                int stopParen = cPart.LastIndexOf(')');
+
+                if (openParen > 0 && stopParen > openParen)
+                {
+                    // 提取括号内的ID部分
+                    string idString = cPart.Substring(openParen + 1, stopParen - openParen - 1);
+
+                    if (int.TryParse(idString, out var tileID))
+                    {
+                        return plr.adjTile[tileID];
+                    }
+                }
+                return false;
+            case "水":
+                return plr.adjWater || plr.adjTile[172]; // 172 是水槽的图格ID
+            case "蜂蜜":
+                return plr.adjHoney;
+            case "岩浆":
+                return plr.adjLava;
             case "史莱姆王":
             case "史王":
                 return NPC.downedSlimeKing;
@@ -699,12 +724,14 @@ public class CustomRecipeData
             case "巨鹿":
             case "鹿角怪":
                 return NPC.downedDeerclops;
-            case "克脑":
+            case "邪恶boss":
+                return NPC.downedBoss2;
             case "世吞":
             case "世界吞噬者":
+                return NPC.downedBoss2 && (Utils.IsDefeated(13) || Utils.IsDefeated(14) || Utils.IsDefeated(15));
             case "克苏鲁之脑":
             case "世界吞噬怪":
-                return NPC.downedBoss2;
+                return NPC.downedBoss2 && Utils.IsDefeated(NPCID.BrainofCthulhu);
             case "蜂王":
                 return NPC.downedQueenBee;
             case "骷髅王":
@@ -816,7 +843,37 @@ public class CustomRecipeData
                 return plr.ZoneDesert;
             case "雪原":
                 return plr.ZoneSnow;
+            case "宝石洞":
+                return plr.ZoneGemCave;
+            case "花岗岩":
+                return plr.ZoneGranite;
+            case "大理石":
+                return plr.ZoneMarble;
+            case "陨石坑":
+                return plr.ZoneMeteor;
+            case "和平蜡烛":
+                return plr.ZonePeaceCandle;
+            case "水蜡烛":
+                return plr.ZoneWaterCandle;
+            case "影烛":
+                return plr.ZoneShadowCandle;
+            case "微光":
+                return plr.ZoneShimmer;
+            case "星云环境":
+                return plr.ZoneTowerNebula;
+            case "日耀环境":
+                return plr.ZoneTowerSolar;
+            case "星尘环境":
+                return plr.ZoneTowerStardust;
+            case "星旋环境":
+                return plr.ZoneTowerVortex;
+            case "地下沙漠":
+                return plr.ZoneUndergroundDesert;
+            case "地下":
+                return plr.ZoneDirtLayerHeight;
             case "洞穴":
+                return plr.ZoneRockLayerHeight;
+            case "地狱":
                 return plr.ZoneUnderworldHeight;
             case "海洋":
                 return plr.ZoneBeach;
@@ -858,12 +915,6 @@ public class CustomRecipeData
                 return Main.moonPhase == 6;
             case "盈凸月":
                 return Main.moonPhase == 7;
-            case "水":
-                return plr.adjWater || plr.adjTile[172];
-            case "蜂蜜":
-                return plr.adjHoney;
-            case "岩浆":
-                return plr.adjLava;
             default:
                 return false;
         }

@@ -2743,18 +2743,22 @@ internal class Utils
         { TileID.CookingPots, "烹饪锅" },
         { TileID.Blendomatic, "搅拌机" },
         { TileID.MeatGrinder, "绞肉机" },
-        { TileID.LesionStation, "病变工作站" },
+        { 219, "提炼机" },
+        { TileID.LesionStation, "腐变室" },
         { TileID.SteampunkBoiler, "蒸汽朋克锅炉" },
         { TileID.GlassKiln, "玻璃窑" },
         { TileID.Solidifier, "固化机" },
-        { TileID.BoneWelder, "骨焊机" },
+        { TileID.BoneWelder, "骨头焊机" },
         { TileID.FleshCloningVat, "血肉克隆台" },
         { TileID.SkyMill, "天磨" },
-        { TileID.LivingLoom, "活木织机" },
+        { TileID.LivingLoom, "生命木织机" },
         { TileID.IceMachine, "冰雪机" },
         { TileID.HeavyWorkBench, "重型工作台" },
         { 412, "远古操纵机" },
         { 26, "恶魔祭坛" },
+        { 303, "丛林蜥蜴熔炉" },
+        { 237, "丛林蜥蜴祭坛" },
+
     };
     #endregion
 
@@ -2785,7 +2789,7 @@ internal class Utils
             case "白天": return "游戏时间4:30 AM - 7:30 PM";
             case "晚上": return "游戏时间7:30 PM - 4:30 AM";
             case "满月": return "月亮完全可见时";
-            case "水": return "玩家站在水中";
+            case "水": return "玩家站在水中或任意水槽旁";
             case "蜂蜜": return "玩家站在蜂蜜中";
             case "岩浆": return "玩家站在熔岩中";
             case "森林": return "玩家处于森林生物群系";
@@ -2796,6 +2800,19 @@ internal class Utils
             case "神庙": return "玩家处于丛林神庙中";
             case "天空": return "玩家处于高空区域";
             case "沙尘暴": return "沙漠中发生沙尘暴时";
+            case "一王后": return "击败毁灭者、双子眼、机械骷髅王任意一个时";
+            case "三王后": return "击败毁灭者、双子眼、机械骷髅王所有时";
+            case "一柱后": return "击败任意四柱之一时";
+            case "四柱后": return "击败所有四柱时";
+            case "2020": return "世界种子为醉酒世界(05162020)时";
+            case "2021": return "世界种子为十周年(05162021)时";
+            case "ftw": return "世界种子为真实世界(ForTheWorthy)时";
+            case "ntb": return "世界种子为蜜蜂世界(Notthebees)时";
+            case "dst": return "世界种子为永恒领域(Constant)时";
+            case "颠倒": return "世界种子为颠倒世界(Don'tDigUp)时";
+            case "陷阱": return "世界种子为陷阱世界(NoTraps)时";
+            case "天顶": return "世界种子为天顶世界(Getfixedboi)时";
+            case "邪恶boss": return "击败世界吞噬怪与克苏鲁之脑任意一个时";
             default: return $"满足 {condition} 条件时解锁配方";
         }
     }
@@ -2804,15 +2821,26 @@ internal class Utils
     #region 合成环境名称
     public static readonly List<string> AllEnvironments = new List<string>
     {
-    "史莱姆王", "克眼", "巨鹿", "克脑", "蜂王", "骷髅王", "困难模式",
-    "毁灭者", "双子魔眼", "机械骷髅王", "世纪之花", "石巨人", "史莱姆皇后",
-    "光之女皇", "猪鲨", "教徒", "月亮领主", "哀木", "南瓜王", "常绿尖叫怪",
-    "冰雪女王", "圣诞坦克", "火星飞碟", "小丑", "哥布林入侵", "海盗入侵",
-    "霜月", "血月", "雨天", "白天", "晚上", "大风天", "万圣节", "圣诞节",
-    "派对", "2020", "2021", "ftw", "ntb", "dst", "颠倒", "陷阱", "天顶",
-    "森林", "丛林", "沙漠", "雪原", "洞穴", "海洋", "神圣", "蘑菇", "腐化",
-    "猩红", "地牢", "墓地", "蜂巢", "神庙", "沙尘暴", "天空", "满月", "亏凸月",
-    "下弦月", "残月", "新月", "娥眉月", "上弦月", "盈凸月", "水", "蜂蜜", "岩浆"
-    }; 
+        "水", "蜂蜜", "岩浆", "地下", "地下沙漠", "洞穴", "地狱", "海洋", "天空",
+        "森林", "丛林", "沙漠", "雪原", "神圣", "蘑菇", "腐化", "陨石坑", "微光",
+        "猩红", "地牢", "墓地", "蜂巢", "神庙", "沙尘暴", "宝石洞", "花岗岩","大理石",
+        "和平蜡烛", "水蜡烛","影烛","星云环境","日耀环境","星尘环境","星旋环境",
+        "下弦月", "残月", "新月", "娥眉月", "上弦月", "盈凸月","满月", "亏凸月",
+        "哥布林入侵", "史莱姆王", "克苏鲁之眼", "鹿角怪", "克苏鲁之脑","世界吞噬怪","邪恶boss",
+        "蜂王", "骷髅王", "困难模式", "海盗入侵", "史莱姆皇后", "一王后",
+        "毁灭者", "双子魔眼", "机械骷髅王", "三王后", "世纪之花", "石巨人", "光之女皇", "猪龙鱼公爵", "拜月教邪教徒", "月亮领主",
+        "哀木", "南瓜王", "常绿尖叫怪", "冰雪女王", "圣诞坦克", "火星飞碟", "小丑",
+        "一柱后", "日耀柱", "星旋柱", "星云柱", "星尘柱", "四柱后",
+        "霜月", "血月", "雨天", "白天", "晚上", "大风天", "万圣节", "圣诞节",
+        "派对", "2020", "2021", "ftw", "ntb", "dst", "颠倒", "陷阱", "天顶",
+    };
+    #endregion
+
+    #region 根据怪物图鉴进一步判断进度方法
+    public static bool IsDefeated(int type)
+    {
+        var unlockState = Main.BestiaryDB.FindEntryByNPCID(type).UIInfoProvider.GetEntryUICollectionInfo().UnlockState;
+        return unlockState == Terraria.GameContent.Bestiary.BestiaryEntryUnlockState.CanShowDropsWithDropRates_4;
+    }
     #endregion
 }
