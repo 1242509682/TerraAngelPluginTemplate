@@ -1407,7 +1407,9 @@ public class UITool : Tool
                     NewIngredientItemId = 0;
                     NewIngredientStack = 1;
                 }
-                else
+
+                // 修复：只在材料列表为空时显示"无材料要求"
+                if (EditingRecipe.Ingredients.Count == 0)
                 {
                     ImGui.TextDisabled("无材料要求");
                 }
