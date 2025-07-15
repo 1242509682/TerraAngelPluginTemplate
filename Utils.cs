@@ -1,9 +1,9 @@
 ﻿using Microsoft.Xna.Framework;
+using ReLogic.Threading;
 using System.Numerics;
 using System.Reflection;
 using TerraAngel;
 using TerraAngel.Input;
-using TerraAngel.Utility;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -82,7 +82,7 @@ internal class Utils
     {
         if (!key) return;
         var plr = Main.LocalPlayer;
-        List<int> relive = GetRelive();
+        HashSet<int> relive = GetRelive();
         for (int i = 0; i < 200; i++)
         {
             if (Main.npc[i].active && Main.npc[i].townNPC && relive.Contains(Main.npc[i].type))
@@ -98,14 +98,14 @@ internal class Utils
             var tileX = (int)plr.position.X / 16;
             var tileY = (int)plr.position.Y / 16;
             npc.SetDefaults(id, default);
-            SpawnNPC(npc.type, npc.FullName, 1, tileX, tileY, 5, 2);
+            SpawnNPC(npc.type, npc.TypeName, 1, tileX, tileY, 5 * 16, 2);
             if (mess.Count != 0 && mess.Count % 10 == 0)
             {
-                mess.Add("\n" + npc.FullName);
+                mess.Add("\n" + npc.TypeName);
             }
             else
             {
-                mess.Add(npc.FullName);
+                mess.Add(npc.TypeName);
             }
         }
 
@@ -122,37 +122,23 @@ internal class Utils
     }
 
     // 获取复活NPC列表
-    public static List<int> GetRelive()
+    public static HashSet<int> GetRelive()
     {
-        List<int> list = new List<int>();
-        List<int> list2 = new List<int>
-        {
-            17, 18, 19, 20, 22, 38, 54, 107, 108, 124,
-            160, 178, 207, 208, 209, 227, 228, 229, 353, 369,
-            441, 550, 588, 633, 663, 637, 638, 656, 670, 678,
-            679, 680, 681, 682, 683, 684
-        };
+        // 直接使用 TownNPCBestiaryPriority 作为基础集合
+        var baseIds = new HashSet<int>(NPCID.Sets.TownNPCBestiaryPriority);
+        baseIds.Remove(NPCID.TravellingMerchant); // 旅商
+        baseIds.Remove(NPCID.SkeletonMerchant); // 骷髅商人
+        baseIds.Remove(NPCID.OldMan); // 老人
+        baseIds.Remove(NPCID.BoundTownSlimeYellow); // 神秘青蛙
 
-        if (Main.xMas)
+        // 处理圣诞节特殊逻辑
+        if (!Main.xMas)
         {
-            list2.Add(142);
+            baseIds.Remove(NPCID.SantaClaus); // 非圣诞节移除圣诞老人
         }
 
-        foreach (int item in list2)
-        {
-            if (BestiaryEntry(item))
-            {
-                list.Add(item);
-            }
-        }
-
-        return list;
-    }
-
-    // 检查NPC是否解锁于怪物图鉴
-    public static bool BestiaryEntry(int npcId)
-    {
-        return Main.BestiaryDB.FindEntryByNPCID(npcId).UIInfoProvider.GetEntryUICollectionInfo().UnlockState > BestiaryEntryUnlockState.NotKnownAtAll_0;
+        // 过滤并返回符合条件的NPC
+        return baseIds.Where(id => BestiaryEntry(id)).ToHashSet();
     }
     #endregion
 
@@ -162,7 +148,26 @@ internal class Utils
         for (int i = 0; i < amount; i++)
         {
             GetRandomClearTileWithInRange(startTileX, startTileY, tileXRange, tileYRange, out var tileX, out var tileY);
-            NPC.NewNPC(new EntitySource_DebugCommand(), tileX * 16, tileY * 16, type);
+
+            var bossList = NPCID.Sets.BossBestiaryPriority;
+            var index = -1;
+
+            if (!bossList.Contains(type))
+            {
+                index = NPC.NewNPC(new EntitySource_SpawnNPC(), tileX * 16, tileY * 16, type);
+            }
+            else
+            {
+                index = NPC.NewNPC(new EntitySource_BossSpawn(Main.player[Main.myPlayer]), tileX * 16, tileY * 16, type);
+            }
+
+            if (Main.netMode is 2)
+            {
+                var npc = Main.npc[index];
+                npc.netUpdate = true;
+                npc.netUpdate2 = true;
+                NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, index);
+            }
         }
     }
 
@@ -234,8 +239,11 @@ internal class Utils
 
                 if (Main.netMode is 2)
                 {
-                    NetMessage.SendTileSquare(-1, point.X, point.Y);
-                    NetMessage.SendData(MessageID.TileManipulation, -1, -1, null, 4, point.X, point.Y, false.GetHashCode());
+                    NetMessage.SendTileSquare(-1, point.X, point.Y); // 刷新服务器图格
+                }
+                else
+                {
+                    WorldGen.SquareTileFrame(point.X, point.Y); // 刷新客户端图格
                 }
             }
 
@@ -823,6 +831,68 @@ internal class Utils
     }
     #endregion
 
+    #region 定位传送方法实现
+    public static void StartTeleport(string message, Vector4 color)
+    {
+        // 检查冷却时间
+        if (TPCooldown)
+        {
+            int cooldown = Math.Max(0, 3 - (int)((Main.GameUpdateCount - LastTPTime) / 60f));
+            ClientLoader.Chat.WriteLine($"传送冷却中，请等待 {cooldown} 秒", Color.Yellow);
+            TPColor = new Vector4(1f, 0.5f, 0.5f, 1f);
+            return;
+        }
+
+        TP = true;
+        TPColor = color;
+        TPProgress = 0f;
+        LastTPTime = Main.GameUpdateCount;
+        TPCooldown = true;
+    }
+
+    #region 传送出生点
+    public static void TPSpawnPoint(Player plr)
+    {
+        StartTeleport("正在传送至世界出生点...", new Vector4(0.8f, 1f, 0.8f, 1f));
+
+        Vector2 pos = new Vector2(Main.spawnTileX * 16, (Main.spawnTileY - 3) * 16);
+        plr.Teleport(pos, TeleportationStyleID.RodOfDiscord);
+        if (Main.netMode is 2)
+            NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
+
+        ClientLoader.Chat.WriteLine($"已传送到世界出生点 ({Main.spawnTileX}, {Main.spawnTileY - 3})", Color.Yellow);
+    }
+    #endregion
+
+    #region 传送到床位置
+    public static void TPBed(Player plr)
+    {
+        if (plr.SpawnX == -1 || plr.SpawnY == -1)
+        {
+            ClientLoader.Chat.WriteLine("未设置床位置! 请先放置并右键点击床", Color.Red);
+            return;
+        }
+
+        StartTeleport("正在传送至床位置...", new Vector4(1f, 0.8f, 1f, 1f));
+        plr.Spawn(PlayerSpawnContext.RecallFromItem);
+        if (Main.netMode is 2)
+            NetMessage.SendData(MessageID.PlayerSpawn, -1, -1, null, Main.myPlayer, (byte)PlayerSpawnContext.RecallFromItem);
+
+        ClientLoader.Chat.WriteLine($"已传送到床位置 ({plr.SpawnX}, {plr.SpawnY})", Color.Yellow);
+    }
+    #endregion
+
+    #region 传送到特定死亡地点
+    public static void TPDeathPoint(Player plr, Vector2 pos)
+    {
+        StartTeleport("正在传送至死亡地点...", new Vector4(0.5f, 0.5f, 0.5f, 1f));
+        plr.Teleport(pos, TeleportationStyleID.RodOfDiscord);
+        if (Main.netMode is 2)
+            NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
+
+        ClientLoader.Chat.WriteLine($"已传送到死亡地点 ({(int)pos.X / 16}, {(int)pos.Y / 16})", Color.Yellow);
+    }
+
     #region 记录死亡位置（在玩家死亡时调用）
     public static Dictionary<int, long> LastDeadTime = new Dictionary<int, long>(); // 按地图ID存储最后死亡时间
     public static void RecordDeathPoint(Player plr)
@@ -875,58 +945,6 @@ internal class Utils
     }
     #endregion
 
-    #region 定位传送方法实现
-    public static void StartTeleport(string message, Vector4 color)
-    {
-        // 检查冷却时间
-        if (TPCooldown)
-        {
-            int cooldown = Math.Max(0, 3 - (int)((Main.GameUpdateCount - LastTPTime) / 60f));
-            ClientLoader.Chat.WriteLine($"传送冷却中，请等待 {cooldown} 秒", Color.Yellow);
-            TPColor = new Vector4(1f, 0.5f, 0.5f, 1f);
-            return;
-        }
-
-        TP = true;
-        TPColor = color;
-        TPProgress = 0f;
-        LastTPTime = Main.GameUpdateCount;
-        TPCooldown = true;
-    }
-
-    #region 传送出生点
-    public static void TPSpawnPoint(Player plr)
-    {
-        StartTeleport("正在传送至世界出生点...", new Vector4(0.8f, 1f, 0.8f, 1f));
-
-        Vector2 pos = new Vector2(Main.spawnTileX * 16, (Main.spawnTileY - 3) * 16);
-        plr.Teleport(pos, 10);
-        ClientLoader.Chat.WriteLine($"已传送到世界出生点 ({Main.spawnTileX}, {Main.spawnTileY - 3})", Color.Yellow);
-    }
-    #endregion
-
-    #region 传送到床位置
-    public static void TPBed(Player plr)
-    {
-        if (plr.SpawnX == -1 || plr.SpawnY == -1)
-        {
-            ClientLoader.Chat.WriteLine("未设置床位置! 请先放置并右键点击床", Color.Red);
-            return;
-        }
-
-        StartTeleport("正在传送至床位置...", new Vector4(1f, 0.8f, 1f, 1f));
-        plr.Spawn(new PlayerSpawnContext());
-        ClientLoader.Chat.WriteLine($"已传送到床位置 ({plr.SpawnX}, {plr.SpawnY})", Color.Yellow);
-    }
-    #endregion
-
-    #region 传送到特定死亡地点
-    public static void TPDeathPoint(Player plr, Vector2 position)
-    {
-        StartTeleport("正在传送至死亡地点...", new Vector4(0.5f, 0.5f, 0.5f, 1f));
-        plr.Teleport(position, 10);
-        ClientLoader.Chat.WriteLine($"已传送到死亡地点 ({(int)position.X / 16}, {(int)position.Y / 16})", Color.Yellow);
-    }
     #endregion
 
     #region 传送到NPC
@@ -942,8 +960,11 @@ internal class Utils
         StartTeleport($"正在传送至{Lang.GetNPCNameValue(npcType)}...", new Vector4(0.8f, 0.8f, 1f, 1f));
 
         // 传送到NPC上方一点的位置
-        Vector2 pos = npc.position - new Vector2(0, 48);
-        plr.Teleport(pos, 10);
+        Vector2 pos = npc.position - new Vector2(0, 3 * 16);
+        plr.Teleport(pos, TeleportationStyleID.RodOfDiscord);
+
+        if (Main.netMode is 2)
+            NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
 
         ClientLoader.Chat.WriteLine($"已传送到 {Lang.GetNPCNameValue(npcType)} 附近", Color.Yellow);
     }
@@ -954,8 +975,7 @@ internal class Utils
         for (int i = 0; i < Main.maxNPCs; i++)
         {
             NPC npc = Main.npc[i];
-            if (npc.active && npc.type == npcType &&
-                !npc.SpawnedFromStatue && npc.type != 488) //排除假人 雕像怪
+            if (npc.active && npc.type == npcType && !npc.SpawnedFromStatue && npc.type != 488) //排除假人 雕像怪
             {
                 return npc;
             }
@@ -974,6 +994,10 @@ internal class Utils
         if (pos != Vector2.Zero)
         {
             plr.Teleport(pos * 16, 10);
+
+            if (Main.netMode is 2)
+                NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
+
             ClientLoader.Chat.WriteLine($"已传送到微光湖附近 ({pos.X}, {pos.Y})", Color.Yellow);
         }
         else
@@ -999,6 +1023,7 @@ internal class Utils
                 return new Vector2(x, y - 3);
             }
         }
+
         return Vector2.Zero;
     }
     #endregion
@@ -1013,6 +1038,10 @@ internal class Utils
         if (pos != Vector2.Zero)
         {
             plr.Teleport(pos * 16, 10);
+
+            if (Main.netMode is 2)
+                NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
+
             ClientLoader.Chat.WriteLine($"已传送到神庙附近 ({pos.X}, {pos.Y})", Color.Yellow);
         }
         else
@@ -1030,6 +1059,7 @@ internal class Utils
             for (int y = 0; y < Main.maxTilesY; y++)
             {
                 Tile tile = Main.tile[x, y];
+
                 if (tile == null!) continue;
 
                 if (tile.type == 237)
@@ -1038,6 +1068,7 @@ internal class Utils
                 }
             }
         }
+
         return Vector2.Zero;
     }
     #endregion
@@ -1052,6 +1083,8 @@ internal class Utils
         if (pos != Vector2.Zero)
         {
             plr.Teleport(pos * 16, 10);
+            if (Main.netMode is 2)
+                NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
             ClientLoader.Chat.WriteLine($"已传送到花苞附近 ({pos.X}, {pos.Y})", Color.Yellow);
         }
         else
@@ -1089,6 +1122,9 @@ internal class Utils
         if (pos != Vector2.Zero)
         {
             plr.Teleport(pos * 16, 10);
+            if (Main.netMode is 2)
+                NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
+
             ClientLoader.Chat.WriteLine($"已传送到地牢附近 ({pos.X}, {pos.Y})", Color.Yellow);
         }
         else
@@ -1119,7 +1155,10 @@ internal class Utils
         Vector2 pos = FindBossBag();
         if (pos != Vector2.Zero)
         {
-            plr.Teleport(pos, 10);
+            plr.Teleport(pos, TeleportationStyleID.RodOfDiscord);
+            if (Main.netMode is 2)
+                NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
+
             ClientLoader.Chat.WriteLine($"已传送到宝藏袋附近 ({pos.X / 16}, {pos.Y / 16})", Color.Yellow);
         }
         else
@@ -1158,6 +1197,10 @@ internal class Utils
         if (safePos.HasValue)
         {
             plr.Teleport(safePos.Value, 10);
+
+            if (Main.netMode is 2)
+                NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, safePos.Value.X, safePos.Value.Y, TeleportationStyleID.RodOfDiscord);
+
             ClientLoader.Chat.WriteLine($"已传送到陨石坑安全位置 ({(int)safePos.Value.X / 16}, {(int)safePos.Value.Y / 16})", Color.Yellow);
         }
         else
@@ -1268,7 +1311,11 @@ internal class Utils
     public static void TPCustomPoint(Player plr, Vector2 pos, string pointName)
     {
         StartTeleport($"正在传送到 {pointName}...", new Vector4(0.8f, 0.6f, 0.9f, 1f));
-        plr.Teleport(pos, 10);
+        plr.Teleport(pos, TeleportationStyleID.RodOfDiscord);
+
+        if (Main.netMode is 2)
+            NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, plr.whoAmI, pos.X, pos.Y, TeleportationStyleID.RodOfDiscord);
+
         ClientLoader.Chat.WriteLine($"已传送到 {pointName} ({(int)pos.X / 16}, {(int)pos.Y / 16})", Color.Yellow);
     }
 
@@ -1667,7 +1714,7 @@ internal class Utils
         plr.Heal(Config.HealVal);
         if (Main.netMode is 2)
         {
-            NetMessage.TrySendData(66, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
+            NetMessage.SendData(MessageID.PlayerHeal, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
         }
     }
     #endregion
@@ -1975,9 +2022,9 @@ internal class Utils
                 OpenGuideCraftMenu();
                 break;
 
-            case NPCID.OldMan: //老人
-                HandleOldManInteraction();
-                break;
+            //case NPCID.OldMan: //老人
+            //    HandleOldManInteraction();
+            //    break;
 
             case NPCID.TaxCollector: //税收官
                 HandleTaxCollectorInteraction(plr);
@@ -2389,22 +2436,22 @@ internal class Utils
     #region 老人交互逻辑（召唤骷髅王）
     private static void HandleOldManInteraction()
     {
-        if (Main.netMode == 1)
-        {
-            NPC.SpawnSkeletron(Main.myPlayer);
-        }
-        else
-        {
-            NetMessage.SendData(MessageID.MiscDataSync, -1, -1, null, Main.myPlayer, 1f);
-        }
-
         if (!Main.IsItDay())
         {
             Main.npcChatText = Lang.inter[50].Value;
         }
-        else
+        else if (Main.dayTime)
         {
             Main.npcChatText = "你小子晚上再来找我 嘿嘿嘿~";
+        }
+
+        if (Main.netMode is 1)
+        {
+            NPC.SpawnSkeletron(Main.myPlayer);
+        }
+        else if (Main.netMode is 2)
+        {
+            NetMessage.SendData(MessageID.MiscDataSync, -1, -1, null, Main.myPlayer, 1f);
         }
     }
     #endregion
@@ -2729,9 +2776,10 @@ internal class Utils
     public static readonly Dictionary<int, string> BaseStations = new Dictionary<int, string>
     {
         { TileID.WorkBenches, "工作台" },
-        { 114, "工匠作坊" },
+        { TileID.TinkerersWorkbench, "工匠作坊" },
         { TileID.Furnaces, "熔炉" },
         { TileID.Anvils, "铁砧/铅砧" },
+        { TileID.MythrilAnvil, "秘银砧/山铜砧" },
         { TileID.Hellforge, "地狱熔炉" },
         { TileID.AlchemyTable, "炼药桌" },
         { TileID.ImbuingStation, "灌注站" },
@@ -2743,7 +2791,7 @@ internal class Utils
         { TileID.CookingPots, "烹饪锅" },
         { TileID.Blendomatic, "搅拌机" },
         { TileID.MeatGrinder, "绞肉机" },
-        { 219, "提炼机" },
+        { TileID.Extractinator, "提炼机" },
         { TileID.LesionStation, "腐变室" },
         { TileID.SteampunkBoiler, "蒸汽朋克锅炉" },
         { TileID.GlassKiln, "玻璃窑" },
@@ -2754,10 +2802,10 @@ internal class Utils
         { TileID.LivingLoom, "生命木织机" },
         { TileID.IceMachine, "冰雪机" },
         { TileID.HeavyWorkBench, "重型工作台" },
-        { 412, "远古操纵机" },
-        { 26, "恶魔祭坛" },
-        { 303, "丛林蜥蜴熔炉" },
-        { 237, "丛林蜥蜴祭坛" },
+        { TileID.LunarCraftingStation, "远古操纵机" },
+        { TileID.DemonAltar, "恶魔祭坛" },
+        { TileID.LihzahrdFurnace, "丛林蜥蜴熔炉" },
+        { TileID.LihzahrdAltar, "丛林蜥蜴祭坛" },
 
     };
     #endregion
@@ -2837,10 +2885,56 @@ internal class Utils
     #endregion
 
     #region 根据怪物图鉴进一步判断进度方法
-    public static bool IsDefeated(int type)
+    // 用于判断是否解锁城镇NPC
+    public static bool BestiaryEntry(int npcId, int state = 0)
+    {
+        var unlockState = Main.BestiaryDB.FindEntryByNPCID(npcId).UIInfoProvider.GetEntryUICollectionInfo().UnlockState;
+        return unlockState > (BestiaryEntryUnlockState)state;
+    }
+    // 用于判断是否击败boss
+    public static bool BestiaryEntry2(int type, int state = 4)
     {
         var unlockState = Main.BestiaryDB.FindEntryByNPCID(type).UIInfoProvider.GetEntryUICollectionInfo().UnlockState;
-        return unlockState == Terraria.GameContent.Bestiary.BestiaryEntryUnlockState.CanShowDropsWithDropRates_4;
+        return unlockState == (BestiaryEntryUnlockState)state;
+    }
+    #endregion
+
+    #region 地图区块更新工具（用于传送）
+    // 更新指定位置周围的地图区块
+    public static void UpdatePosMap(Vector2 pos)
+    {
+        UpdateMapSection((int)pos.X, (int)pos.Y);
+    }
+
+    // 更新单个地图区块
+    private static void UpdateMapSection(int sectionX, int sectionY)
+    {
+        if (Main.mapDelay > 0)
+        {
+            Main.mapDelay--;
+        }
+        else
+        {
+            int startX = sectionX * 200;
+            int endX = Math.Min(startX + 200, Main.maxTilesX);
+            int startY = sectionY * 150;
+            int endY = Math.Min(startY + 150, Main.maxTilesY);
+
+            // 并行更新区块内的所有图块
+            FastParallel.For(startX, endX, delegate (int start, int end, object context)
+            {
+                for (int x = start; x < end; x++)
+                {
+                    for (int y = startY; y < endY; y++)
+                    {
+                        Main.Map.Update(x, y, 255);
+                    }
+                }
+            });
+
+            // 标记地图需要刷新
+            Main.refreshMap = true;
+        }
     }
     #endregion
 }

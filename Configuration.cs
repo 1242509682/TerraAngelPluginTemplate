@@ -112,8 +112,10 @@ internal class Configuration
     [JsonProperty("进入世界收藏背包物品", Order = 20)]
     public bool FavoriteItemForJoinWorld { get; set; } = false;
 
-    [JsonProperty("添加自定义配方", Order = 21)]
+    [JsonProperty("启用自定义配方", Order = 21)]
     public bool CustomRecipesEnabled { get; set; } = true;
+    [JsonProperty("启用隐藏原版配方", Order = 21)]
+    public bool HideOriginalRecipe { get; set; } = true;
     [JsonProperty("解锁所有配方", Order = 21)]
     public bool UnlockAllRecipes { get; set; } = false;
     [JsonProperty("忽略工作站要求", Order = 21)]
@@ -176,10 +178,14 @@ internal class Configuration
     public List<ShopItem> Shop = new List<ShopItem>();
     #endregion
 
-    [JsonProperty("修改传送枪弹幕距离", Order = 23)]
+    [JsonProperty("NPC瞬移回家", Order = 23)]
+    public bool NPCMoveRoomForTeleport { get; set; } = true;
+
+    [JsonProperty("修改传送枪弹幕距离", Order = 24)]
     public bool ModifyPortalDistance { get; set; } = true;
-    [JsonProperty("传送枪弹幕销毁距离", Order = 23)]
+    [JsonProperty("传送枪弹幕销毁距离", Order = 24)]
     public float PortalMaxDistance { get; set; } = 4000f * 16;
+    public bool ProjUpdate { get; internal set; }
 
     #region 预设参数方法
     public void SetDefault()
@@ -256,11 +262,14 @@ internal class Configuration
         TaxCollectorRewards = TaxCollectorRewardsSetDefault();
 
         CustomRecipesEnabled = true;
+        HideOriginalRecipe = true;
         UnlockAllRecipes = false;
         IgnoreStationRequirements = false;
         CustomRecipes = CustomRecipeSetDefault();
 
         Shop = ShopItemSetDefault();
+
+        NPCMoveRoomForTeleport = true;
 
         ModifyPortalDistance = true;
         PortalMaxDistance = 4000 * 16f;

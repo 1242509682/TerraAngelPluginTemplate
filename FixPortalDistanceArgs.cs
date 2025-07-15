@@ -10,7 +10,7 @@ namespace MyPlugin;
 internal class FixPortalDistanceArgs
 {
     public static ILHook? PortalAIHook;
-    private const float DefaultMaxDistance = 12800f;
+    private const float DefaultMaxDistance = 12800f; // 800英尺 * 16 像素单位
 
     #region  注册与卸载钩子
     public static void Register()

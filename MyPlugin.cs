@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Input;
 using TerraAngel;
 using TerraAngel.Config;
 using TerraAngel.Input;
@@ -16,7 +15,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 1, 5);
+    public Version Version => new(1, 1, 6);
     #endregion
 
     #region 注册与卸载
@@ -32,10 +31,13 @@ public class MyPlugin(string path) : Plugin(path)
         // 传送枪弹幕AI样式最大距离修改
         FixPortalDistanceArgs.Register();
 
+        // 注册移动NPC住房事件
+        NPCMoveRoomArgs.Register();
+
         // 注册配方事件
         RecipeHooks.Register();
         RecipeHooks.OnRecipeCheck += OnRecipeCheck; // 配方检查事件
-        RecipeHooks.AddCustomRecipes += OnAddCustomRecipes; // 配方查找后事件
+        RecipeHooks.BeforeRecipeCheck += BuildCustomRecipes; // 配方查找前事件
 
         // 注册图格编辑事件
         TileEditEventSystem.Register();
@@ -73,10 +75,13 @@ public class MyPlugin(string path) : Plugin(path)
         // 传送枪弹幕AI样式最大距离修改
         FixPortalDistanceArgs.Dispose();
 
+        // 卸载移动NPC住房事件
+        NPCMoveRoomArgs.Dispose();
+
         // 卸载配方事件
         RecipeHooks.Dispose();
         RecipeHooks.OnRecipeCheck -= OnRecipeCheck;
-        RecipeHooks.AddCustomRecipes -= OnAddCustomRecipes;
+        RecipeHooks.BeforeRecipeCheck -= BuildCustomRecipes;
 
         //卸载图格编辑事件
         TileEditEventSystem.Dispose();
@@ -181,7 +186,7 @@ public class MyPlugin(string path) : Plugin(path)
             Config.SocialAccessory = !Config.SocialAccessory;
             Config.Write();
             string status = Config.SocialAccessory ? "开启" : "关闭";
-            ClientLoader.Chat.WriteLine($"社交栏饰品功能已{status}", color);
+            ClientLoader.Chat.WriteLine($"社交栏饰品功能已 [c/9DA2E7:{status}]", color);
         }
 
         // 切换重力控制状态
@@ -191,7 +196,7 @@ public class MyPlugin(string path) : Plugin(path)
             Config.IgnoreGravity = !Config.IgnoreGravity;
             Config.Write();
             string status = Config.IgnoreGravity ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"重力控制已{status}", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"重力控制已 [c/9DA2E7:{status}]", Color.Yellow);
         }
 
         // 切换自动垃圾桶状态
@@ -201,7 +206,7 @@ public class MyPlugin(string path) : Plugin(path)
             Config.AutoTrash = !Config.AutoTrash;
             Config.Write();
             string status = Config.AutoTrash ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"自动垃圾桶已{status}", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"自动垃圾桶已 [c/9DA2E7:{status}]", Color.Yellow);
         }
 
         // 触发自动垃圾桶方法
@@ -219,7 +224,7 @@ public class MyPlugin(string path) : Plugin(path)
             SoundEngine.PlaySound(SoundID.MenuOpen);
             Config.ClearAnglerQuests = !Config.ClearAnglerQuests;
             string status = Config.ClearAnglerQuests ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"清理渔夫任务已{status}", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"清理渔夫任务已 [c/9DA2E7:{status}]", Color.Yellow);
         }
 
         // 切换NPC自动回血状态
@@ -229,7 +234,7 @@ public class MyPlugin(string path) : Plugin(path)
             Config.NPCAutoHeal = !Config.NPCAutoHeal;
             Config.Write();
             string status = Config.NPCAutoHeal ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"NPC自动回血已{status}", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"NPC自动回血已 [c/9DA2E7:{status}]", Color.Yellow);
         }
 
         // 切换NPC自动对话状态
@@ -239,7 +244,7 @@ public class MyPlugin(string path) : Plugin(path)
             Config.AutoTalkNPC = !Config.AutoTalkNPC;
             Config.Write();
             string status = Config.AutoTalkNPC ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"NPC自动对话已{status}", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"NPC自动对话已 [c/9DA2E7:{status}]", Color.Yellow);
         }
 
         // 复活城镇NPC
@@ -251,7 +256,7 @@ public class MyPlugin(string path) : Plugin(path)
             Config.VeinMinerEnabled = !Config.VeinMinerEnabled;
             Config.Write();
             string status = Config.VeinMinerEnabled ? "启用" : "禁用";
-            ClientLoader.Chat.WriteLine($"连锁挖矿已{status}", Color.Yellow);
+            ClientLoader.Chat.WriteLine($"连锁挖矿已 [c/9DA2E7:{status}]", Color.Yellow);
         }
     }
     #endregion
@@ -262,7 +267,6 @@ public class MyPlugin(string path) : Plugin(path)
         var npc = e.npc;
         // 排除城镇NPC、友好NPC、雕像怪、傀儡
         if (npc == null || !npc.active || !Config.Enabled || npc.SpawnedFromStatue || npc.type == 488) return;
-
         if (Config.NPCAutoHeal)
         {
             Utils.NPCAutoHeal(npc, e.whoAmI);  // npc自动回血
@@ -300,14 +304,7 @@ public class MyPlugin(string path) : Plugin(path)
     public static HashSet<int> CustomRecipeIndexes = new HashSet<int>(); // 存储自定义配方索引 用于比较原版
     private void OnRecipeCheck(RecipeCheckEventArgs e)
     {
-        if (!Config.Enabled || !Config.CustomRecipesEnabled) return;
-
-        // 隐藏原版配方：如果当前配方结果物品在自定义物品列表中，但不是自定义配方
-        if (CustomRecipeItems.Contains(e.Recipe.createItem.type) && !CustomRecipeIndexes.Contains(e.Index))
-        {
-            e.MeetsConditions = false; // 强制不满足条件 只显示自定义配方
-            return;
-        }
+        if (!Config.Enabled) return;
 
         // 自定义配方处理逻辑 
         if (CustomRecipeIndexes.Contains(e.Index))
@@ -316,35 +313,46 @@ public class MyPlugin(string path) : Plugin(path)
             var customRecipe = Config.CustomRecipes.FirstOrDefault(r => r.Index == e.Index);
             if (customRecipe != null)
             {
-                e.MeetsConditions = e.MeetsTileConditions &&
-                CustomRecipeData.IsRecipeUnlocked(customRecipe) &&
-                RecipeHooks.HasResultItemForRecipe(e.Recipe, e.HasItem);
+                // 简化条件判断
+                e.MeetsConditions = Config.CustomRecipesEnabled
+                    && e.MeetsTileConditions
+                    && CustomRecipeData.IsRecipeUnlocked(customRecipe)
+                    && RecipeHooks.HasResultItemForRecipe(e.Recipe, e.HasItem);
             }
             return;
         }
 
-        // 解锁所有配方
-        if (Config.UnlockAllRecipes)
+        // 隐藏原版配方：如果当前配方结果物品在自定义物品列表中，但不是自定义配方
+        if (Config.HideOriginalRecipe)
         {
-            e.MeetsConditions = true;
+            if (CustomRecipeItems.Contains(e.Recipe.createItem.type))
+            {
+                // 优化条件判断
+                e.MeetsConditions = !Config.CustomRecipesEnabled
+                    && e.MeetsTileConditions
+                    && e.MeetsEnvironmentConditions
+                    && e.MeetsMaterialConditions;
+                return;
+            }
+        }
+
+        // 如果开启"忽略合成站要求"且条件不满足,有材料就能合成(仅对原版配方有效)
+        if (Config.IgnoreStationRequirements && !e.MeetsTileConditions)
+        {
+            e.MeetsConditions = e.MeetsMaterialConditions;
             return;
         }
 
-        // 如果开启"忽略工作站要求"且工作站条件不满足
-        if (Config.IgnoreStationRequirements && !e.MeetsTileConditions)
+        if (Config.UnlockAllRecipes) // 解锁所有配方
         {
-            // 只要有材料就允许合成
-            e.MeetsConditions = e.MeetsMaterialConditions;
-            return;
+            e.MeetsConditions = true;
         }
     }
     #endregion
 
-    #region 配方查找前事件（添加自定义配方）
-    private void OnAddCustomRecipes()
+    #region 创建自定义配方（配方查找前事件方法）
+    private void BuildCustomRecipes()
     {
-        if (!Config.Enabled || !Config.CustomRecipesEnabled) return;
-
         // 清空缓存集合
         CustomRecipeItems.Clear();
         CustomRecipeIndexes.Clear();
@@ -373,7 +381,8 @@ public class MyPlugin(string path) : Plugin(path)
         foreach (var data in Config.CustomRecipes)
         {
             // 如果配方已经分配了有效索引，跳过
-            if (full || data.Index != -1) continue;
+            if (full) break;
+            if (data.Index != -1) continue;
 
             // 检查是否已存在相同的配方
             if (RecipeHooks.ExistsRecipe(data))
@@ -392,7 +401,7 @@ public class MyPlugin(string path) : Plugin(path)
             int slot = RecipeHooks.FindEmptyRecipeSlot();
             if (slot == -1)
             {
-                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 {Lang.GetItemNameValue(data.ResultItem)} 的配方", Color.Red);
+                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 [c/9DA2E7:{Lang.GetItemNameValue(data.ResultItem)}] 的配方", Color.Red);
                 full = true; // 标记槽位已满
                 continue;
             }
@@ -407,7 +416,7 @@ public class MyPlugin(string path) : Plugin(path)
         // 记录添加的配方数量
         if (count > 0)
         {
-            ClientLoader.Chat.WriteLine($"已加载 {count} 个自定义配方", Color.Green);
+            ClientLoader.Chat.WriteLine($"已加载 [c/9DA2E7:{count}] 个自定义配方", color);
         }
     }
     #endregion

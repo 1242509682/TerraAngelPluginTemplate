@@ -102,7 +102,7 @@ public class NPCShopEditorUI
             bool ReplaceOriginal = shop.ReplaceOriginal;
 
             ImGui.Text($"商店状态: {(enabled ? "已启用" : "已禁用")}");
-            if (ImGui.Checkbox("启用此商店", ref enabled))
+            if (ImGui.Checkbox("启用自定义商店", ref enabled))
             {
                 shop.Enabled = enabled;
                 Config.Write();

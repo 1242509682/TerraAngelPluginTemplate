@@ -1,8 +1,5 @@
 ﻿using MonoMod.RuntimeDetour;
-using System.Buffers;
 using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Terraria;
 
 namespace MyPlugin;

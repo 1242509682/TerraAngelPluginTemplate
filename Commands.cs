@@ -85,12 +85,11 @@ internal class Commands
         SoundEngine.PlaySound(SoundID.MenuTick);
         if (!plr.dead)
         {
-            plr.KillMe(PlayerDeathReason.ByPlayer(plr.whoAmI), 100, 0);
+            plr.KillMe(PlayerDeathReason.ByPlayer(plr.whoAmI), 100, 0); 
             ClientLoader.Chat.WriteLine($"玩家 [c/4C92D8:{plr.name}] 已自杀", color);
         }
         else
         {
-            //plr.Spawn(new PlayerSpawnContext());
             plr.respawnTimer = 0;
             ClientLoader.Chat.WriteLine($"玩家 [c/4C92D8:{plr.name}] 已复活", color);
         }

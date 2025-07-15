@@ -107,7 +107,7 @@ public class UITool : Tool
             // 播放界面点击音效
             SoundEngine.PlaySound(SoundID.MenuTick);
 
-            // 定位传送区域
+            #region 定位传送区域
             ImGui.Separator();
             if (ImGui.TreeNodeEx("传送管理", ImGuiTreeNodeFlags.Framed))
             {
@@ -131,13 +131,24 @@ public class UITool : Tool
                 {
                     DrawDeathTeleportWindow(plr);
                 }
-            }
+            } 
+            #endregion
 
-            // 事件控制区域
+            #region 事件控制区域
             ImGui.Separator();
             float Width = (ImGui.GetContentRegionAvail().X - ImGui.GetStyle().ItemSpacing.X * 8) / 8f;
             if (ImGui.TreeNodeEx("事件管理", ImGuiTreeNodeFlags.Framed))
             {
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "事件管理");
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text("此功能暂未适配服务器");
+                    ImGui.EndTooltip();
+                }
+
                 // 血月按钮
                 if (ImGui.Button("血月", new Vector2(Width, 40)))
                 {
@@ -214,8 +225,9 @@ public class UITool : Tool
 
                 ImGui.TreePop();
             }
+            #endregion
 
-            // 辅助功能区域
+            #region 辅助功能区域
             ImGui.Separator();
             if (ImGui.TreeNodeEx("辅助功能", ImGuiTreeNodeFlags.Framed))
             {
@@ -277,8 +289,9 @@ public class UITool : Tool
 
                 ImGui.TreePop();
             }
+            #endregion
 
-            // 物品管理区域
+            #region 物品管理区域
             ImGui.Separator();
             if (ImGui.TreeNodeEx("物品管理", ImGuiTreeNodeFlags.Framed))
             {
@@ -336,6 +349,7 @@ public class UITool : Tool
                     RecipeManagerWindow();
                 }
 
+                #region 物品特性修改功能
                 // 使重力药水、重力球等不会反转屏幕效果
                 ImGui.Separator();
                 ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
@@ -436,11 +450,13 @@ public class UITool : Tool
 
                     ImGui.TreePop();
                 }
+                #endregion
 
                 ImGui.TreePop();
             }
+            #endregion
 
-            // NPC管理区域
+            #region NPC管理区域
             ImGui.Separator();
             if (ImGui.TreeNodeEx("NPC管理", ImGuiTreeNodeFlags.Framed))
             {
@@ -451,9 +467,17 @@ public class UITool : Tool
                     npcListLoaded = true;
                 }
 
+                #region 生成NPC区域
                 ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "生成与复活NPC");
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text("此功能暂未适配服务器");
+                    ImGui.EndTooltip();
+                }
 
-                // 生成NPC区域
                 ImGui.Spacing();
                 if (ImGui.Button("生成NPC"))
                 {
@@ -474,13 +498,36 @@ public class UITool : Tool
                     Utils.Relive(true);
                 }
                 if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC");
+                    ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC\n" +
+                                     "注意:有重置房屋BUG,暂时不建议用");
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.NPCReliveKey, ref EditNPCReliveKey);
+                #endregion
 
-                // npc自动回血
+                #region NPC修改区域
                 ImGui.Separator();
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动回血");
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC修改功能");
+
+                // NPC瞬移回家
+                if (ImGui.Button("切换NPC瞬移回家"))
+                {
+                    Config.NPCMoveRoomForTeleport = !Config.NPCMoveRoomForTeleport;
+                    Config.Write();
+                    ReloadPlugins();
+                    string status = Config.NPCMoveRoomForTeleport ? "启用" : "禁用";
+                    ClientLoader.Chat.WriteLine($"NPC瞬移回家已设置为 [c/9DA2E7:{status}]", color);
+                }
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text("分配房屋时,自动将城镇NPC瞬移到指定房屋\n" +
+                               "注意:服务器需分配2个不同房屋,才能从隔壁房间彻底过来");
+                    ImGui.EndTooltip();
+                }
+
+                //自动回家
                 ImGui.Checkbox("NPC自动回血", ref nPCAutoHeal);
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.NPCAutoHealKey, ref EditNPCAutoHealKey);
@@ -606,8 +653,11 @@ public class UITool : Tool
                         ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1f), "没有正在进行的对话");
                     }
                 }
+                #endregion
+
                 ImGui.TreePop();
-            }
+            } 
+            #endregion
         }
 
         // 更新配置值
@@ -1109,11 +1159,25 @@ public class UITool : Tool
         {
             // 顶部按钮区域
             ImGui.Separator();
+            bool CustomRecipesEnabled = Config.CustomRecipesEnabled; // 自定义配方开关
+            ImGui.Checkbox("启用自定义配方", ref CustomRecipesEnabled);
+            if (Config.CustomRecipesEnabled != CustomRecipesEnabled)
+            {
+                Config.CustomRecipesEnabled = CustomRecipesEnabled;
+                Config.Write();
+                string status = Config.CustomRecipesEnabled ? "开启" : "关闭";
+                ClientLoader.Chat.WriteLine($"自定义配方功能已{status}", color);
+                ReloadPlugins(); // 重载插件以应用更改
+            }
+
+            ImGui.SameLine();
             if (ImGui.Button("新建配方"))
             {
                 EditingRecipe = new CustomRecipeData();
                 IsNewRecipe = true;
             }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("新建自定义配方");
 
             ImGui.SameLine();
             if (ImGui.Button("保存所有配方"))
@@ -1124,12 +1188,18 @@ public class UITool : Tool
                 // 重建自定义配方
                 RecipeHooks.RebuildCustomRecipes();
             }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("保存所有自定义配方");
 
             ImGui.SameLine();
             if (ImGui.Button("从原版导入配方"))
             {
                 ShowVanillaRecipeSelector = !ShowVanillaRecipeSelector;
             }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("从原版配方导入一份参考作为自定义配方便于修改\n" +
+                                 "注意导入后不做修改也会替换掉原版配方合成逻辑\n" +
+                                 "(自定义配方暂不支持材料组)");
 
             // 显示原版配方选择器
             if (ShowVanillaRecipeSelector)
@@ -1138,13 +1208,26 @@ public class UITool : Tool
             }
 
             ImGui.SameLine();
-            if (ImGui.Button("忽略原版工作站需求"))
+            if (ImGui.Button("隐藏原版配方"))
+            {
+                Config.HideOriginalRecipe = !Config.HideOriginalRecipe;
+                Config.Write();
+                string status = Config.HideOriginalRecipe ? "开启" : "关闭";
+                ClientLoader.Chat.WriteLine($"隐藏原版配方功能已{status}", color);
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("切换自定义配方存在与原版相同合成物品时隐藏原版配方状态");
+
+            ImGui.SameLine();
+            if (ImGui.Button("忽略原版合成站需求"))
             {
                 Config.IgnoreStationRequirements = !Config.IgnoreStationRequirements;
                 Config.Write();
                 string status = Config.IgnoreStationRequirements ? "开启" : "关闭";
-                ClientLoader.Chat.WriteLine($"忽略原版工作站需求功能已{status}", color);
+                ClientLoader.Chat.WriteLine($"忽略原版合成站需求功能已{status}", color);
             }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("切换忽略原版配方的合成站检查状态,此功能仅对原版配方有效");
 
             ImGui.SameLine();
             if (ImGui.Button("解锁所有配方"))
@@ -1154,6 +1237,8 @@ public class UITool : Tool
                 string status = Config.UnlockAllRecipes ? "开启" : "关闭";
                 ClientLoader.Chat.WriteLine($"解锁所有配方功能已{status}", color);
             }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("切换解锁所有原版配方状态(对自定义配方无效)");
 
             // 搜索框
             ImGui.Separator();
@@ -1199,6 +1284,8 @@ public class UITool : Tool
 
                 ClientLoader.Chat.WriteLine("已清空所有自定义配方", Color.Green);
             }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("移除在列表内的所有自定义配方");
 
             ImGui.BeginChild("RecipeList", new Vector2(250, 550), ImGuiChildFlags.Borders);
 
@@ -1362,6 +1449,8 @@ public class UITool : Tool
                 {
                     ShowEnvironmentSelector = !ShowEnvironmentSelector;
                 }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("手持可创建图格的物品可添加相对应的环境(与合成站类似)");
 
                 // 清空环境条件按钮
                 ImGui.SameLine();
@@ -1528,12 +1617,16 @@ public class UITool : Tool
                     // 重置编辑状态
                     EditingRecipe = null;
                 }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("添加和修改按钮,不点击则无法使自定义配方生效");
 
                 ImGui.SameLine();
                 if (ImGui.Button("取消"))
                 {
                     EditingRecipe = null;
                 }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("取消本次修改与创建自定义配方操作");
 
                 ImGui.SameLine();
                 if (!IsNewRecipe && EditingRecipe != null && ImGui.Button("删除配方"))
@@ -1557,6 +1650,8 @@ public class UITool : Tool
 
                     EditingRecipe = null;
                 }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("从列表中删除选中的自定义配方");
 
                 // 添加手持物品到材料按钮
                 ImGui.SameLine();
@@ -1570,7 +1665,7 @@ public class UITool : Tool
 
                 if (ImGui.Button($"添加手持材料: {itemName}"))
                 {
-                    if (canAddHeldItem && heldItem !=null && !heldItem.IsAir)
+                    if (canAddHeldItem && heldItem != null && !heldItem.IsAir)
                     {
                         // 检查物品是否已存在
                         bool itemExists = EditingRecipe!.Ingredients.Any(i => i.ItemId == heldItem.type);
@@ -1700,17 +1795,17 @@ public class UITool : Tool
                         }
 
                         // 提示添加成功
-                        Main.NewText($"已添加环境条件: {customEnv}");
+                        ClientLoader.Chat.WriteLine($"已添加环境条件: {customEnv}");
                     }
                     else
                     {
-                        Main.NewText("该环境条件已存在!");
+                        ClientLoader.Chat.WriteLine("该环境条件已存在!");
                     }
                 }
                 else
                 {
                     // 提示物品无效
-                    Main.NewText("手持物品不是可放置的物块!");
+                    ClientLoader.Chat.WriteLine("手持物品不是可放置的物块!");
                 }
             }
 
@@ -1941,7 +2036,7 @@ public class UITool : Tool
                     if (!Utils.BaseStations.ContainsKey(tileID) && !CustomStations.ContainsKey(tileID))
                     {
                         CustomStations.Add(tileID, tileName);
-                        Main.NewText($"已添加合成站: {tileName}");
+                        ClientLoader.Chat.WriteLine($"已添加合成站: {tileName}");
                     }
 
                     // 添加到当前配方
@@ -1952,7 +2047,7 @@ public class UITool : Tool
                 }
                 else
                 {
-                    Main.NewText("手持物品不是可放置的物块!");
+                    ClientLoader.Chat.WriteLine("手持物品不是可放置的物块!");
                 }
             }
             ImGui.SameLine();
@@ -2420,6 +2515,16 @@ public class UITool : Tool
             ImGui.Text("当前位置:");
             ImGui.SameLine();
             ImGui.TextColored(new Vector4(1f, 1f, 0.5f, 1f), $"{(int)plr.position.X / 16}, {(int)plr.position.Y / 16}");
+
+            // 添加使用说明
+            ImGui.SameLine();
+            ImGui.TextDisabled("(?)");
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.BeginTooltip();
+                ImGui.Text("服务器需到过那个地方才能传送(因区块刷新问题)");
+                ImGui.EndTooltip();
+            }
         }
 
         // 按钮区域

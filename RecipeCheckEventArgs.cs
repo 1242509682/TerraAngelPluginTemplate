@@ -1,6 +1,5 @@
 ﻿using MonoMod.RuntimeDetour;
 using Newtonsoft.Json;
-using System.Linq;
 using System.Reflection;
 using Terraria;
 using Terraria.GameContent.Events;
@@ -19,7 +18,7 @@ public static class RecipeHooks
     // 钩子
     private static Hook? FindRecipesHook;
     public static event Action<RecipeCheckEventArgs>? OnRecipeCheck; // 配方检查事件
-    public static event Action? AddCustomRecipes; // 添加自定义配方(配方查找前调用)
+    public static event Action? BeforeRecipeCheck; // 添加自定义配方(配方查找前调用)
 
     #region 注册与卸载钩子方法
     public static void Register()
@@ -45,7 +44,7 @@ public static class RecipeHooks
     {
         FindRecipesHook?.Dispose();
         OnRecipeCheck = null;
-        AddCustomRecipes = null;
+        BeforeRecipeCheck = null;
     }
     #endregion
 
@@ -83,7 +82,7 @@ public static class RecipeHooks
         Recipe.ClearAvailableRecipes();
 
         // 先添加自定义配方
-        AddCustomRecipes?.Invoke();
+        BeforeRecipeCheck?.Invoke();
 
         // 处理向导物品的配方
         if (!Main.guideItem.IsAir && !string.IsNullOrEmpty(Main.guideItem.Name))
@@ -105,25 +104,27 @@ public static class RecipeHooks
         // 遍历所有配方
         for (int i = 0; i < Recipe.maxRecipes; i++)
         {
-            Recipe recipe = Main.recipe[i];
+            Recipe Recipe = Main.recipe[i];
+            int ActiveRecipe = Main.availableRecipe[i];
+            float ActiveRecipeY = Main.availableRecipeY[i];
 
             // 跳过空配方
-            if (recipe.createItem.type == 0) continue;
+            if (Recipe.createItem.type == 0) continue;
 
             // 检查工作站条件
-            bool MeetsTileConditions = PlayerMeetsTileRequirements!(plr, recipe);
+            bool MeetsTileConditions = PlayerMeetsTileRequirements!(plr, Recipe);
 
             // 检查环境条件
-            bool MeetsEnvironmentConditions = PlayerMeetsEnvironmentConditions!(plr, recipe);
+            bool MeetsEnvironmentConditions = PlayerMeetsEnvironmentConditions!(plr, Recipe);
 
             // 检查材料是否足够
-            bool MeetsMaterialConditions = Recipe.CollectedEnoughItemsToCraftRecipeNew(recipe);
+            bool MeetsMaterialConditions = Recipe.CollectedEnoughItemsToCraftRecipeNew(Recipe);
 
             // 初始条件检查结果
             bool MeetsConditions = MeetsTileConditions && MeetsEnvironmentConditions && MeetsMaterialConditions;
 
             // 创建事件参数
-            var args = new RecipeCheckEventArgs(recipe, i, plr, MeetsConditions, MeetsTileConditions, MeetsMaterialConditions, MeetsEnvironmentConditions, HasItems);
+            var args = new RecipeCheckEventArgs(Recipe, i, plr, MeetsConditions, MeetsTileConditions, MeetsMaterialConditions, MeetsEnvironmentConditions, HasItems, ActiveRecipe, ActiveRecipeY);
 
             // 触发自定义配方检查事件
             OnRecipeCheck?.Invoke(args);
@@ -629,14 +630,16 @@ public static class RecipeHooks
 public class RecipeCheckEventArgs : EventArgs
 {
     public int Index { get; } // 配方索引
-    public Recipe Recipe { get; }
+    public Recipe Recipe { get; set; }
     public Player Player { get; }
     public bool MeetsConditions { get; set; } // 符合所有条件
     public bool MeetsTileConditions { get; set; } // 符合合成站条件
     public bool MeetsMaterialConditions { get; set; } //符合材料条件
     public bool MeetsEnvironmentConditions { get; set; } //符合环境条件
     public Dictionary<int, int> HasItem { get; } // 添加收集的物品数据
-    public RecipeCheckEventArgs(Recipe recipe, int recipeIndex, Player player, bool meetsConditions, bool meetsTileConditions, bool meetsMaterialConditions, bool meetsEnvironmentConditions, Dictionary<int, int> hasItem)
+    public int ActiveRecipe { get; set; }
+    public float ActiveRecipeY { get; set; }
+    public RecipeCheckEventArgs(Recipe recipe, int recipeIndex, Player player, bool meetsConditions, bool meetsTileConditions, bool meetsMaterialConditions, bool meetsEnvironmentConditions, Dictionary<int, int> hasItem, int activeRecipe, float activeRecipeY)
     {
         this.Recipe = recipe;
         this.Index = recipeIndex;
@@ -646,6 +649,8 @@ public class RecipeCheckEventArgs : EventArgs
         this.MeetsMaterialConditions = meetsMaterialConditions;
         this.MeetsEnvironmentConditions = meetsEnvironmentConditions;
         this.HasItem = hasItem;
+        this.ActiveRecipe = activeRecipe;
+        this.ActiveRecipeY = activeRecipeY;
     }
 }
 #endregion
@@ -710,7 +715,7 @@ public class CustomRecipeData
                 }
                 return false;
             case "水":
-                return plr.adjWater || plr.adjTile[172]; // 172 是水槽的图格ID
+                return plr.adjWater || plr.adjTile[TileID.Sinks]; // 水槽的图格ID
             case "蜂蜜":
                 return plr.adjHoney;
             case "岩浆":
@@ -728,10 +733,10 @@ public class CustomRecipeData
                 return NPC.downedBoss2;
             case "世吞":
             case "世界吞噬者":
-                return NPC.downedBoss2 && (Utils.IsDefeated(13) || Utils.IsDefeated(14) || Utils.IsDefeated(15));
+                return NPC.downedBoss2 && Utils.BestiaryEntry2(NPCID.EaterofWorldsHead);
             case "克苏鲁之脑":
             case "世界吞噬怪":
-                return NPC.downedBoss2 && Utils.IsDefeated(NPCID.BrainofCthulhu);
+                return NPC.downedBoss2 && Utils.BestiaryEntry2(NPCID.BrainofCthulhu);
             case "蜂王":
                 return NPC.downedQueenBee;
             case "骷髅王":
