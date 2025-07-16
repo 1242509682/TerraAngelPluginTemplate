@@ -1521,7 +1521,7 @@ public class UITool : Tool
                 {
                     ImGui.BeginChild("RequiredTileList", new Vector2(0, 100), ImGuiChildFlags.Borders);
                     // 使用统一的GetTileName方法获取中文名称
-                    var tileNames = EditingRecipe.Tile.Select(Utils.GetTileName).ToList();
+                    var tileNames = EditingRecipe.Tile.Select(RecipeHooks.GetTileName).ToList();
 
                     // 每4个换一行
                     int itemsPerRow = 4;
@@ -1723,8 +1723,8 @@ public class UITool : Tool
 
             // 应用搜索过滤
             var filteredConditions = string.IsNullOrEmpty(SelectedEnvironment)
-                ? Utils.AllEnvironments
-                : Utils.AllEnvironments.Where(c => c.Contains(SelectedEnvironment)).ToList();
+                ? RecipeHooks.AllEnvironments
+                : RecipeHooks.AllEnvironments.Where(c => c.Contains(SelectedEnvironment)).ToList();
 
             // 将条件分为两组：自定义条件和其他条件
             var customConditions = filteredConditions
@@ -1790,9 +1790,9 @@ public class UITool : Tool
                         EditingRecipe.unlock.Add(customEnv);
 
                         // 添加到全局列表供后续使用
-                        if (!Utils.AllEnvironments.Contains(customEnv))
+                        if (!RecipeHooks.AllEnvironments.Contains(customEnv))
                         {
-                            Utils.AllEnvironments.Add(customEnv);
+                            RecipeHooks.AllEnvironments.Add(customEnv);
                         }
 
                         // 提示添加成功
@@ -1866,7 +1866,7 @@ public class UITool : Tool
 
         if (ImGui.IsItemHovered())
         {
-            string tooltip = Utils.GetEnvironmentTooltip(condition);
+            string tooltip = RecipeHooks.GetEnvironmentTooltip(condition);
             if (!string.IsNullOrEmpty(tooltip))
                 ImGui.SetTooltip(tooltip);
         }
@@ -2034,7 +2034,7 @@ public class UITool : Tool
                     string tileName = Lang.GetItemNameValue(heldItem.type);
 
                     // 添加到自定义缓存
-                    if (!Utils.BaseStations.ContainsKey(tileID) && !CustomStations.ContainsKey(tileID))
+                    if (!RecipeHooks.BaseStations.ContainsKey(tileID) && !CustomStations.ContainsKey(tileID))
                     {
                         CustomStations.Add(tileID, tileName);
                         ClientLoader.Chat.WriteLine($"已添加合成站: {tileName}");
@@ -2063,7 +2063,7 @@ public class UITool : Tool
             ImGui.BeginChild("TileList", new Vector2(0, ImGui.GetContentRegionAvail().Y - 10), ImGuiChildFlags.Borders);
 
             // 获取所有合成站
-            Dictionary<int, string> Stations = Utils.StationList();
+            Dictionary<int, string> Stations = RecipeHooks.StationList();
 
             // 应用搜索过滤
             var filteredStations = Stations
