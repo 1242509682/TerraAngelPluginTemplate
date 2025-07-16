@@ -254,7 +254,7 @@ public static class RecipeHooks
     {
         data.Index = index;
         CustomRecipeIndexes.Add(index);
-        CustomRecipeItems.Add(data.ResultItem);
+        CustomRecipeItems.Add(data.ItemID);
     }
 
     // 重建配方方法
@@ -325,16 +325,16 @@ public static class RecipeHooks
             if (recipe.createItem.type == 0) continue; // 跳过空槽位
 
             // 检查结果物品
-            if (recipe.createItem.type != data.ResultItem ||
-                recipe.createItem.stack != data.ResultStack)
+            if (recipe.createItem.type != data.ItemID ||
+                recipe.createItem.stack != data.Stack)
                 continue;
 
             // 检查材料
-            if (!AreIngredientsEqual(recipe, data.Ingredients))
+            if (!AreIngredientsEqual(recipe, data.Material))
                 continue;
 
             // 检查合成站
-            if (!AreTilesEqual(recipe, data.RequiredTile))
+            if (!AreTilesEqual(recipe, data.Tile))
                 continue;
 
             return true;
@@ -350,10 +350,10 @@ public static class RecipeHooks
             Recipe recipe = Main.recipe[i];
             if (recipe.createItem.type == 0) continue;
 
-            if (recipe.createItem.type == data.ResultItem &&
-                recipe.createItem.stack == data.ResultStack &&
-                AreIngredientsEqual(recipe, data.Ingredients) &&
-                AreTilesEqual(recipe, data.RequiredTile))
+            if (recipe.createItem.type == data.ItemID &&
+                recipe.createItem.stack == data.Stack &&
+                AreIngredientsEqual(recipe, data.Material) &&
+                AreTilesEqual(recipe, data.Tile))
             {
                 return i;
             }
@@ -362,7 +362,7 @@ public static class RecipeHooks
     }
 
     // 检查材料是否相同
-    public static bool AreIngredientsEqual(Recipe recipe, List<IngredientData> ingredients)
+    public static bool AreIngredientsEqual(Recipe recipe, List<MaterialData> ingredients)
     {
         // 收集配方中的有效材料
         var recipeIngredients = recipe.requiredItem
@@ -373,8 +373,8 @@ public static class RecipeHooks
 
         // 收集自定义配方中的材料
         var customIngredients = ingredients
-            .Where(i => i.ItemId > 0)
-            .Select(i => new { type = i.ItemId, stack = i.Stack })
+            .Where(i => i.type > 0)
+            .Select(i => new { type = i.type, stack = i.stack })
             .OrderBy(i => i.type)
             .ToList();
 
@@ -431,18 +431,18 @@ public static class RecipeHooks
         Recipe recipe = new Recipe();
 
         // 设置结果物品
-        recipe.createItem.SetDefaults(data.ResultItem);
-        recipe.createItem.stack = data.ResultStack;
+        recipe.createItem.SetDefaults(data.ItemID);
+        recipe.createItem.stack = data.Stack;
 
         // 使用 SetIngredients 设置材料 - 支持多个材料
         List<int> Ingredients = new List<int>();
-        foreach (var ingredient in data.Ingredients)
+        foreach (var ingredient in data.Material)
         {
             // 跳过无效材料
-            if (ingredient.ItemId <= 0 || ingredient.Stack <= 0) continue;
+            if (ingredient.type <= 0 || ingredient.stack <= 0) continue;
 
-            Ingredients.Add(ingredient.ItemId);
-            Ingredients.Add(ingredient.Stack);
+            Ingredients.Add(ingredient.type);
+            Ingredients.Add(ingredient.stack);
         }
 
         // 确保至少有一个有效材料
@@ -453,7 +453,7 @@ public static class RecipeHooks
 
         // 使用 SetCraftingStation 设置合成站 - 支持多个合成站
         List<int> RequiredTile = new List<int>();
-        foreach (int tileId in data.RequiredTile)
+        foreach (int tileId in data.Tile)
         {
             // 跳过无效的 TileID (0 或负数)
             if (tileId <= 0) continue;
@@ -510,7 +510,7 @@ public static class RecipeHooks
         bool hasAlchemyTable = RequiredTile.Contains(TileID.AlchemyTable);
 
         // 设置炼金配方标记
-        recipe.alchemy = data.IsAlchemyRecipe || hasBottles || hasAlchemyTable;
+        recipe.alchemy = hasBottles || hasAlchemyTable;
 
         return recipe;
     }
@@ -521,9 +521,8 @@ public static class RecipeHooks
     {
         CustomRecipeData myRecipe = new()
         {
-            ResultItem = recipe.createItem.type,
-            ResultStack = recipe.createItem.stack,
-            IsAlchemyRecipe = recipe.alchemy
+            ItemID = recipe.createItem.type,
+            Stack = recipe.createItem.stack,
         };
 
         // 添加普通材料
@@ -536,7 +535,7 @@ public static class RecipeHooks
             }
 
             // 添加材料到配方
-            myRecipe.Ingredients.Add(new IngredientData(item.type, item.stack));
+            myRecipe.Material.Add(new MaterialData(item.type, item.stack));
         }
 
         // 添加所有合成站
@@ -546,7 +545,7 @@ public static class RecipeHooks
             if (tileId <= 0) continue;
 
             // 确保不添加重复的合成站
-            myRecipe.RequiredTile.Add(tileId);
+            myRecipe.Tile.Add(tileId);
         }
 
         // 添加环境
@@ -645,17 +644,15 @@ public class CustomRecipeData
     [JsonProperty("配方索引", Order = 1)]
     public int Index { get; set; } = -1; //配方索引
     [JsonProperty("合成物品", Order = 2)]
-    public int ResultItem { get; set; } //合成物品
+    public int ItemID { get; set; } //合成物品
     [JsonProperty("合成物品数量", Order = 3)]
-    public int ResultStack { get; set; } = 1; //合成物品数量
+    public int Stack { get; set; } = 1; //合成物品数量
     [JsonProperty("组成材料", Order = 4)]
-    public List<IngredientData> Ingredients { get; set; } = new List<IngredientData>(); //材料
+    public List<MaterialData> Material { get; set; } = new List<MaterialData>(); //材料
     [JsonProperty("合成站", Order = 5)]
-    public List<int> RequiredTile { get; set; } = new List<int>(); //合成站
+    public List<int> Tile { get; set; } = new List<int>(); //合成站
     [JsonProperty("合成环境", Order = 6)]
     public List<string> unlock = new List<string>();
-    [JsonProperty("炼药属性", Order = 7)]
-    public bool IsAlchemyRecipe { get; set; } //炼药标识
 
     #region 判断解锁配方
     public static bool IsRecipeUnlocked(CustomRecipeData recipe)
@@ -909,18 +906,18 @@ public class CustomRecipeData
     #endregion
 }
 
-public class IngredientData
+public class MaterialData
 {
     [JsonProperty("物品ID", Order = 0)]
-    public int ItemId { get; set; }
+    public int type { get; set; }
     [JsonProperty("物品数量", Order = 1)]
-    public int Stack { get; set; }
+    public int stack { get; set; }
 
-    public IngredientData() { }
-    public IngredientData(int itemId, int stack)
+    public MaterialData() { }
+    public MaterialData(int itemId, int stack = 1)
     {
-        ItemId = itemId;
-        Stack = stack;
+        type = itemId;
+        this.stack = stack;
     }
 }
 #endregion

@@ -368,7 +368,7 @@ public class MyPlugin(string path) : Plugin(path)
             // 只有当配方无效时才重置索引
             if (data.Index == -1 ||
                 data.Index >= Recipe.maxRecipes ||
-                Main.recipe[data.Index].createItem.type != data.ResultItem)
+                Main.recipe[data.Index].createItem.type != data.ItemID)
             {
                 data.Index = -1;
             }
@@ -376,7 +376,7 @@ public class MyPlugin(string path) : Plugin(path)
             {
                 // 记录有效的自定义配方
                 CustomRecipeIndexes.Add(data.Index);
-                CustomRecipeItems.Add(data.ResultItem);
+                CustomRecipeItems.Add(data.ItemID);
             }
         }
 
@@ -406,7 +406,7 @@ public class MyPlugin(string path) : Plugin(path)
             int slot = RecipeHooks.FindEmptyRecipeSlot();
             if (slot == -1)
             {
-                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 [c/9DA2E7:{Lang.GetItemNameValue(data.ResultItem)}] 的配方", Color.Red);
+                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 [c/9DA2E7:{Lang.GetItemNameValue(data.ItemID)}] 的配方", Color.Red);
                 full = true; // 标记槽位已满
                 continue;
             }

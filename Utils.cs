@@ -2781,6 +2781,7 @@ internal class Utils
         { TileID.Anvils, "铁砧/铅砧" },
         { TileID.MythrilAnvil, "秘银砧/山铜砧" },
         { TileID.Hellforge, "地狱熔炉" },
+        { TileID.Bottles, "玻璃瓶" },
         { TileID.AlchemyTable, "炼药桌" },
         { TileID.ImbuingStation, "灌注站" },
         { TileID.CrystalBall, "水晶球" },

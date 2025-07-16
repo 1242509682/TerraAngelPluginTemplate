@@ -1296,16 +1296,16 @@ public class UITool : Tool
 
                 // 检查结果物品
                 Item resultItem = new Item();
-                resultItem.SetDefaults(r.ResultItem);
-                if (resultItem.Name.Contains(RecipeSearch, StringComparison.OrdinalIgnoreCase) || r.ResultItem.ToString().Contains(RecipeSearch))
+                resultItem.SetDefaults(r.ItemID);
+                if (resultItem.Name.Contains(RecipeSearch, StringComparison.OrdinalIgnoreCase) || r.ItemID.ToString().Contains(RecipeSearch))
                     return true;
 
                 // 检查材料
-                foreach (var ing in r.Ingredients)
+                foreach (var ing in r.Material)
                 {
                     Item ingItem = new Item();
-                    ingItem.SetDefaults(ing.ItemId);
-                    if (ingItem.Name.Contains(RecipeSearch, StringComparison.OrdinalIgnoreCase) || ing.ItemId.ToString().Contains(RecipeSearch))
+                    ingItem.SetDefaults(ing.type);
+                    if (ingItem.Name.Contains(RecipeSearch, StringComparison.OrdinalIgnoreCase) || ing.type.ToString().Contains(RecipeSearch))
                         return true;
                 }
 
@@ -1323,10 +1323,10 @@ public class UITool : Tool
                 {
                     var recipe = GetRecipes[i];
                     Item resultItem = new Item();
-                    resultItem.SetDefaults(recipe.ResultItem);
+                    resultItem.SetDefaults(recipe.ItemID);
 
                     bool isSelected = EditingRecipe == recipe;
-                    if (ImGui.Selectable($"{resultItem.Name} x{recipe.ResultStack}##{i}", isSelected))
+                    if (ImGui.Selectable($"{resultItem.Name} x{recipe.Stack}##{i}", isSelected))
                     {
                         EditingRecipe = recipe;
                         IsNewRecipe = false;
@@ -1349,8 +1349,8 @@ public class UITool : Tool
                 ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "合成物品:");
                 ImGui.SameLine();
                 Item resultItem = new Item();
-                resultItem.SetDefaults(EditingRecipe.ResultItem);
-                string resultLabel = resultItem.Name != "" ? $"{resultItem.Name} ({EditingRecipe.ResultItem})" : "未选择";
+                resultItem.SetDefaults(EditingRecipe.ItemID);
+                string resultLabel = resultItem.Name != "" ? $"{resultItem.Name} ({EditingRecipe.ItemID})" : "未选择";
                 if (ImGui.Button(resultLabel))
                 {
                     ShowItemSelectorForResult = !ShowItemSelectorForResult;
@@ -1359,18 +1359,18 @@ public class UITool : Tool
                 // 显示合成物品窗口
                 if (ShowItemSelectorForResult)
                 {
-                    var selectedItemId = EditingRecipe.ResultItem;
+                    var selectedItemId = EditingRecipe.ItemID;
                     DrawItemSelector(ref selectedItemId);
-                    EditingRecipe.ResultItem = selectedItemId;
+                    EditingRecipe.ItemID = selectedItemId;
                 }
 
-                var selectedItemsStack = EditingRecipe.ResultStack;
+                var selectedItemsStack = EditingRecipe.Stack;
                 ImGui.SameLine();
                 ImGui.Text("数量");
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(100);
                 ImGui.InputInt("##ResultStack", ref selectedItemsStack);
-                EditingRecipe.ResultStack = Math.Max(1, selectedItemsStack);
+                EditingRecipe.Stack = Math.Max(1, selectedItemsStack);
 
                 // 材料区域
                 ImGui.Separator();
@@ -1401,7 +1401,7 @@ public class UITool : Tool
                 ImGui.SameLine();
                 if (ImGui.Button("添加") && NewIngredientItemId > 0)
                 {
-                    EditingRecipe.Ingredients.Add(new IngredientData(NewIngredientItemId, NewIngredientStack));
+                    EditingRecipe.Material.Add(new MaterialData(NewIngredientItemId, NewIngredientStack));
 
                     // 重置
                     NewIngredientItemId = 0;
@@ -1409,30 +1409,30 @@ public class UITool : Tool
                 }
 
                 // 修复：只在材料列表为空时显示"无材料要求"
-                if (EditingRecipe.Ingredients.Count == 0)
+                if (EditingRecipe.Material.Count == 0)
                 {
                     ImGui.TextDisabled("无材料要求");
                 }
                 ImGui.EndGroup();
 
                 // 材料列表
-                if (EditingRecipe.Ingredients.Count > 0)
+                if (EditingRecipe.Material.Count > 0)
                 {
                     ImGui.BeginChild("IngredientsList", new Vector2(0, 100), ImGuiChildFlags.Borders);
-                    for (int i = 0; i < EditingRecipe.Ingredients.Count; i++)
+                    for (int i = 0; i < EditingRecipe.Material.Count; i++)
                     {
-                        var ingredient = EditingRecipe.Ingredients[i];
+                        var ingredient = EditingRecipe.Material[i];
                         Item ingItem = new Item();
-                        ingItem.SetDefaults(ingredient.ItemId);
+                        ingItem.SetDefaults(ingredient.type);
 
                         ImGui.PushID(i);
 
-                        ImGui.Text($"{ingItem.Name} x{ingredient.Stack}");
+                        ImGui.Text($"{ingItem.Name} x{ingredient.stack}");
 
                         ImGui.SameLine();
                         if (ImGui.Button("删除"))
                         {
-                            EditingRecipe.Ingredients.RemoveAt(i);
+                            EditingRecipe.Material.RemoveAt(i);
                             i--;
                         }
 
@@ -1503,14 +1503,12 @@ public class UITool : Tool
                 {
                     ShowTileSelector = !ShowTileSelector;
                 }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("手持可放置图格的物品可添加自定义合成站");
 
                 // 清空合成站按钮
                 ImGui.SameLine();
                 if (ImGui.Button("清空合成站"))
                 {
-                    EditingRecipe.RequiredTile.Clear();
+                    EditingRecipe.Tile.Clear();
                 }
 
                 if (ShowTileSelector)
@@ -1519,11 +1517,11 @@ public class UITool : Tool
                 }
 
                 // 显示当前选择的合成站
-                if (EditingRecipe.RequiredTile.Count > 0)
+                if (EditingRecipe.Tile.Count > 0)
                 {
                     ImGui.BeginChild("RequiredTileList", new Vector2(0, 100), ImGuiChildFlags.Borders);
                     // 使用统一的GetTileName方法获取中文名称
-                    var tileNames = EditingRecipe.RequiredTile.Select(Utils.GetTileName).ToList();
+                    var tileNames = EditingRecipe.Tile.Select(Utils.GetTileName).ToList();
 
                     // 每4个换一行
                     int itemsPerRow = 4;
@@ -1541,7 +1539,7 @@ public class UITool : Tool
                         string name = tileNames[i];
 
                         // 检查是否为自定义合成站
-                        bool isCustom = CustomStations.ContainsKey(EditingRecipe.RequiredTile[i]);
+                        bool isCustom = CustomStations.ContainsKey(EditingRecipe.Tile[i]);
                         if (isCustom)
                         {
                             ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.8f, 0.4f, 1f)); // 橙色
@@ -1555,14 +1553,15 @@ public class UITool : Tool
 
                         // 删除按钮
                         ImGui.SameLine();
-                        if (ImGui.Button($"删除##tile_{EditingRecipe.RequiredTile[i]}"))
+                        if (ImGui.Button($"删除##tile_{EditingRecipe.Tile[i]}"))
                         {
-                            EditingRecipe.RequiredTile.RemoveAt(i);
+                            EditingRecipe.Tile.RemoveAt(i);
                             tileNames.RemoveAt(i);
                             i--; // 调整索引
                         }
-                        ImGui.EndChild();
                     }
+
+                    ImGui.EndChild();
                 }
                 else
                 {
@@ -1577,8 +1576,8 @@ public class UITool : Tool
                     {
                         // 确保配方不存在再添加
                         bool Exists = Config.CustomRecipes.Any(r =>
-                            r.ResultItem == EditingRecipe.ResultItem &&
-                            r.Ingredients.SequenceEqual(EditingRecipe.Ingredients));
+                            r.ItemID == EditingRecipe.ItemID &&
+                            r.Material.SequenceEqual(EditingRecipe.Material));
 
                         if (!Exists)
                         {
@@ -1670,11 +1669,11 @@ public class UITool : Tool
                     if (canAddHeldItem && heldItem != null && !heldItem.IsAir)
                     {
                         // 检查物品是否已存在
-                        bool itemExists = EditingRecipe!.Ingredients.Any(i => i.ItemId == heldItem.type);
+                        bool itemExists = EditingRecipe!.Material.Any(i => i.type == heldItem.type);
 
                         if (!itemExists)
                         {
-                            EditingRecipe.Ingredients.Add(new IngredientData(heldItem.type, heldItem.stack));
+                            EditingRecipe.Material.Add(new MaterialData(heldItem.type, heldItem.stack));
                             ClientLoader.Chat.WriteLine($"已添加材料: {itemName} x{heldItem.stack}", Color.Green);
                         }
                         else
@@ -2042,9 +2041,9 @@ public class UITool : Tool
                     }
 
                     // 添加到当前配方
-                    if (EditingRecipe != null && !EditingRecipe.RequiredTile.Contains(tileID))
+                    if (EditingRecipe != null && !EditingRecipe.Tile.Contains(tileID))
                     {
-                        EditingRecipe.RequiredTile.Add(tileID);
+                        EditingRecipe.Tile.Add(tileID);
                     }
                 }
                 else
@@ -2096,7 +2095,7 @@ public class UITool : Tool
     {
         if (EditingRecipe == null) return;
 
-        bool isSelected = EditingRecipe.RequiredTile.Contains(tileID);
+        bool isSelected = EditingRecipe.Tile.Contains(tileID);
         bool isCustom = CustomStations.ContainsKey(tileID);
 
         // 设置颜色
@@ -2117,11 +2116,11 @@ public class UITool : Tool
         {
             if (!isSelected)
             {
-                EditingRecipe.RequiredTile.Add(tileID);
+                EditingRecipe.Tile.Add(tileID);
             }
             else
             {
-                EditingRecipe.RequiredTile.Remove(tileID);
+                EditingRecipe.Tile.Remove(tileID);
             }
         }
 

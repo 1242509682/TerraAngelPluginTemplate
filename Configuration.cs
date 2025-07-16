@@ -333,223 +333,195 @@ internal class Configuration
         {
            new CustomRecipeData()
            {
-               ResultItem = ItemID.Wood, // 10个木材
-               ResultStack = 10,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.Wood, // 10个木材
+               Stack = 10,
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.Acorn,1)
+                   new MaterialData(ItemID.Acorn)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.DepthMeter, // 深度计
-               ResultStack = 1,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.DepthMeter, // 深度计
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.Compass,1)
+                   new MaterialData(ItemID.Compass)
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Compass, // 罗盘
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DepthMeter)
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.GoldenKey,  // 5个金钥匙
+               Stack = 5,
+               Tile = new List<int>() { TileID.Hellforge },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ShadowKey)
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.BloodMoonStarter,  // 血泪
+               Stack = 1,
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.LifeCrystal,5)
                },
 
-               RequiredTile = new List<int>()
-               {
-                   114 // 工匠作坊
-               }
-
+               unlock = new List<string>() { "血月" }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.Compass, // 罗盘
-               ResultStack = 1,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.LifeFruit,  // 生命果
+               Stack = 1,
+               Tile = new List<int>() { TileID.LihzahrdFurnace },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.DepthMeter,1)
+                   new MaterialData(ItemID.LifeCrystal)
                },
-
-               RequiredTile = new List<int>()
-               {
-                   114 // 工匠作坊
-               }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.GoldenKey,  // 5个金钥匙
-               ResultStack = 5,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.FrogLeg, // 蛙腿
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.ShadowKey,1)
+                   new MaterialData(ItemID.Frog,5)
                },
-
-               RequiredTile = new List<int>()
-               {
-                   77 //地狱熔炉
-               }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.BloodMoonStarter,  // 血泪
-               ResultStack = 1,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.CloudinaBottle,  // 云朵瓶
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.LifeCrystal,5)
+                   new MaterialData(ItemID.Cloud,10),
+                   new MaterialData(ItemID.Bottle)
                },
+           },
 
-               unlock = new List<string>()
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.MushroomGrassSeeds,  // 蘑菇草种子
+               Stack = 1,
+               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   "血月"
+                   new MaterialData(ItemID.JungleGrassSeeds)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.LifeFruit,  // 生命果
-               ResultStack = 1,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.JungleGrassSeeds,  // 丛林草种子
+               Stack = 1,
+               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.LifeCrystal,1)
-               },
-
-               RequiredTile = new List<int>()
-               {
-                   303 //丛林蜥蜴熔炉
+                   new MaterialData(ItemID.MushroomGrassSeeds)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.FrogLeg, // 蛙腿
-               ResultStack = 1,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.HerbBag,  // 草药袋
+               Stack = 1,
+               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.Frog,5)
-               },
-
-               RequiredTile = new List<int>()
-               {
-                   114 // 工匠作坊
+                   new MaterialData(ItemID.DaybloomSeeds),
+                   new MaterialData(ItemID.MoonglowSeeds),
+                   new MaterialData(ItemID.BlinkrootSeeds),
+                   new MaterialData(ItemID.DeathweedSeeds),
+                   new MaterialData(ItemID.WaterleafSeeds),
+                   new MaterialData(ItemID.FireblossomSeeds),
+                   new MaterialData(ItemID.ShiverthornSeeds)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.CloudinaBottle,  // 云朵瓶
-               ResultStack = 1,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.Daybloom,  // 太阳花
+               Stack = 1,
+               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.Cloud,10),
-                   new IngredientData(ItemID.Bottle,1)
-               },
-
-               RequiredTile = new List<int>()
-               {
-                   114 // 工匠作坊
+                   new MaterialData(ItemID.DaybloomSeeds,3)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.MushroomGrassSeeds,  // 蘑菇草种子
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.Moonglow,  // 月光草
+               Stack = 1,
+               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.JungleGrassSeeds,1)
+                   new MaterialData(ItemID.MoonglowSeeds,3)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.JungleGrassSeeds,  // 丛林草种子
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.Deathweed,  // 死亡草
+               Stack = 1,
+               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.MushroomGrassSeeds,1)
+                   new MaterialData(ItemID.DeathweedSeeds,3)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.HerbBag,  // 草药袋
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.Waterleaf,  // 幌菊
+               Stack = 1,
+               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.DaybloomSeeds,1),
-                   new IngredientData(ItemID.MoonglowSeeds,1),
-                   new IngredientData(ItemID.BlinkrootSeeds,1),
-                   new IngredientData(ItemID.DeathweedSeeds,1),
-                   new IngredientData(ItemID.WaterleafSeeds,1),
-                   new IngredientData(ItemID.FireblossomSeeds,1),
-                   new IngredientData(ItemID.ShiverthornSeeds,1)
+                   new MaterialData(ItemID.WaterleafSeeds,3)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.Daybloom,  // 太阳花
-               ResultStack = 1,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.Fireblossom,  // 火焰花
+               Stack = 1,
+               Tile = new List < int >() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.DaybloomSeeds,3)
-               }
-
-           },
-
-           new CustomRecipeData()
-           {
-               ResultItem = ItemID.Moonglow,  // 月光草
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
-               {
-                   new IngredientData(ItemID.MoonglowSeeds,3)
+                   new MaterialData(ItemID.FireblossomSeeds,3)
                }
            },
 
            new CustomRecipeData()
            {
-               ResultItem = ItemID.Deathweed,  // 死亡草
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
+               ItemID = ItemID.Shiverthorn,  // 寒颤棘
+               Stack = 1,
+               Tile = new List < int >() { TileID.Bottles, TileID.AlchemyTable },
+               Material = new List<MaterialData>()
                {
-                   new IngredientData(ItemID.DeathweedSeeds,3)
-               }
-           },
-
-           new CustomRecipeData()
-           {
-               ResultItem = ItemID.Waterleaf,  // 幌菊
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
-               {
-                   new IngredientData(ItemID.WaterleafSeeds,3)
-               }
-           },
-
-           new CustomRecipeData()
-           {
-               ResultItem = ItemID.Fireblossom,  // 火焰花
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
-               {
-                   new IngredientData(ItemID.FireblossomSeeds,3)
-               }
-           },
-
-           new CustomRecipeData()
-           {
-               ResultItem = ItemID.Shiverthorn,  // 寒颤棘
-               ResultStack = 1,
-               IsAlchemyRecipe = true,
-               Ingredients = new List<IngredientData>()
-               {
-                   new IngredientData(ItemID.ShiverthornSeeds,3)
+                   new MaterialData(ItemID.ShiverthornSeeds,3)
                }
            },
         };
