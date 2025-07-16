@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using System.Reflection;
 using TerraAngel;
 using TerraAngel.Config;
 using TerraAngel.Input;
@@ -306,46 +307,50 @@ public class MyPlugin(string path) : Plugin(path)
     {
         if (!Config.Enabled) return;
 
+
         // 自定义配方处理逻辑 
         if (CustomRecipeIndexes.Contains(e.Index))
         {
             // 获取对应的自定义配方数据
-            var customRecipe = Config.CustomRecipes.FirstOrDefault(r => r.Index == e.Index);
-            if (customRecipe != null)
+            var CustomRecipe = Config.CustomRecipes.FirstOrDefault(r => r.Index == e.Index);
+            if (CustomRecipe != null)
             {
-                // 简化条件判断
-                e.MeetsConditions = Config.CustomRecipesEnabled
-                    && e.MeetsTileConditions
-                    && CustomRecipeData.IsRecipeUnlocked(customRecipe)
-                    && RecipeHooks.HasResultItemForRecipe(e.Recipe, e.HasItem);
+                // 开启自定义配方时：
+                // 合成站使用原版遇到对应图格检查
+                // 环境使用自己定义的作为检查（已与原版环境相兼容）
+                // 材料条件使用收集到的玩家拥有物品与配方物品数量作比较
+                e.Conditions = Config.CustomRecipesEnabled && e.MeetTile
+                            && CustomRecipeData.IsRecipeUnlocked(CustomRecipe)
+                            && RecipeHooks.HasMaterial(e.Recipe, e.HasItem);
             }
             return;
         }
 
-        // 隐藏原版配方：如果当前配方结果物品在自定义物品列表中，但不是自定义配方
+        // 隐藏原版配方
         if (Config.HideOriginalRecipe)
         {
+            // 如果当前配方结果物品在自定义物品列表中，但不是自定义配方
             if (CustomRecipeItems.Contains(e.Recipe.createItem.type))
             {
-                // 优化条件判断
-                e.MeetsConditions = !Config.CustomRecipesEnabled
-                    && e.MeetsTileConditions
-                    && e.MeetsEnvironmentConditions
-                    && e.MeetsMaterialConditions;
+                // 没开启自定义配方时使用原版条件检查，开启后则隐藏原版配方
+                e.Conditions = !Config.CustomRecipesEnabled
+                    && e.MeetTile // 遇到合成站（图格)
+                    && e.MeetEnvironment // 遇到环境
+                    && e.MeetMaterial; // 遇到材料
                 return;
             }
         }
 
-        // 如果开启"忽略合成站要求"且条件不满足,有材料就能合成(仅对原版配方有效)
-        if (Config.IgnoreStationRequirements && !e.MeetsTileConditions)
+        // 如果开启"忽略合成站要求"且遇到合成站条件不满足
+        if (Config.IgnoreStationRequirements && !e.MeetTile)
         {
-            e.MeetsConditions = e.MeetsMaterialConditions;
+            e.Conditions = e.MeetMaterial; // 有材料就能合成(仅对原版配方有效)
             return;
         }
 
         if (Config.UnlockAllRecipes) // 解锁所有配方
         {
-            e.MeetsConditions = true;
+            e.Conditions = true;
         }
     }
     #endregion

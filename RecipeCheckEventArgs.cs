@@ -1,6 +1,6 @@
-﻿using MonoMod.RuntimeDetour;
+﻿using System.Reflection;
+using MonoMod.RuntimeDetour;
 using Newtonsoft.Json;
-using System.Reflection;
 using Terraria;
 using Terraria.GameContent.Events;
 using Terraria.ID;
@@ -111,26 +111,26 @@ public static class RecipeHooks
             // 跳过空配方
             if (Recipe.createItem.type == 0) continue;
 
-            // 检查工作站条件
-            bool MeetsTileConditions = PlayerMeetsTileRequirements!(plr, Recipe);
+            // 检查合成站条件
+            bool MeetsTile = PlayerMeetsTileRequirements!(plr, Recipe);
 
             // 检查环境条件
-            bool MeetsEnvironmentConditions = PlayerMeetsEnvironmentConditions!(plr, Recipe);
+            bool Environment = PlayerMeetsEnvironmentConditions!(plr, Recipe);
 
             // 检查材料是否足够
-            bool MeetsMaterialConditions = Recipe.CollectedEnoughItemsToCraftRecipeNew(Recipe);
+            bool Material = Recipe.CollectedEnoughItemsToCraftRecipeNew(Recipe);
 
             // 初始条件检查结果
-            bool MeetsConditions = MeetsTileConditions && MeetsEnvironmentConditions && MeetsMaterialConditions;
+            bool Conditions = MeetsTile && Environment && Material;
 
             // 创建事件参数
-            var args = new RecipeCheckEventArgs(Recipe, i, plr, MeetsConditions, MeetsTileConditions, MeetsMaterialConditions, MeetsEnvironmentConditions, HasItems, ActiveRecipe, ActiveRecipeY);
+            var args = new RecipeCheckEventArgs(Recipe, i, plr, Conditions, MeetsTile, Material, Environment, HasItems, ActiveRecipe, ActiveRecipeY);
 
             // 触发自定义配方检查事件
             OnRecipeCheck?.Invoke(args);
 
             // 使用事件处理后的结果
-            if (args.MeetsConditions)
+            if (args.Conditions)
             {
                 AddToAvailableRecipes(i);
             }
@@ -290,36 +290,18 @@ public static class RecipeHooks
     #endregion
 
     #region 复用已收集的物品
-    public static bool HasResultItemForRecipe(Recipe recipe, Dictionary<int, int> HasItems)
+    public static bool HasMaterial(Recipe recipe, Dictionary<int, int> HasItems)
     {
         foreach (Item item in recipe.requiredItem)
         {
-            if (item.type <= 0) continue;
+            if (item.type is 0) continue;
 
-            // 检查物品组
-            if (RecipeGroup.recipeGroups != null)
-            {
-                foreach (var Group in RecipeGroup.recipeGroups.Values)
-                {
-                    if (Group.ValidItems.Contains(item.type))
-                    {
-                        int GroupId = Group.RegisteredId;
-                        if (!HasItems.TryGetValue(GroupId, out int GroupCount) || GroupCount < item.stack)
-                        {
-                            continue;
-                        }
-                        return true;
-                    }
-                }
-            }
-
-            // 检查普通物品
-            if (!HasItems.TryGetValue(item.type, out int itemCount) || itemCount < item.stack)
-            {
-                return false;
-            }
+            if (HasItems.TryGetValue(item.type, out int stack) &&
+                stack >= item.stack)
+                return true;
         }
-        return true;
+
+        return false;
     }
     #endregion
 
@@ -544,17 +526,17 @@ public static class RecipeHooks
             IsAlchemyRecipe = recipe.alchemy
         };
 
-        // 添加材料
-        foreach (var ingredient in recipe.requiredItem)
+        // 添加普通材料
+        foreach (var item in recipe.requiredItem)
         {
             // 跳过无效材料
-            if (ingredient.IsAir || ingredient.type <= 0 || ingredient.stack <= 0)
+            if (item.IsAir || item.type <= 0 || item.stack <= 0)
             {
                 continue;
             }
 
             // 添加材料到配方
-            myRecipe.Ingredients.Add(new IngredientData(ingredient.type, ingredient.stack));
+            myRecipe.Ingredients.Add(new IngredientData(item.type, item.stack));
         }
 
         // 添加所有合成站
@@ -632,22 +614,22 @@ public class RecipeCheckEventArgs : EventArgs
     public int Index { get; } // 配方索引
     public Recipe Recipe { get; set; }
     public Player Player { get; }
-    public bool MeetsConditions { get; set; } // 符合所有条件
-    public bool MeetsTileConditions { get; set; } // 符合合成站条件
-    public bool MeetsMaterialConditions { get; set; } //符合材料条件
-    public bool MeetsEnvironmentConditions { get; set; } //符合环境条件
+    public bool Conditions { get; set; } // 符合所有条件
+    public bool MeetTile { get; set; } // 符合合成站条件
+    public bool MeetMaterial { get; set; } //符合材料条件
+    public bool MeetEnvironment { get; set; } //符合环境条件
     public Dictionary<int, int> HasItem { get; } // 添加收集的物品数据
     public int ActiveRecipe { get; set; }
     public float ActiveRecipeY { get; set; }
-    public RecipeCheckEventArgs(Recipe recipe, int recipeIndex, Player player, bool meetsConditions, bool meetsTileConditions, bool meetsMaterialConditions, bool meetsEnvironmentConditions, Dictionary<int, int> hasItem, int activeRecipe, float activeRecipeY)
+    public RecipeCheckEventArgs(Recipe recipe, int recipeIndex, Player player, bool conditions, bool meetsTile, bool mterial, bool environment, Dictionary<int, int> hasItem, int activeRecipe, float activeRecipeY)
     {
         this.Recipe = recipe;
         this.Index = recipeIndex;
         this.Player = player;
-        this.MeetsConditions = meetsConditions;
-        this.MeetsTileConditions = meetsTileConditions;
-        this.MeetsMaterialConditions = meetsMaterialConditions;
-        this.MeetsEnvironmentConditions = meetsEnvironmentConditions;
+        this.Conditions = conditions;
+        this.MeetTile = meetsTile;
+        this.MeetMaterial = mterial;
+        this.MeetEnvironment = environment;
         this.HasItem = hasItem;
         this.ActiveRecipe = activeRecipe;
         this.ActiveRecipeY = activeRecipeY;
@@ -933,6 +915,8 @@ public class IngredientData
     public int ItemId { get; set; }
     [JsonProperty("物品数量", Order = 1)]
     public int Stack { get; set; }
+
+    public IngredientData() { }
     public IngredientData(int itemId, int stack)
     {
         ItemId = itemId;
