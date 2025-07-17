@@ -114,6 +114,10 @@ internal class Configuration
 
     [JsonProperty("启用自定义配方", Order = 21)]
     public bool CustomRecipesEnabled { get; set; } = true;
+    [JsonProperty("添加更多配方槽位", Order = 21)]
+    public bool ModifiedMaxRecipesEnabled { get; set; } = true;
+    [JsonProperty("预设配方槽位数量", Order = 21)]
+    public int MaxRecipes { get; set; } = 6000;
     [JsonProperty("启用隐藏原版配方", Order = 21)]
     public bool HideOriginalRecipe { get; set; } = true;
     [JsonProperty("解锁所有配方", Order = 21)]
@@ -262,6 +266,8 @@ internal class Configuration
         TaxCollectorRewards = TaxCollectorRewardsSetDefault();
 
         CustomRecipesEnabled = true;
+        ModifiedMaxRecipesEnabled = true;
+        MaxRecipes = 6000;
         HideOriginalRecipe = true;
         UnlockAllRecipes = false;
         IgnoreStationRequirements = false;
@@ -365,6 +371,762 @@ internal class Configuration
 
            new CustomRecipeData()
            {
+               ItemID = ItemID.LifeformAnalyzer, // 生命体分析仪
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Radar) // 雷达
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Radar, // 雷达
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.TallyCounter) // 杀怪计数器
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.TallyCounter, // 杀怪计数器
+               Stack = 1,
+               unlock = new List<string>() { "骷髅王" },
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.LifeformAnalyzer) // 生命体分析仪
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.DPSMeter, // 每秒伤害计数器
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.MetalDetector) // 金属探测器
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Stopwatch, // 秒表
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DPSMeter) // 每秒伤害计数器
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.MetalDetector, // 金属探测器
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Stopwatch) // 秒表
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.MagicConch, // 魔法海螺
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DemonConch) // 恶魔海螺
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.DemonConch, // 恶魔海螺
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.MagicConch) // 魔法海螺
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.SunStone, // 太阳石
+               Stack = 1,
+               Tile = new List<int>() { TileID.CrystalBall }, // 水晶球
+               unlock = new List<string>() { "石巨人" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.MoonStone) // 月亮石
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.MoonStone,  // 月亮石
+               Stack = 1,
+               Tile = new List<int>() { TileID.CrystalBall }, // 水晶球
+               unlock = new List<string>() { "满月" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.SunStone) // 太阳石
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ArtisanLoaf,  // 工匠面包
+               Stack = 1,
+               Tile = new List<int>() { TileID.Anvils,TileID.MythrilAnvil }, // 铁砧 与 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.TorchGodsFavor) // 火把神的恩赐
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.TorchGodsFavor,  // 火把神的恩赐
+               Stack = 1,
+               Tile = new List<int>() { TileID.Anvils,TileID.MythrilAnvil }, // 铁砧 与 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ArtisanLoaf) // 工匠面包
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.MoneyTrough,  // 钱币槽
+               Stack = 1,
+               unlock = new List<string>() { "血月","鹿角怪" },
+               Tile = new List<int>() { TileID.Anvils, TileID.MythrilAnvil }, // 铁砧 与 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ChesterPetItem) // 眼骨
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ChesterPetItem,  // 眼骨
+               Stack = 1,
+               unlock = new List<string>() { "鹿角怪" },
+               Tile = new List<int>() { TileID.Anvils, TileID.MythrilAnvil }, // 铁砧 与 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.MoneyTrough) // 钱币槽
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ShadowFlameBow,  // 暗影焰弓
+               Stack = 1,
+               unlock = new List<string>() { "困难模式","哥布林入侵" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ShadowFlameHexDoll) // 暗影焰妖娃
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ShadowFlameHexDoll,  // 暗影焰妖娃
+               Stack = 1,
+               unlock = new List<string>() { "困难模式","哥布林入侵" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ShadowFlameKnife) // 暗影焰刀
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ShadowFlameKnife,  // 暗影焰刀
+               Stack = 1,
+               unlock = new List<string>() { "困难模式","哥布林入侵" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ShadowFlameBow)  // 暗影焰弓
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.CrossNecklace,  // 十字项链
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.PhilosophersStone)  // 点金石
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.PhilosophersStone,  // 点金石
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.CrossNecklace)  // 十字项链
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.MagicDagger,  // 魔法飞刀
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.CrystalSerpent)  // 水晶蛇
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.CrystalSerpent,  // 点金石
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.MagicDagger)  // 水晶蛇
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Uzi,  // 鳄鱼机关枪
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Gatligator)  // 乌兹冲锋枪
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Gatligator,  // 乌兹冲锋枪
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Uzi)  // 鳄鱼机关枪
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.DaedalusStormbow,  // 代达罗斯风暴弓
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.CrystalVileShard)  // 魔晶碎块
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.CrystalVileShard,  // 魔晶碎块
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.FlyingKnife)  // 飞刀
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.FlyingKnife,  // 魔晶碎块
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil }, // 秘银砧
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DaedalusStormbow)  // 代达罗斯风暴弓
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.DD2PhoenixBow,  // 幽灵凤凰
+               Stack = 1,
+               unlock = new List<string>() { "一王后" },
+               Tile = new List<int>() { TileID.MythrilAnvil },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DD2SquireDemonSword)  // 地狱烙印
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.DD2SquireDemonSword,  // 地狱烙印
+               Stack = 1,
+               unlock = new List<string>() { "一王后" },
+               Tile = new List<int>() { TileID.MythrilAnvil },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DD2PhoenixBow)  // 幽灵凤凰
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.DarkShard,  // 暗黑碎块
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.LightShard)  // 光明碎块
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.LightShard,  // 光明碎块
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DarkShard)  // 暗黑碎块
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.AncientBattleArmorMaterial,  // 禁戒碎片
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.FrostCore)  // 寒霜核
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.FrostCore,  // 寒霜核
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.MythrilAnvil },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.AncientBattleArmorMaterial)  // 禁戒碎片
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Ichor,  // 灵液
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.CursedFlame)  // 诅咒焰
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.CursedFlame,  // 诅咒焰
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Ichor)  // 灵液
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.CursedFlame,  // 诅咒焰
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Ichor)  // 灵液
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Vertebrae,  // 椎骨
+               Stack = 1,
+               Tile = new List<int>() { TileID.DemonAltar }, // 恶魔祭坛
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.RottenChunk)  // 腐肉
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.RottenChunk,  // 腐肉
+               Stack = 1,
+               Tile = new List<int>() { TileID.DemonAltar }, // 恶魔祭坛
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Vertebrae)  // 椎骨
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ViciousMushroom,  // 毒蘑菇
+               Stack = 1,
+               Tile = new List<int>() { TileID.DemonAltar }, // 恶魔祭坛
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.VileMushroom)  // 魔菇
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.VileMushroom,  // 魔菇
+               Stack = 1,
+               Tile = new List<int>() { TileID.DemonAltar }, // 恶魔祭坛
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ViciousMushroom)  // 毒蘑菇
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.CloudinaBottle,  // 云朵瓶
+               Stack = 1,
+               Tile = new List<int>() { TileID.WorkBenches }, // 工作台
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.TsunamiInABottle)  // 海啸瓶
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.BlizzardinaBottle,  // 暴雪瓶
+               Stack = 1,
+               Tile = new List<int>() { TileID.WorkBenches }, // 工作台
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.CloudinaBottle)  // 云朵瓶
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.SandstorminaBottle,  // 沙暴瓶
+               Stack = 1,
+               Tile = new List<int>() { TileID.WorkBenches }, // 工作台
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.BlizzardinaBottle)  // 暴雪瓶
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.TsunamiInABottle,  // 海啸瓶
+               Stack = 1,
+               Tile = new List<int>() { TileID.WorkBenches }, // 工作台
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.SandstorminaBottle)  // 沙暴瓶
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.UnicornHorn,  // 独角兽角
+               Stack = 1,
+               unlock = new List<string>() { "困难模式" },
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.PixieDust)  // 妖精尘
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.SharkFin,  // 鲨鱼鳍
+               Stack = 1,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Feather)  // 羽毛
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Feather,  // 羽毛
+               Stack = 3,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.SharkFin)  // 鲨鱼鳍
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Tombstone,  // 墓石
+               Stack = 1,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.StoneBlock,30)  // 石块
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.NaturesGift,  // 大自然恩赐
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.JungleRose)  // 丛林玫瑰
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.JungleSpores,  // 丛林孢子
+               Stack = 2,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Stinger)  // 毒刺
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Vine,  // 藤蔓
+               Stack = 2,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.JungleSpores)  // 丛林孢子
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Aglet,  // 金属带扣
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.AnkletoftheWind)  // 疾风脚镯
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.AnkletoftheWind,  // 疾风脚镯
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Aglet)  // 金属带扣
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.PaladinsShield,  // 圣骑士护盾
+               Stack = 1,
+               Tile = new List<int>() { TileID.MythrilAnvil },
+               unlock = new List<string>(){ "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.PaladinsHammer)  // 圣骑士锤
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.FlinxFur,  // 小雪怪皮毛
+               Stack = 2,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.TatteredCloth)  // 破布
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.TatteredCloth,  // 破布
+               Stack = 2,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.FlinxFur)  // 小雪怪皮毛
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.SailfishBoots,  // 航鱼靴
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.HermesBoots)  // 赫尔墨斯靴
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.BlackBelt,  // 黑腰带
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.Tabi)  // 分趾厚底袜
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.Tabi,  // 分趾厚底袜
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.BlackBelt)  // 黑腰带
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ShoeSpikes,  // 鞋钉
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ClimbingClaws)  // 攀爬爪
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ClimbingClaws,  // 攀爬爪
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ShoeSpikes)  // 鞋钉
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.BrickLayer,  // 砌砖刀
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ExtendoGrip)  // 加长握爪
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ExtendoGrip,  // 加长握爪
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.PaintSprayer)  // 自动喷漆器
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.PaintSprayer,  // 自动喷漆器
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.PortableCementMixer)  // 便携式水泥搅拌机
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.PortableCementMixer,  // 便携式水泥搅拌机
+               Stack = 1,
+               Tile = new List<int>() { TileID.TinkerersWorkbench },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.BrickLayer)  // 砌砖刀
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.DryBomb,  // 干炸弹
+               Stack = 2,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.ScarabBomb)  // 甲虫炸弹
+               },
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ScarabBomb,  // 甲虫炸弹
+               Stack = 2,
+               Tile = new List<int>() { TileID.WorkBenches },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DryBomb)  // 干炸弹
+               },
+           },
+
+           new CustomRecipeData()
+           {
                ItemID = ItemID.GoldenKey,  // 5个金钥匙
                Stack = 5,
                Tile = new List<int>() { TileID.Hellforge },
@@ -391,6 +1153,7 @@ internal class Configuration
                ItemID = ItemID.LifeFruit,  // 生命果
                Stack = 1,
                Tile = new List<int>() { TileID.LihzahrdFurnace },
+               unlock = new List<string>() { "一王后" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.LifeCrystal)
@@ -424,7 +1187,7 @@ internal class Configuration
            {
                ItemID = ItemID.MushroomGrassSeeds,  // 蘑菇草种子
                Stack = 1,
-               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.JungleGrassSeeds)
@@ -435,7 +1198,7 @@ internal class Configuration
            {
                ItemID = ItemID.JungleGrassSeeds,  // 丛林草种子
                Stack = 1,
-               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.MushroomGrassSeeds)
@@ -446,7 +1209,7 @@ internal class Configuration
            {
                ItemID = ItemID.HerbBag,  // 草药袋
                Stack = 1,
-               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.DaybloomSeeds),
@@ -463,7 +1226,7 @@ internal class Configuration
            {
                ItemID = ItemID.Daybloom,  // 太阳花
                Stack = 1,
-               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.DaybloomSeeds,3)
@@ -474,7 +1237,7 @@ internal class Configuration
            {
                ItemID = ItemID.Moonglow,  // 月光草
                Stack = 1,
-               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.MoonglowSeeds,3)
@@ -485,7 +1248,7 @@ internal class Configuration
            {
                ItemID = ItemID.Deathweed,  // 死亡草
                Stack = 1,
-               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.DeathweedSeeds,3)
@@ -496,7 +1259,7 @@ internal class Configuration
            {
                ItemID = ItemID.Waterleaf,  // 幌菊
                Stack = 1,
-               Tile = new List <int>() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.WaterleafSeeds,3)
@@ -507,7 +1270,7 @@ internal class Configuration
            {
                ItemID = ItemID.Fireblossom,  // 火焰花
                Stack = 1,
-               Tile = new List < int >() { TileID.Bottles, TileID.AlchemyTable },
+               unlock = new List<string>() { "炼药" },
                Material = new List<MaterialData>()
                {
                    new MaterialData(ItemID.FireblossomSeeds,3)
@@ -524,6 +1287,79 @@ internal class Configuration
                    new MaterialData(ItemID.ShiverthornSeeds,3)
                }
            },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.PiranhaGun, // 食人鱼枪
+               Stack = 1,
+               Tile = new List < int >() { TileID.MythrilAnvil },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.JungleKey)
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.ScourgeoftheCorruptor, // 腐化者之戟（腐化灾兵）
+               Stack = 1,
+               Tile = new List < int >() { TileID.MythrilAnvil },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.CorruptionKey)
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.VampireKnives, // 吸血鬼刀
+               Stack = 1,
+               Tile = new List < int >() { TileID.MythrilAnvil },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.CrimsonKey)
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.RainbowGun, // 彩虹枪
+               Stack = 1,
+               Tile = new List < int >() { TileID.MythrilAnvil },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.HallowedKey)
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.StaffoftheFrostHydra, // 寒霜九头蛇法杖
+               Stack = 1,
+               Tile = new List < int >() { TileID.MythrilAnvil },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.FrozenKey)
+               }
+           },
+
+           new CustomRecipeData()
+           {
+               ItemID = ItemID.StormTigerStaff, // 沙漠虎杖
+               Stack = 1,
+               Tile = new List < int >() { TileID.MythrilAnvil },
+               unlock = new List<string>() { "世纪之花" },
+               Material = new List<MaterialData>()
+               {
+                   new MaterialData(ItemID.DungeonDesertKey)
+               }
+           },
+
         };
     }
     #endregion

@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using System.Reflection;
 using TerraAngel;
 using TerraAngel.Config;
 using TerraAngel.Input;
@@ -38,7 +37,7 @@ public class MyPlugin(string path) : Plugin(path)
         // 注册配方事件
         RecipeHooks.Register();
         RecipeHooks.OnRecipeCheck += OnRecipeCheck; // 配方检查事件
-        RecipeHooks.BeforeRecipeCheck += BuildCustomRecipes; // 配方查找前事件
+        RecipeHooks.BeforeRecipeCheck += RecipeHooks.BuildCustomRecipes; // 配方查找前事件
 
         // 注册图格编辑事件
         TileEditEventSystem.Register();
@@ -82,7 +81,7 @@ public class MyPlugin(string path) : Plugin(path)
         // 卸载配方事件
         RecipeHooks.Dispose();
         RecipeHooks.OnRecipeCheck -= OnRecipeCheck;
-        RecipeHooks.BeforeRecipeCheck -= BuildCustomRecipes;
+        RecipeHooks.BeforeRecipeCheck -= RecipeHooks.BuildCustomRecipes;
 
         //卸载图格编辑事件
         TileEditEventSystem.Dispose();
@@ -351,77 +350,6 @@ public class MyPlugin(string path) : Plugin(path)
         if (Config.UnlockAllRecipes) // 解锁所有配方
         {
             e.Conditions = true;
-        }
-    }
-    #endregion
-
-    #region 创建自定义配方（配方查找前事件方法）
-    private void BuildCustomRecipes()
-    {
-        // 清空缓存集合
-        CustomRecipeItems.Clear();
-        CustomRecipeIndexes.Clear();
-
-        // 检查所有自定义配方的索引有效性
-        foreach (var data in Config.CustomRecipes)
-        {
-            // 只有当配方无效时才重置索引
-            if (data.Index == -1 ||
-                data.Index >= Recipe.maxRecipes ||
-                Main.recipe[data.Index].createItem.type != data.ItemID)
-            {
-                data.Index = -1;
-            }
-            else
-            {
-                // 记录有效的自定义配方
-                CustomRecipeIndexes.Add(data.Index);
-                CustomRecipeItems.Add(data.ItemID);
-            }
-        }
-
-        int count = 0;
-        bool full = false;
-
-        foreach (var data in Config.CustomRecipes)
-        {
-            // 如果配方已经分配了有效索引，跳过
-            if (full) break;
-            if (data.Index != -1) continue;
-
-            // 检查是否已存在相同的配方
-            if (RecipeHooks.ExistsRecipe(data))
-            {
-                // 找到已存在的相同配方并更新索引
-                int existing = RecipeHooks.FindExistingRecipeIndex(data);
-                if (existing != -1)
-                {
-                    // 记录新添加的配方(用于比较原版物品)
-                    RecipeHooks.AddRecipeIndex(data, existing);
-                    continue;
-                }
-            }
-
-            // 查找空槽位
-            int slot = RecipeHooks.FindEmptyRecipeSlot();
-            if (slot == -1)
-            {
-                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 [c/9DA2E7:{Lang.GetItemNameValue(data.ItemID)}] 的配方", Color.Red);
-                full = true; // 标记槽位已满
-                continue;
-            }
-
-            // 创建新配方
-            Recipe recipe = RecipeHooks.CreateRecipeFromData(data);
-            Main.recipe[slot] = recipe;
-            RecipeHooks.AddRecipeIndex(data, slot);
-            count++;
-        }
-
-        // 记录添加的配方数量
-        if (count > 0)
-        {
-            ClientLoader.Chat.WriteLine($"已加载 [c/9DA2E7:{count}] 个自定义配方", color);
         }
     }
     #endregion

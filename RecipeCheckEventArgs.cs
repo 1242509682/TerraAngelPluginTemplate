@@ -1,6 +1,7 @@
-﻿using System.Reflection;
-using MonoMod.RuntimeDetour;
+﻿using MonoMod.RuntimeDetour;
 using Newtonsoft.Json;
+using System.Reflection;
+using TerraAngel;
 using Terraria;
 using Terraria.GameContent.Events;
 using Terraria.ID;
@@ -37,6 +38,9 @@ public static class RecipeHooks
         // 查找配方（用于决定配方是否显示）
         MethodInfo findRecipes = typeof(Recipe).GetMethod("FindRecipes", BindingFlags.Public | BindingFlags.Static, [typeof(bool)])!;
         FindRecipesHook = new Hook(findRecipes, OnFindRecipes);
+
+        // 增加配方数
+        AddMaxRecipes();
     }
     #endregion
 
@@ -317,10 +321,79 @@ public static class RecipeHooks
     private static Dictionary<int, int> GetCollectedItems()
     {
         // 通过反射获取 Recipe._ownedItems 字段
-        var ownedItems = typeof(Recipe).GetField("_ownedItems",
-            BindingFlags.NonPublic | BindingFlags.Static);
+        var ownedItems = typeof(Recipe).GetField("_ownedItems", BindingFlags.NonPublic | BindingFlags.Static);
+        return (Dictionary<int, int>)ownedItems?.GetValue(null)!;
+    }
+    #endregion
 
-        return (Dictionary<int, int>)ownedItems?.GetValue(null)! ?? new Dictionary<int, int>();
+    #region 创建自定义配方（配方查找前事件方法）
+    public static void BuildCustomRecipes()
+    {
+        // 清空缓存集合
+        CustomRecipeItems.Clear();
+        CustomRecipeIndexes.Clear();
+
+        // 检查所有自定义配方的索引有效性
+        foreach (var data in Config.CustomRecipes)
+        {
+            // 只有当配方无效时才重置索引
+            if (data.Index == -1 ||
+                data.Index >= Recipe.maxRecipes ||
+                Main.recipe[data.Index].createItem.type != data.ItemID)
+            {
+                data.Index = -1;
+            }
+            else
+            {
+                // 记录有效的自定义配方
+                CustomRecipeIndexes.Add(data.Index);
+                CustomRecipeItems.Add(data.ItemID);
+            }
+        }
+
+        int count = 0;
+        bool full = false;
+
+        foreach (var data in Config.CustomRecipes)
+        {
+            // 如果配方已经分配了有效索引，跳过
+            if (full) break;
+            if (data.Index != -1) continue;
+
+            // 检查是否已存在相同的配方
+            if (ExistsRecipe(data))
+            {
+                // 找到已存在的相同配方并更新索引
+                int existing = FindExistingRecipeIndex(data);
+                if (existing != -1)
+                {
+                    // 记录新添加的配方(用于比较原版物品)
+                    AddRecipeIndex(data, existing);
+                    continue;
+                }
+            }
+
+            // 查找空槽位
+            int slot = FindEmptyRecipeSlot();
+            if (slot == -1)
+            {
+                ClientLoader.Chat.WriteLine($"错误：配方槽位不足，无法添加 [c/9DA2E7:{Lang.GetItemNameValue(data.ItemID)}] 的配方", color);
+                full = true; // 标记槽位已满
+                continue;
+            }
+
+            // 创建新配方
+            Recipe recipe = CreateRecipeFromData(data);
+            Main.recipe[slot] = recipe;
+            AddRecipeIndex(data, slot);
+            count++;
+        }
+
+        // 记录添加的配方数量
+        if (count > 0)
+        {
+            ClientLoader.Chat.WriteLine($"已加载 [c/9DA2E7:{count}] 个自定义配方", color);
+        }
     }
     #endregion
 
@@ -746,6 +819,89 @@ public static class RecipeHooks
         "霜月", "血月", "雨天", "白天", "晚上", "大风天", "万圣节", "圣诞节",
         "派对", "2020", "2021", "ftw", "ntb", "dst", "颠倒", "陷阱", "天顶",
     };
+    #endregion
+
+    #region 添加更多配方槽位方法
+    public static void AddMaxRecipes()
+    {
+        try
+        {
+            // 确保新容量大于当前最大配方数
+            if (Config.MaxRecipes <= Recipe.maxRecipes) return;
+
+            // 保存旧的最大值
+            int oldMax = Recipe.maxRecipes;
+
+            // 更新静态字段
+            typeof(Recipe).GetField("maxRecipes", BindingFlags.Public | BindingFlags.Static)?.SetValue(null, Config.MaxRecipes);
+
+            // 扩展主配方数组
+            if (Main.recipe == null)
+            {
+                Main.recipe = new Recipe[Config.MaxRecipes];
+            }
+            else
+            {
+                Array.Resize(ref Main.recipe, Config.MaxRecipes);
+            }
+
+            // 扩展其他相关数组
+            Array.Resize(ref Main.availableRecipe, Config.MaxRecipes);
+            Array.Resize(ref Main.availableRecipeY, Config.MaxRecipes);
+
+            // 初始化新创建的槽位
+            for (int i = oldMax; i < Config.MaxRecipes; i++)
+            {
+                if (Main.recipe[i] == null)
+                {
+                    Main.recipe[i] = new Recipe();
+                }
+            }
+
+            ClientLoader.Chat.WriteLine($"配方槽位已扩展到: {Config.MaxRecipes}");
+        }
+        catch (Exception ex)
+        {
+            ClientLoader.Chat.WriteLine($"扩展配方槽位失败: {ex.Message}");
+        }
+    }
+    #endregion
+
+    #region 获取当前配方使用情况
+    public static (int used, int total) GetRecipeUsage()
+    {
+        int used = 0;
+
+        // 动态获取实际槽位总数
+        int actualTotal = GetActualMaxRecipes();
+
+        // 确保不超过数组实际长度
+        int maxToCheck = Math.Min(actualTotal, Main.recipe.Length);
+
+        for (int i = 0; i < maxToCheck; i++)
+        {
+            if (IsRecipeSlotUsed(i))
+            {
+                used++;
+            }
+        }
+
+        return (used, actualTotal);
+    }
+
+    private static int GetActualMaxRecipes()
+    {
+        // 如果启用了扩展，使用配置的值，否则使用默认值
+        return Config.ModifiedMaxRecipesEnabled ? Config.MaxRecipes : 3000;
+    }
+
+    private static bool IsRecipeSlotUsed(int index)
+    {
+        // 安全检查槽位是否被使用
+        return index < Main.recipe.Length &&
+               Main.recipe[index] != null &&
+               Main.recipe[index].createItem.type > 0;
+    }
     #endregion
 }
 
