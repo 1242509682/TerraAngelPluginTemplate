@@ -1,9 +1,12 @@
-﻿using Microsoft.Xna.Framework;
+﻿using System.Numerics;
+using ImGuiNET;
+using Microsoft.Xna.Framework;
 using TerraAngel;
 using TerraAngel.Config;
 using TerraAngel.Input;
 using TerraAngel.Plugin;
 using TerraAngel.Tools;
+using TerraAngel.Utility;
 using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
@@ -15,7 +18,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 1, 6);
+    public Version Version => new(1, 1, 8);
     #endregion
 
     #region 注册与卸载
@@ -31,14 +34,6 @@ public class MyPlugin(string path) : Plugin(path)
         // 传送枪弹幕AI样式最大距离修改
         FixPortalDistanceArgs.Register();
 
-        // 注册移动NPC住房事件
-        NPCMoveRoomArgs.Register();
-
-        // 注册配方事件
-        RecipeHooks.Register();
-        RecipeHooks.OnRecipeCheck += OnRecipeCheck; // 配方检查事件
-        RecipeHooks.BeforeRecipeCheck += RecipeHooks.BuildCustomRecipes; // 配方查找前事件
-
         // 注册图格编辑事件
         TileEditEventSystem.Register();
         TileEditEventSystem.OnTileKill += OnTileEdit;
@@ -46,9 +41,7 @@ public class MyPlugin(string path) : Plugin(path)
         // 注册NPC更新事件
         NPCEventSystem.Register();
         NPCEventSystem.OnNPCUpdate += OnUpdateNPC;
-
-        // 添加额外饰品的Mono注册钩子
-        ExtraAccessory.Register();
+        NPCEventSystem.OnNPCStrike += ApplyDamageMultiplier;
 
         // 添加反重力药水的Mono钩子
         IgnoreGravity.Register();
@@ -58,6 +51,8 @@ public class MyPlugin(string path) : Plugin(path)
 
         // 注册UI
         ToolManager.AddTool<UITool>();
+
+        AutoFishTool.Load(); // 自动钓鱼注册钩子
 
         // 向控制台添加命令
         ClientLoader.Console.AddCommand("reload", ReloadConfig, "重载配置文件");
@@ -75,14 +70,6 @@ public class MyPlugin(string path) : Plugin(path)
         // 传送枪弹幕AI样式最大距离修改
         FixPortalDistanceArgs.Dispose();
 
-        // 卸载移动NPC住房事件
-        NPCMoveRoomArgs.Dispose();
-
-        // 卸载配方事件
-        RecipeHooks.Dispose();
-        RecipeHooks.OnRecipeCheck -= OnRecipeCheck;
-        RecipeHooks.BeforeRecipeCheck -= RecipeHooks.BuildCustomRecipes;
-
         //卸载图格编辑事件
         TileEditEventSystem.Dispose();
         TileEditEventSystem.OnTileKill -= OnTileEdit;
@@ -90,12 +77,12 @@ public class MyPlugin(string path) : Plugin(path)
         // 卸载NPC更新事件
         NPCEventSystem.Dispose();
         NPCEventSystem.OnNPCUpdate -= OnUpdateNPC;
+        NPCEventSystem.OnNPCStrike -= ApplyDamageMultiplier;
 
         // 卸载插件时清理UI
         ToolManager.RemoveTool<UITool>();
 
-        // 卸载额外饰品的Mono注册钩子
-        ExtraAccessory.Dispose();
+        AutoFishTool.Unload(); // 自动钓鱼卸载钩子
 
         // 卸载反重力药水的Mono钩子
         IgnoreGravity.Dispose();
@@ -162,6 +149,28 @@ public class MyPlugin(string path) : Plugin(path)
         //使用物品时伤害鼠标范围内的NPC
         Utils.UseItemStrikeNPC(Config.MouseStrikeNPC);
 
+        // ========== 绘制鼠标伤害范围圆形 ==========
+        if (Config.MouseStrikeNPC && !Main.mapFullscreen)
+        {
+            // 获取背景绘制列表
+            ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
+
+            // 鼠标世界坐标（屏幕坐标 + 屏幕偏移）
+            Vector2 mouseWorld = InputSystem.MousePosition + Main.screenPosition;
+
+            // 半径：格数 * 16（1格 = 16像素）
+            float radius = Config.MouseStrikeNPCRange * 16f;
+
+            // 世界坐标转屏幕坐标（供ImGui绘制）
+            Vector2 screenCenter = Util.WorldToScreenWorld(mouseWorld);
+            Vector2 screenEdge = Util.WorldToScreenWorld(mouseWorld + new Vector2(radius, 0));
+            float screenRadius = screenCenter.Distance(screenEdge);
+
+            // 半透明红色圆形（线框）
+            uint color = Color.Red.WithAlpha(0.5f).PackedValue;
+            drawList.AddCircle(screenCenter, screenRadius, color, 32, 2f);
+        }
+
         //快捷键I 自动应用修改物品
         Utils.ModifyItem(InputSystem.IsKeyPressed(Config.ItemModifyKey));
 
@@ -177,16 +186,6 @@ public class MyPlugin(string path) : Plugin(path)
         {
             SoundEngine.PlaySound(SoundID.MenuOpen);
             Utils.FavoriteAllItems(Main.LocalPlayer);
-        }
-
-        // N键切换社交栏饰品生效状态
-        if (InputSystem.IsKeyPressed(Config.SocialAccessoriesKey))
-        {
-            SoundEngine.PlaySound(SoundID.MenuOpen);
-            Config.SocialAccessory = !Config.SocialAccessory;
-            Config.Write();
-            string status = Config.SocialAccessory ? "开启" : "关闭";
-            ClientLoader.Chat.WriteLine($"社交栏饰品功能已 [c/9DA2E7:{status}]", color);
         }
 
         // 切换重力控制状态
@@ -258,6 +257,9 @@ public class MyPlugin(string path) : Plugin(path)
             string status = Config.VeinMinerEnabled ? "启用" : "禁用";
             ClientLoader.Chat.WriteLine($"连锁挖矿已 [c/9DA2E7:{status}]", Color.Yellow);
         }
+
+        // 自动钓鱼更新
+        AutoFishTool.Instance.Update();
     }
     #endregion
 
@@ -280,6 +282,16 @@ public class MyPlugin(string path) : Plugin(path)
     }
     #endregion
 
+    #region NPC伤害事件
+    private static void ApplyDamageMultiplier(object? sender, NPCStrikeEventArgs e)
+    {
+        if (Config.Enabled && Config.DamageMultiplier > 1f && e.Owner == Main.myPlayer)
+        {
+            e.Damage = (int)(e.Damage * Config.DamageMultiplier);
+        }
+    } 
+    #endregion
+
     #region 加载世界事件
     private void OnWorldLoad()
     {
@@ -296,61 +308,6 @@ public class MyPlugin(string path) : Plugin(path)
         }
 
         WorldInfo();
-    }
-    #endregion
-
-    #region 配方检查事件
-    public static HashSet<int> CustomRecipeItems = new HashSet<int>();  // 存储自定义配方结果物品ID
-    public static HashSet<int> CustomRecipeIndexes = new HashSet<int>(); // 存储自定义配方索引 用于比较原版
-    private void OnRecipeCheck(RecipeCheckEventArgs e)
-    {
-        if (!Config.Enabled) return;
-
-
-        // 自定义配方处理逻辑 
-        if (CustomRecipeIndexes.Contains(e.Index))
-        {
-            // 获取对应的自定义配方数据
-            var CustomRecipe = Config.CustomRecipes.FirstOrDefault(r => r.Index == e.Index);
-            if (CustomRecipe != null)
-            {
-                // 开启自定义配方时：
-                // 合成站使用原版遇到对应图格检查
-                // 环境使用自己定义的作为检查（已与原版环境相兼容）
-                // 材料条件使用收集到的玩家拥有物品与配方物品数量作比较
-                e.Conditions = Config.CustomRecipesEnabled && e.MeetTile
-                            && CustomRecipeData.IsRecipeUnlocked(CustomRecipe)
-                            && RecipeHooks.HasMaterial(e.Recipe, e.HasItem);
-            }
-            return;
-        }
-
-        // 隐藏原版配方
-        if (Config.HideOriginalRecipe)
-        {
-            // 如果当前配方结果物品在自定义物品列表中，但不是自定义配方
-            if (CustomRecipeItems.Contains(e.Recipe.createItem.type))
-            {
-                // 没开启自定义配方时使用原版条件检查，开启后则隐藏原版配方
-                e.Conditions = !Config.CustomRecipesEnabled
-                    && e.MeetTile // 遇到合成站（图格)
-                    && e.MeetEnvironment // 遇到环境
-                    && e.MeetMaterial; // 遇到材料
-                return;
-            }
-        }
-
-        // 如果开启"忽略合成站要求"且遇到合成站条件不满足
-        if (Config.IgnoreStationRequirements && !e.MeetTile)
-        {
-            e.Conditions = e.MeetMaterial; // 有材料就能合成(仅对原版配方有效)
-            return;
-        }
-
-        if (Config.UnlockAllRecipes) // 解锁所有配方
-        {
-            e.Conditions = true;
-        }
     }
     #endregion
 
@@ -373,7 +330,6 @@ public class MyPlugin(string path) : Plugin(path)
     {
         ClientLoader.Console.WriteLine($"\n《世界信息》");
         ClientLoader.Console.WriteLine($"世界名称: {Main.worldName}", color);
-        ClientLoader.Console.WriteLine($"世界种子: {WorldGen.currentWorldSeed}" + "(仅显示客户端最后加载世界的种子)", Color.LightGoldenrodYellow);
         string Size = Utils.GetWorldWorldSize();
         ClientLoader.Console.WriteLine($"世界大小: {Size}", Color.LimeGreen);
         string GameMode = Utils.GetWorldGameMode();

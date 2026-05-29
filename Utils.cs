@@ -1,9 +1,10 @@
-﻿using Microsoft.Xna.Framework;
-using ReLogic.Threading;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Reflection;
+using Microsoft.Xna.Framework;
+using ReLogic.Threading;
 using TerraAngel;
 using TerraAngel.Input;
+using TerraAngel.Net;
 using Terraria;
 using Terraria.Audio;
 using Terraria.DataStructures;
@@ -165,13 +166,12 @@ internal class Utils
             {
                 var npc = Main.npc[index];
                 npc.netUpdate = true;
-                npc.netUpdate2 = true;
                 NetMessage.SendData(MessageID.SyncNPC, -1, -1, null, index);
             }
         }
     }
 
-    // 获取随机清除图格位置
+    // 获取随机图格位置
     public static void GetRandomClearTileWithInRange(int startTileX, int startTileY, int tileXRange, int tileYRange, out int tileX, out int tileY)
     {
         int num = 0;
@@ -392,7 +392,8 @@ internal class Utils
     #region 获取连锁破坏图格的物品属性
     public static Item GetItemFromTile(int x, int y)
     {
-        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _);
+        bool NoPrefix;
+        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _,out NoPrefix);
         Item item = new();
         item.SetDefaults(type);
         item.stack = stack;
@@ -1173,10 +1174,10 @@ internal class Utils
     {
         for (int i = 0; i < Main.maxItems; i++)
         {
-            Item item = Main.item[i];
+            var item = Main.item[i];
 
             // 检查物品是否活跃且是宝藏袋
-            if (!item.active || !ItemID.Sets.BossBag[item.type]) continue;
+            if (!item.active || !ItemID.Sets.BossBag[item.inner.type]) continue;
 
             return item.position;
         }
@@ -1563,7 +1564,10 @@ internal class Utils
             matchingPreset.ApplyTo(item);
 
             // 更新物品状态
-            item.UpdateItem(item.whoAmI);
+            var WorldItem = new WorldItem();
+            WorldItem.SetDefaults(item.type);
+            item = WorldItem.inner;
+            WorldItem.UpdateItem(WorldItem.whoAmI);
             plr.ItemCheck();
 
             ClientLoader.Chat.WriteLine($"已应用预设: {matchingPreset.Name}", Color.Green);
@@ -1677,25 +1681,12 @@ internal class Utils
         {
             if (npc == null) continue;
 
-            if (Config.MouseStrikeNPCVel > 0)
+            var damage = Config.MouseStrikeNPCVel > 0 ? Config.MouseStrikeNPCVel : plr.HeldItem.damage;
+            plr.ApplyDamageToNPC(npc, damage, plr.HeldItem.knockBack, plr.direction, plr.HeldItem.crit > 0); // 应用伤害到NPC
+            if (Main.netMode is 2)
             {
-                npc.StrikeNPC(Config.MouseStrikeNPCVel, 0, 0, false, false, false);
-                plr.ApplyDamageToNPC(npc, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit > 0); // 应用伤害到NPC
-                if (Main.netMode is 2)
-                {
-                    npc.netUpdate = true; // 更新网络状态
-                    NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, Config.MouseStrikeNPCVel, 0, 0, plr.HeldItem.crit);
-                }
-            }
-            else
-            {
-                npc.StrikeNPC(plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, false, false, false);
-                plr.ApplyDamageToNPC(npc, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit > 0); // 应用伤害到NPC
-                if (Main.netMode is 2)
-                {
-                    npc.netUpdate = true; // 更新网络状态
-                    NetMessage.SendData(MessageID.DamageNPC, -1, -1, Terraria.Localization.NetworkText.Empty, npc.whoAmI, plr.HeldItem.damage, plr.HeldItem.knockBack, plr.HeldItem.direction, plr.HeldItem.crit);
-                }
+                SpecialNetMessage.SendPlayerControl(npc.position);
+                NetMessage.TrySendData(MessageID.StrikeNPCWithHeldItem, -1, -1, NetworkText.Empty, npc.whoAmI, Main.myPlayer);
             }
         }
 
@@ -1728,8 +1719,8 @@ internal class Utils
         // 反转收藏模式（每次调用切换模式）
         isFavoriteMode = !isFavoriteMode;
 
-        // 遍历玩家背包（0-50是主背包）
-        for (int i = 0; i < 50; i++)
+        // 遍历玩家背包（10-50是主背包）
+        for (int i = 10; i < 50; i++)
         {
             Item item = plr.inventory[i];
 
@@ -1883,7 +1874,7 @@ internal class Utils
             if (plr.talkNPC == whoAmI)
             {
                 // 关闭对话框
-                plr.SetTalkNPC(-1, Main.netMode is 2);
+                plr.SetTalkNPC(-1);
 
                 // 如果是渔夫 则清理聊天物品(避免任务鱼图标出现在下个npc的聊天窗口)
                 if (npc.type == NPCID.Angler)
@@ -1920,7 +1911,7 @@ internal class Utils
         //注册怪物图鉴
         Main.BestiaryTracker.Chats.RegisterChatStartWith(npc);
         // 设置玩家的对话NPC索引
-        plr.SetTalkNPC(npc.whoAmI, Main.netMode is 2);
+        plr.SetTalkNPC(npc.whoAmI);
         // 给玩家发送内容
         SendTalkText(plr, npc.whoAmI);
 
@@ -2412,7 +2403,7 @@ internal class Utils
                 AchievementsHelper.HandleAnglerService();
 
                 // 自动关闭对话框
-                plr.SetTalkNPC(-1, Main.netMode is 2);
+                plr.SetTalkNPC(-1);
                 if (Main.netMode is 2)
                     NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
             }
@@ -2482,7 +2473,7 @@ internal class Utils
                 AchievementsHelper.HandleNurseService(healCost);
                 SoundEngine.PlaySound(SoundID.Item4);
 
-                plr.SetTalkNPC(-1, Main.netMode is 2); // 自动关闭对话栏
+                plr.SetTalkNPC(-1); // 自动关闭对话栏
                 if (Main.netMode is 2)
                     NetMessage.SendData(MessageID.SyncTalkNPC, -1, -1, null, Main.myPlayer);
             }

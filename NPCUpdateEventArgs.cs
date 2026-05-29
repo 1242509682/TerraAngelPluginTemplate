@@ -10,6 +10,10 @@ public class NPCEventSystem
 {
     private static Hook? NpcUpdateHook; // 钩子
     public static event EventHandler<NPCUpdateEventArgs>? OnNPCUpdate; // NPC更新事件
+
+    private static Hook? NpcStrikeHook;  // 新增
+    public static event EventHandler<NPCStrikeEventArgs>? OnNPCStrike;  // 新增
+
     // 用于反射调用私有方法
     public static MethodInfo? OpenShopMethod;
     public static MethodInfo? HelpTextMethod;
@@ -22,6 +26,15 @@ public class NPCEventSystem
         // 创建钩子
         NpcUpdateHook = new Hook(UpdateNPC, OnUpdateNPC);
 
+        // 新增：StrikeNPC Hook
+        MethodInfo strikeNPC = typeof(NPC).GetMethod("StrikeNPC",
+            BindingFlags.Public | BindingFlags.Instance,
+            null,
+            [typeof(int), typeof(float), typeof(int), typeof(bool), typeof(bool), typeof(bool), typeof(int)],
+            null)!;
+        if (strikeNPC != null)
+            NpcStrikeHook = new Hook(strikeNPC, OnStrikeNPC);
+
         // 获取私有方法信息
         OpenShopMethod = typeof(Main).GetMethod("OpenShop", BindingFlags.Instance | BindingFlags.NonPublic, null, [typeof(int)],null);
 
@@ -32,6 +45,7 @@ public class NPCEventSystem
     {
         // 卸载钩子
         NpcUpdateHook?.Dispose();
+        NpcStrikeHook?.Dispose();  // 新增
         NpcUpdateHook = null;
         OnNPCUpdate = null;
         OpenShopMethod = null;
@@ -44,12 +58,48 @@ public class NPCEventSystem
         orig(npc, whoAmI);  // 调用原始方法
         OnNPCUpdate?.Invoke(null, new NPCUpdateEventArgs(whoAmI, npc)); // 触发事件
     }
+
+    // 新增：StrikeNPC 的钩子委托
+    private static double OnStrikeNPC(Func<NPC, int, float, int, bool, bool, bool, int, double> orig,
+        NPC npc, int damage, float knockBack, int hitDirection, bool crit, bool noEffect, bool fromNet, int owner)
+    {
+        // 先触发事件，让订阅者有机会修改 damage（注意 damage 是值类型，需要通过引用传递）
+        var args = new NPCStrikeEventArgs(npc, damage, knockBack, hitDirection, crit, noEffect, fromNet, owner);
+        OnNPCStrike?.Invoke(null, args);
+        // 使用可能被修改后的 damage
+        return orig(npc, args.Damage, args.KnockBack, args.HitDirection, args.Crit, args.NoEffect, args.FromNet, args.Owner);
+    }
 }
 
 // 使用记录类型简化事件参数
 public record NPCUpdateEventArgs(int whoAmI, NPC npc);
 
 internal record NPCInfo(int ID, string Name, bool IsTownNPC);
+
+// 伤害事件参数类
+public class NPCStrikeEventArgs : EventArgs
+{
+    public NPC NPC { get; }
+    public int Damage { get; set; }
+    public float KnockBack { get; set; }
+    public int HitDirection { get; set; }
+    public bool Crit { get; set; }
+    public bool NoEffect { get; set; }
+    public bool FromNet { get; set; }
+    public int Owner { get; set; }
+
+    public NPCStrikeEventArgs(NPC npc, int damage, float knockBack, int hitDirection, bool crit, bool noEffect, bool fromNet, int owner)
+    {
+        NPC = npc;
+        Damage = damage;
+        KnockBack = knockBack;
+        HitDirection = hitDirection;
+        Crit = crit;
+        NoEffect = noEffect;
+        FromNet = fromNet;
+        Owner = owner;
+    }
+}
 
 #region 用于税收官随机奖励物品的类
 public class RewardItem
@@ -118,7 +168,7 @@ public class ShopItem
             {
                 if (int.TryParse(item2, out var itemID))
                 {
-                    if (itemID > 0 && Main.player[plrIndex].inventory.Where((Item PItem) => PItem.netID == itemID).Count() == 0)
+                    if (itemID > 0 && Main.player[plrIndex].inventory.Where((Item PItem) => PItem.type == itemID).Count() == 0)
                     {
                         flag = false;
                     }
