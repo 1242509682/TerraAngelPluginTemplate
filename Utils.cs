@@ -393,7 +393,7 @@ internal class Utils
     public static Item GetItemFromTile(int x, int y)
     {
         bool NoPrefix;
-        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _,out NoPrefix);
+        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _, out NoPrefix);
         Item item = new();
         item.SetDefaults(type);
         item.stack = stack;
@@ -946,6 +946,24 @@ internal class Utils
     }
     #endregion
 
+    #region  传送到当前地图的最近死亡地点
+    /// <summary>
+    /// 传送到当前地图的最近死亡地点
+    /// </summary>
+    public static void TPLatest(Player plr)
+    {
+        int worldID = Main.worldID;
+        List<Vector2> deaths = GetCurrentWorldDeaths(worldID);
+        if (deaths.Count == 0)
+        {
+            ClientLoader.Chat.WriteLine("当前地图没有死亡记录", Color.Red);
+            return;
+        }
+        Vector2 latest = deaths[deaths.Count - 1];
+        TPDeathPoint(plr, latest);
+    } 
+    #endregion
+
     #endregion
 
     #region 传送到NPC
@@ -1495,91 +1513,6 @@ internal class Utils
     }
     #endregion
 
-    #region 修改手上物品方法
-    public static void ModifyItem(bool key)
-    {
-        if (!Config.ItemModify || !key) return;
-
-        var plr = Main.player[Main.myPlayer];
-        var item = plr.HeldItem;
-
-        if (item == null || item.IsAir || item.type == 0)
-        {
-            ClientLoader.Chat.WriteLine("请先手持一个物品", Color.Red);
-            return;
-        }
-
-        // Alt+按键：添加当前物品到预设列表
-        if (InputSystem.Alt)
-        {
-            SoundEngine.PlaySound(SoundID.MenuTick);
-
-            // 创建新物品预设
-            ItemData newItem = ItemData.FromItem(plr.HeldItem);
-
-            // 生成唯一的预设名称
-            string baseName = $"{plr.HeldItem.Name}";
-            string newName = baseName;
-            int prefix = 1;
-
-            // 检查名称是否已存在，如果存在则添加后缀
-            while (Config.ItemModifyList.Any(p => p.Name == newName))
-            {
-                newName = $"{baseName}_{prefix++}";
-            }
-
-            newItem.Name = newName;
-
-            Config.ItemModifyList.Add(newItem);
-            Config.Write();
-            return;
-        }
-
-        // Ctrl+按键：删除当前类型的预设
-        if (InputSystem.Ctrl)
-        {
-            SoundEngine.PlaySound(SoundID.MenuTick);
-
-            // 查找匹配的预设
-            ItemData presetToRemove = Config.ItemModifyList.FirstOrDefault(p => p.Type == item.type)!;
-
-            if (presetToRemove != null)
-            {
-                Config.ItemModifyList.Remove(presetToRemove);
-                Config.Write();
-                ClientLoader.Chat.WriteLine($"已删除物品预设: {presetToRemove.Name}", Color.Yellow);
-            }
-            else
-            {
-                ClientLoader.Chat.WriteLine($"未找到类型为 {item.type} 的物品预设", Color.Red);
-            }
-            return;
-        }
-
-        // 普通按键：应用预设到当前物品
-        ItemData matchingPreset = Config.ItemModifyList.FirstOrDefault(p => p.Type == item.type)!;
-
-        if (matchingPreset != null)
-        {
-            matchingPreset.ApplyTo(item);
-
-            // 更新物品状态
-            var WorldItem = new WorldItem();
-            WorldItem.SetDefaults(item.type);
-            item = WorldItem.inner;
-            WorldItem.UpdateItem(WorldItem.whoAmI);
-            plr.ItemCheck();
-
-            ClientLoader.Chat.WriteLine($"已应用预设: {matchingPreset.Name}", Color.Green);
-        }
-        else
-        {
-            ClientLoader.Chat.WriteLine($"未找到类型为 {item.type} 的物品预设", Color.Red);
-            ClientLoader.Chat.WriteLine($"使用 Alt + {Config.ItemModifyKey} 添加当前物品为预设", Color.Yellow);
-        }
-    }
-    #endregion
-
     #region 自动使用物品方法
     public static long AutoUseTime = 0;
     public static void AutoUseItem(bool key)
@@ -1624,45 +1557,34 @@ internal class Utils
     }
     #endregion
 
-    #region 批量修改饰品
-    public static void ApplyPrefix()
+    #region 批量修改饰品（支持专家、大师难度 不管有没有吃恶魔之心）
+    public static void ApplyPrefix(int id)
     {
         Player plr = Main.player[Main.myPlayer];
+
+        if (id < 0 || id >= PrefixID.Count) return;
+        var pr = Lang.prefix[id]?.ToString() ?? "无";
+
+        // 1 专家 2 大师
+        List<int> NotSlot = Main.GameMode == 2
+            ? (!plr.extraAccessory ? [10, 11, 12] : [11, 12, 13])
+            : (!plr.extraAccessory ? [9, 10, 11] : [10, 11, 12]);
+
         int count = 0;
-
-        var pr = Lang.prefix[PrefixId].ToString();
-        if (string.IsNullOrEmpty(pr))
-        {
-            pr = "无";
-        }
-
-        // 默认跳过的槽位：装饰栏
-        List<int> NotSlot;
-        if (plr.extraAccessory)
-        {
-            // 开启额外饰品：饰品栏为 3~9，跳过 10、11、12
-            NotSlot = new List<int>() { 10, 11, 12 };
-        }
-        else
-        {
-            // 未开启额外饰品：饰品栏为 3~8，跳过 9、10、11
-            NotSlot = new List<int>() { 9, 10, 11 };
-        }
-
         for (int i = 3; i < plr.armor.Length; i++)
         {
-            if (NotSlot.Contains(i)) continue;
             var item = plr.armor[i];
 
-            if (item != null && !item.IsAir &&
-                item.accessory && PrefixId != 0)
+            if (NotSlot.Contains(i)) continue;
+
+            if (item != null && !item.IsAir)
             {
-                item.Prefix((byte)PrefixId);
+                item.Prefix((byte)id);
                 count++;
             }
         }
 
-        ClientLoader.Chat.WriteLine($"已为 {count} 个饰品槽位设置前缀: {pr}", color);
+        ClientLoader.Chat.WriteLine($"已设置 {count} 个饰品前缀: {pr}", color);
     }
     #endregion
 
@@ -1707,45 +1629,6 @@ internal class Utils
         {
             NetMessage.SendData(MessageID.PlayerHeal, -1, -1, Terraria.Localization.NetworkText.Empty, plr.whoAmI, Config.HealVal);
         }
-    }
-    #endregion
-
-    #region 一键收藏所有物品
-    public static bool isFavoriteMode = false; // 收藏模式开关（true为收藏，false为取消收藏）
-    public static int FavoriteAllItems(Player plr)
-    {
-        int count = 0;
-
-        // 反转收藏模式（每次调用切换模式）
-        isFavoriteMode = !isFavoriteMode;
-
-        // 遍历玩家背包（10-50是主背包）
-        for (int i = 10; i < 50; i++)
-        {
-            Item item = plr.inventory[i];
-
-            if (!item.IsAir)
-            {
-                // 根据当前模式设置收藏状态
-                item.favorited = isFavoriteMode;
-                count++;
-            }
-        }
-
-        // 虚空袋（40格）
-        for (int i = 0; i < 40; i++)
-        {
-            Item item = plr.bank4.item[i];
-
-            if (!item.IsAir)
-            {
-                // 根据当前模式设置收藏状态
-                item.favorited = isFavoriteMode;
-                count++;
-            }
-        }
-
-        return count;
     }
     #endregion
 

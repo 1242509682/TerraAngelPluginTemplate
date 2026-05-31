@@ -22,17 +22,16 @@ public class UITool : Tool
     private bool EditHealKey = false; // 快速回血按键编辑状态
     private bool EditKillKey = false; // 快速死亡与复活按键编辑状态
     private bool EditAutoUseKey = false; // 自动使用物品按键编辑状态
-    private bool EditShowEditPrefixKey = false; // 一键修改前缀按键编辑状态
-    private bool EditFavoriteKey = false; // 快速收藏按键编辑状态
-    private bool EditItemManagerKey = false; // 物品管理器按键编辑状态
     private bool EditDamageKey = false; // 伤害修改开关按键编辑状态
     private bool EditIgnoreGravityKey = false; // 忽略重力按键编辑状态
     private bool EditAutoTrashKey = false; // 自动垃圾桶按键编辑状态
-    private bool EditClearAnglerQuestsKey = false; // 清除钓鱼任务按键编辑状态
+    private bool EditAutoFishKey = false; // 自动钓鱼按键编辑状态
     private bool EditNPCAutoHealKey = false; // NPC自动回血按键编辑状态
     public bool EditNPCReliveKey = false; // 复活NPC按键编辑状态
     public bool EditVeinMinerKey = false; // 连锁挖矿按键编辑状态
     public bool EditAutoTalkKey = false; // NPC自动对话按键编辑状态
+    private bool EditHeadUIKey = false; // 头顶UI开关按键编辑状态
+    private bool EditDTPKey = false; // 死亡传送按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -69,8 +68,6 @@ public class UITool : Tool
         float BossHealVel = Config.BossHealVel; // BOSS回血百分比
         int BossHealCap = Config.BossHealCap; // BOSS每次回血上限
         int BossHealInterval = Config.BossHealInterval; //BOSS独立回血间隔(秒)
-
-        bool FavoriteItemForJoinWorld = Config.FavoriteItemForJoinWorld; // 进入世界自动收藏物品
 
         bool autoTalkNPC = Config.AutoTalkNPC; // NPC自动对话开关
         int waitTime = Config.AutoTalkNPCWaitTimes;  // NPC自动对话等待时间
@@ -118,6 +115,417 @@ public class UITool : Tool
         {
             // 播放界面点击音效
             SoundEngine.PlaySound(SoundID.MenuTick);
+
+            #region 辅助功能区域
+            ImGui.Separator();
+            if (ImGui.TreeNodeEx("辅助功能", ImGuiTreeNodeFlags.Framed))
+            {
+                // 快速死亡复活开关（单bool + 自定义按键）
+                ImGui.Checkbox("快速死亡/复活", ref killOrRESpawn);
+                ImGui.SameLine();
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                DrawKeySelector("按键", ref Config.KillKey, ref EditKillKey);
+
+                // 强制回血
+                ImGui.Checkbox("强制回血", ref Heal);
+                ImGui.SameLine(); // 回血按键设置
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                DrawKeySelector("按键", ref Config.HealKey, ref EditHealKey);
+                if (Heal)
+                {
+                    ImGui.Indent();
+                    ImGui.Text("回复血量:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    ImGui.SliderInt("##HealAmount", ref HealVal, 1, 500, "%d HP");
+                    ImGui.SameLine();
+                    ImGui.Text($"{HealVal} HP");
+                    ImGui.Unindent();
+                }
+
+                // 渲染头顶UI
+                bool showHeadUI = Config.ShowPlayerHeadUI;
+                if (ImGui.Checkbox("显示头顶UI", ref showHeadUI))
+                {
+                    Config.ShowPlayerHeadUI = showHeadUI;
+                }
+
+                // 按键选择器
+                ImGui.SameLine();
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                DrawKeySelector("按键", ref Config.HeadUIKey, ref EditHeadUIKey);
+                if (showHeadUI)
+                {
+                    ImGui.Indent();
+                    ImGui.Text("显示距离:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    float headDist = Config.HeadDist;
+                    if (ImGui.SliderFloat("##HeadDist", ref headDist, 1f, 65f, "%.0f格"))
+                    {
+                        Config.HeadDist = headDist;
+                    }
+                    ImGui.Unindent();
+                }
+
+                ImGui.TreePop();
+            }
+            #endregion
+
+            #region 物品管理区域
+            ImGui.Separator();
+            if (ImGui.TreeNodeEx("物品管理", ImGuiTreeNodeFlags.Framed))
+            {
+                // 自动钓鱼
+                if (ImGui.Button("自动钓鱼"))
+                {
+                    SoundEngine.PlaySound(SoundID.MenuOpen);
+                    ShowAFW = !ShowAFW;
+                }
+
+                // 显示自动钓鱼窗口
+                if (ShowAFW)
+                {
+                    DrawAutoFishW(ref AutoFishEnabled, ref acceptItems, ref acceptAll,
+                        ref acceptQuest, ref acceptCrates, ref acceptNormal,
+                        ref acceptCommon, ref acceptUncommon, ref acceptRare,
+                        ref acceptVeryRare, ref acceptLegendary, ref acceptNpc,
+                        ref min, ref max, ref useSpecial);
+                }
+
+                // 自动垃圾桶
+                ImGui.SameLine();
+                if (ImGui.Button("自动垃圾桶"))
+                {
+                    SoundEngine.PlaySound(SoundID.MenuOpen);
+                    ShowAutoTrashWindow = !ShowAutoTrashWindow;
+                }
+
+                // 显示自动垃圾桶窗口
+                if (ShowAutoTrashWindow)
+                {
+                    DrawAutoTrashWindow(plr);
+                }
+
+                // 连锁挖矿
+                ImGui.Separator();
+                if (ImGui.Button("连锁挖矿"))
+                {
+                    SoundEngine.PlaySound(SoundID.MenuOpen);
+                    ShowVeinMinerWindow = !ShowVeinMinerWindow; // 连锁挖矿窗口
+                }
+
+                if (ShowVeinMinerWindow)
+                {
+                    VeinMineWindows();
+                }
+
+                #region 一键修改饰品前缀（下拉菜单版）
+                ImGui.SameLine();
+                // 从配置中读取上次使用的前缀ID，或默认0（无前缀）
+                int PrefixId = Config.DefaultPrefixId;
+                if (ImGui.Button("一键前缀"))
+                {
+                    SoundEngine.PlaySound(SoundID.MenuClose);
+                    Utils.ApplyPrefix(PrefixId);
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip($"批量修改饰品前缀 跳过盔甲 快捷键 P");
+
+                string[] names = GetPrefixNames();
+
+                // 下拉选择框
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(180);
+                if (ImGui.Combo("##PrefixCombo", ref PrefixId, names, names.Length))
+                {
+                    // 改变时保存到配置文件
+                    Config.DefaultPrefixId = PrefixId;
+                    Config.Write();
+                }
+                #endregion
+
+                #region 物品特性修改功能
+                // 使重力药水、重力球等不会反转屏幕效果
+                ImGui.Separator();
+                ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
+
+                // 自动使用物品
+                ImGui.Checkbox("自动使用物品", ref autoUseItem);
+                ImGui.SameLine();
+                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
+                DrawKeySelector("按键", ref Config.AutoUseKey, ref EditAutoUseKey);
+                if (autoUseItem)
+                {
+                    ImGui.Text("使用间隔(帧):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 1800, "%d fps");
+                }
+
+                ImGui.Checkbox("启用鼠标范围伤害NPC", ref mouseStrikeNPC);
+                if (mouseStrikeNPC)
+                {
+                    ImGui.Text("伤害范围:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    ImGui.SliderInt("##StrikeRange", ref mouseStrikeNPCRange, 0, 85, "%d 格");
+                    ImGui.SameLine();
+                    ImGui.Text($"{mouseStrikeNPCRange} 格");
+
+                    ImGui.Text("伤害间隔(帧):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##StrikeInterval", ref mouseStrikeNPCInterval, 1, 1800, "%d fps");
+
+                    ImGui.Text("伤害值:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##StrikeVel", ref StrikeVel, 0, 20000, "%d 点");
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip("不设置数值时使用手上物品伤害");
+                }
+
+                // 传送枪距离设置
+                ImGui.Checkbox("修改传送枪距离", ref ModifyPortalDistance);
+                if (ModifyPortalDistance)
+                {
+                    // 将浮点数转换为整数格数
+                    int PortalMaxDistanceBlocks = (int)(Config.PortalMaxDistance / 16f);
+
+                    // 使用整数滑块
+                    ImGui.Text("最大距离:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    if (ImGui.SliderInt("##PortalMaxDistance", ref PortalMaxDistanceBlocks, 800, 8400, "%d 格"))
+                    {
+                        // 确保最小值至少为800格
+                        PortalMaxDistanceBlocks = Math.Max(PortalMaxDistanceBlocks, 800);
+
+                        // 转换回像素距离
+                        Config.PortalMaxDistance = PortalMaxDistanceBlocks * 16f;
+                    }
+
+                    // 显示当前设置信息
+                    ImGui.SameLine();
+                    ImGui.TextDisabled($"(当前: {PortalMaxDistanceBlocks} 格)");
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip($"原版距离为800格\n当前设置为{PortalMaxDistanceBlocks}格");
+                }
+                #endregion
+
+                ImGui.TreePop();
+            }
+            #endregion
+
+            #region NPC管理区域
+            ImGui.Separator();
+            if (ImGui.TreeNodeEx("NPC管理", ImGuiTreeNodeFlags.Framed))
+            {
+                // 第一次打开时加载NPC列表
+                if (!npcListLoaded)
+                {
+                    Utils.LoadNPCList();
+                    npcListLoaded = true;
+                }
+
+                #region 生成NPC区域
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC修改功能");
+                ImGui.SameLine();
+                ImGui.TextDisabled("(?)");
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.BeginTooltip();
+                    ImGui.Text("此功能暂未适配服务器");
+                    ImGui.EndTooltip();
+                }
+
+                ImGui.Spacing();
+                if (ImGui.Button("生成NPC"))
+                {
+                    ShowSpawnNpcWindow = !ShowSpawnNpcWindow;
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("生成怪物或NPC在屏幕外");
+
+                if (ShowSpawnNpcWindow)
+                {
+                    SpawnNpcWindows();
+                }
+
+                // 复活NPC区域
+                ImGui.SameLine();
+                if (ImGui.Button("复活NPC"))
+                {
+                    Utils.Relive(true);
+                }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC\n" +
+                                     "注意:有重置房屋BUG,暂时不建议用");
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.NPCReliveKey, ref EditNPCReliveKey);
+                #endregion
+
+                #region NPC修改区域
+                // ===== 伤害倍数（带开关和缩进） =====
+                bool dmgEnabled = Config.DamageMultiplierEnabled;
+                if (ImGui.Checkbox("NPC伤害倍数", ref dmgEnabled))
+                {
+                    Config.DamageMultiplierEnabled = dmgEnabled;
+                }
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.DamageMultiplierKey, ref EditDamageKey);
+                if (dmgEnabled)
+                {
+                    ImGui.Indent();
+                    ImGui.Text("伤害倍率:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    float multiplier = Config.DamageMultiplier;
+                    if (ImGui.SliderFloat("##DamageMultiplier", ref multiplier, 1f, 10f, "%.1f 倍"))
+                    {
+                        Config.DamageMultiplier = multiplier;
+                    }
+                    ImGui.Unindent();
+                }
+
+                //自动回血
+                ImGui.Checkbox("NPC自动回血", ref nPCAutoHeal);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.NPCAutoHealKey, ref EditNPCAutoHealKey);
+                if (nPCAutoHeal)
+                {
+                    ImGui.Indent();
+                    ImGui.Text("普通NPC间隔(秒):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    ImGui.SliderInt("##NPCHealVelInterval", ref NPCHealVelInterval, 1, 60 * 5); //最久5分钟回一次
+
+                    // 普通NPC回血设置
+                    ImGui.Text("普通NPC回血(百分比):");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    ImGui.SliderFloat("##NPCHealVel", ref NPCHealVel, 0.01f, 20f, "%.2f%%");
+
+                    // BOSS回血设置
+                    ImGui.Checkbox("允许Boss回血", ref Boss);
+                    if (Boss)
+                    {
+                        ImGui.Indent();
+                        ImGui.Text("BOSS回血限制");
+                        ImGui.SameLine();
+                        ImGui.SetNextItemWidth(200);
+                        ImGui.InputInt("##BossHealCap", ref BossHealCap);
+
+                        ImGui.Text("BOSS回血间隔(秒)");
+                        ImGui.SameLine();
+                        ImGui.SetNextItemWidth(200);
+                        ImGui.SliderInt("##BossHealInterval", ref BossHealInterval, 1, 60 * 5); //最久5分钟回一次
+
+                        ImGui.Text("BOSS回血值(百分比)");
+                        ImGui.SameLine();
+                        ImGui.SetNextItemWidth(200);
+                        ImGui.SliderFloat("##BossHealVel", ref BossHealVel, 0.01f, 20f, "%.2f%%");
+                        ImGui.Unindent();
+                    }
+                    ImGui.Unindent();
+                }
+
+                // npc自动对话
+                ImGui.Separator();
+                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动对话");
+                // 自动对话开关
+                ImGui.Checkbox("NPC自动对话", ref autoTalkNPC);
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.AutoTalkKey, ref EditAutoTalkKey);
+                if (autoTalkNPC)
+                {
+                    ImGui.Checkbox("对话NPC无敌", ref TalkingNpcImmortal);
+                    if (ImGui.IsItemHovered())
+                    {
+                        string tooltipText = "使正在对话的NPC自动无敌(对护士/渔夫无效)\n" +
+                                             "因为护士/渔夫有自动重置对话npc索引功能";
+
+                        ImGui.SetTooltip(tooltipText);
+                    }
+
+                    ImGui.Text("等待时间:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##AutoTalkWaitTime", ref waitTime, 1, 600, "%d 帧");
+
+                    ImGui.Text("检测格数:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(200);
+                    ImGui.SliderInt("##NurseRange", ref NpcRange, 1, 85, "%d 格");
+
+                    if (ImGui.Button("NPC自动对话行为设置"))
+                    {
+                        ShowNPCBehaviorWindows = !ShowNPCBehaviorWindows;
+                    }
+
+                    // 渲染NPC行为设置窗口
+                    if (ShowNPCBehaviorWindows)
+                    {
+                        DrawNPCBehaviorSettingsWindow(ref helpTextForGuide, ref inGuideCraftMenu,
+                                                      ref openShopForPartyGirl, ref swapMusicing,
+                                                      ref openShopForDD2Bartender, ref helpTextFoDD2Bartender,
+                                                      ref openShopForDryad, ref checkBiomes,
+                                                      ref openShopForGoblin, ref inReforgeMenu,
+                                                      ref openHairWindow, ref openShopForStylist,
+                                                      ref openShopForPainter, ref openShopForWall,
+                                                      ref AutoClearAngel, ref ClearFish,
+                                                      ref taxCollectorCustomReward, ref NurseMute);
+                    }
+
+                    // NPC商店编辑器
+                    ImGui.SameLine();
+                    if (ImGui.Button("NPC商店编辑器"))
+                    {
+                        NPCShopEditorUI.ToggleWindow();
+                    }
+
+                    // 绘制商店编辑器窗口
+                    NPCShopEditorUI.Draw();
+
+                    // 显示当前对话状态
+                    ImGui.Separator();
+                    ImGui.Text("当前对话状态:");
+                    if (Utils.TalkTimes.Count > 0)
+                    {
+                        foreach (var kvp in Utils.TalkTimes)
+                        {
+                            int index = kvp.Key;
+                            if (index >= 0 && index < Main.maxNPCs && Main.npc[index].active)
+                            {
+                                NPC npc = Main.npc[index];
+                                float progress = (float)(Main.GameUpdateCount - kvp.Value) / (Config.AutoTalkNPCWaitTimes);
+                                progress = Math.Clamp(progress, 0f, 1f);
+
+                                ImGui.ProgressBar(progress, new Vector2(200, 20), $"{Lang.GetNPCNameValue(npc.type)} - {(progress * 100):F0}%");
+
+                                // 添加取消按钮
+                                ImGui.SameLine();
+                                if (ImGui.Button($"取消##{index}"))
+                                {
+                                    Utils.TalkTimes.Remove(index);
+                                    plr.SetTalkNPC(-1); // 自动关闭对话栏
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1f), "没有正在进行的对话");
+                    }
+                }
+                #endregion
+
+                ImGui.TreePop();
+            }
+            #endregion
 
             #region 定位传送区域
             ImGui.Separator();
@@ -238,437 +646,6 @@ public class UITool : Tool
                 ImGui.TreePop();
             }
             #endregion
-
-            #region 辅助功能区域
-            ImGui.Separator();
-            if (ImGui.TreeNodeEx("辅助功能", ImGuiTreeNodeFlags.Framed))
-            {
-                ImGui.Checkbox("强制回血", ref Heal);
-                ImGui.SameLine(); // 回血按键设置
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-                DrawKeySelector("按键", ref Config.HealKey, ref EditHealKey);
-                if (Heal)
-                {
-                    ImGui.Text("回血量:");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(150);
-                    ImGui.SliderInt("##HealAmount", ref HealVal, 1, 500, "%d HP");
-                    ImGui.SameLine();
-                    ImGui.Text($"{HealVal} HP");
-                }
-
-                // 快速死亡复活开关（单bool + 自定义按键）
-                ImGui.Checkbox("快速死亡/复活", ref killOrRESpawn);
-                ImGui.SameLine();
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-                DrawKeySelector("按键", ref Config.KillKey, ref EditKillKey);
-
-                // 自动使用物品
-                ImGui.Checkbox("自动使用物品", ref autoUseItem);
-                ImGui.SameLine();
-                ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
-                DrawKeySelector("按键", ref Config.AutoUseKey, ref EditAutoUseKey);
-                if (autoUseItem)
-                {
-                    ImGui.Text("使用间隔(帧):");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##AutoUseInterval", ref autoUseInterval, 1, 1800, "%d fps");
-                }
-
-                ImGui.Checkbox("启用鼠标范围伤害NPC", ref mouseStrikeNPC);
-                if (mouseStrikeNPC)
-                {
-                    ImGui.Text("伤害范围:");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(150);
-                    ImGui.SliderInt("##StrikeRange", ref mouseStrikeNPCRange, 0, 85, "%d 格");
-                    ImGui.SameLine();
-                    ImGui.Text($"{mouseStrikeNPCRange} 格");
-
-                    ImGui.Text("伤害间隔(帧):");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##StrikeInterval", ref mouseStrikeNPCInterval, 1, 1800, "%d fps");
-
-                    ImGui.Text("伤害值:");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##StrikeVel", ref StrikeVel, 0, 20000, "%d 点");
-                    if (ImGui.IsItemHovered())
-                        ImGui.SetTooltip("不设置数值时使用手上物品伤害");
-                }
-
-                ImGui.Checkbox("自动钓鱼", ref AutoFishEnabled);
-                Config.AutoFishEnabled = AutoFishEnabled;
-                if (AutoFishEnabled)
-                {
-                    ImGui.Indent();
-                    ImGui.Checkbox("接受物品", ref acceptItems);
-                    ImGui.Checkbox("接受所有物品", ref acceptAll);
-
-                    if (acceptItems && !acceptAll)
-                    {
-                        ImGui.Indent();
-                        ImGui.Checkbox("任务鱼", ref acceptQuest);
-                        ImGui.Checkbox("宝匣", ref acceptCrates);
-                        ImGui.Checkbox("普通", ref acceptNormal);
-                        ImGui.Checkbox("常见", ref acceptCommon);
-                        ImGui.Checkbox("罕见", ref acceptUncommon);
-                        ImGui.Checkbox("稀有", ref acceptRare);
-                        ImGui.Checkbox("非常稀有", ref acceptVeryRare);
-                        ImGui.Checkbox("传说", ref acceptLegendary);
-                        ImGui.Unindent();
-                    }
-                    ImGui.Checkbox("接受NPC（血月敌怪）", ref acceptNpc);
-
-                    ImGui.SliderInt("随机延迟最小（帧）", ref min, 0, 120);
-                    ImGui.SliderInt("随机延迟最大（帧）", ref max, min, min + 120);
-
-                    ImGui.Checkbox("使用指定鼠标位置", ref useSpecial);
-                    ImGui.SameLine();
-                    ImGui.TextDisabled("(?)");
-                    if (ImGui.IsItemHovered())
-                    {
-                        ImGui.BeginTooltip();
-                        ImGui.Text("按下 Ctrl+Alt 选择抛竿位置");
-                        ImGui.EndTooltip();
-                    }
-
-                    ImGui.Unindent();
-                }
-
-                ImGui.TreePop();
-            }
-            #endregion
-
-            #region 物品管理区域
-            ImGui.Separator();
-            if (ImGui.TreeNodeEx("物品管理", ImGuiTreeNodeFlags.Framed))
-            {
-                if (ImGui.Button("物品编辑器"))
-                {
-                    SoundEngine.PlaySound(SoundID.MenuOpen); // 播放界面打开音效
-                    ShowItemManagerWindow = !ShowItemManagerWindow;
-                }
-
-                // 物品管理器窗口
-                if (ShowItemManagerWindow)
-                {
-                    DrawItemManagerWindow(plr);
-                }
-
-                // 自动垃圾桶
-                ImGui.SameLine();
-                if (ImGui.Button("自动垃圾桶"))
-                {
-                    SoundEngine.PlaySound(SoundID.MenuOpen);
-                    ShowAutoTrashWindow = !ShowAutoTrashWindow;
-                }
-
-                // 显示自动垃圾桶窗口
-                if (ShowAutoTrashWindow)
-                {
-                    DrawAutoTrashWindow(plr);
-                }
-
-                // 连锁挖矿
-                ImGui.SameLine();
-                if (ImGui.Button("连锁挖矿"))
-                {
-                    SoundEngine.PlaySound(SoundID.MenuOpen);
-                    ShowVeinMinerWindow = !ShowVeinMinerWindow; // 连锁挖矿窗口
-                }
-
-                if (ShowVeinMinerWindow)
-                {
-                    VeinMineWindows();
-                }
-
-                #region 物品特性修改功能
-                // 使重力药水、重力球等不会反转屏幕效果
-                ImGui.Separator();
-                ImGui.Checkbox("反重力药水", ref applyIgnoreGravity);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.IgnoreGravityKey, ref EditIgnoreGravityKey);
-
-                // 传送枪距离设置
-                ImGui.Checkbox("修改传送枪距离", ref ModifyPortalDistance);
-                if (ModifyPortalDistance)
-                {
-                    // 将浮点数转换为整数格数
-                    int PortalMaxDistanceBlocks = (int)(Config.PortalMaxDistance / 16f);
-
-                    // 保存按钮
-                    ImGui.SameLine();
-                    if (ImGui.Button("保存"))
-                    {
-                        Config.Write(); // 保存配置
-                        ReloadPlugins(); // 重载插件
-                        ClientLoader.Chat.WriteLine($"传送枪距离已设置为 {PortalMaxDistanceBlocks} 格", Color.Yellow);
-                    }
-                    if (ImGui.IsItemHovered())
-                        ImGui.SetTooltip($"保存设置参数并写入配置文件，同时重载插件确保功能生效");
-
-                    // 使用整数滑块
-                    ImGui.Text("最大距离:");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    if (ImGui.SliderInt("##PortalMaxDistance", ref PortalMaxDistanceBlocks, 800, 8400, "%d 格"))
-                    {
-                        // 确保最小值至少为800格
-                        PortalMaxDistanceBlocks = Math.Max(PortalMaxDistanceBlocks, 800);
-
-                        // 转换回像素距离
-                        Config.PortalMaxDistance = PortalMaxDistanceBlocks * 16f;
-                    }
-
-                    // 显示当前设置信息
-                    ImGui.SameLine();
-                    ImGui.TextDisabled($"(当前: {PortalMaxDistanceBlocks} 格)");
-                    if (ImGui.IsItemHovered())
-                        ImGui.SetTooltip($"原版距离为800格\n当前设置为{PortalMaxDistanceBlocks}格");
-                }
-
-                ImGui.Separator();
-                if (ImGui.TreeNodeEx("背包设置", ImGuiTreeNodeFlags.Framed))
-                {
-                    // 一键修改饰品前缀按钮
-                    if (ImGui.Button("一键饰品前缀"))
-                    {
-                        // 播放界面打开音效
-                        SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                        ShowEditPrefix = true;
-                        PrefixId = 0; // 重置为0
-                    }
-                    ImGui.SameLine();
-                    DrawKeySelector("按键", ref Config.ShowEditPrefixKey, ref EditShowEditPrefixKey);
-
-                    // 显示一键修改前缀窗口
-                    if (ShowEditPrefix)
-                    {
-                        DrawEditPrefixWindow();
-                    }
-
-                    // 一键收藏按钮
-                    if (ImGui.Button("一键收藏物品"))
-                    {
-                        // 播放收藏音效
-                        SoundEngine.PlaySound(SoundID.MenuTick);
-
-                        // 收藏所有格子物品（包括虚空袋）
-                        int favoritedItems = Utils.FavoriteAllItems(plr);
-
-                        // 显示操作结果
-                        ClientLoader.Chat.WriteLine($"已收藏 {favoritedItems} 个物品", Color.Green);
-                    }
-                    ImGui.SameLine();
-                    DrawKeySelector("按键", ref Config.FavoriteKey, ref EditFavoriteKey);
-
-                    ImGui.Checkbox("进入世界自动收藏物品", ref FavoriteItemForJoinWorld);
-                    if (ImGui.IsItemHovered())
-                        ImGui.SetTooltip("每次进入世界时自动收藏背包所有物品");
-
-                    ImGui.TreePop();
-                }
-                #endregion
-
-                ImGui.TreePop();
-            }
-            #endregion
-
-            #region NPC管理区域
-            ImGui.Separator();
-            if (ImGui.TreeNodeEx("NPC管理", ImGuiTreeNodeFlags.Framed))
-            {
-                // 第一次打开时加载NPC列表
-                if (!npcListLoaded)
-                {
-                    Utils.LoadNPCList();
-                    npcListLoaded = true;
-                }
-
-                #region 生成NPC区域
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "生成与复活NPC");
-                ImGui.SameLine();
-                ImGui.TextDisabled("(?)");
-                if (ImGui.IsItemHovered())
-                {
-                    ImGui.BeginTooltip();
-                    ImGui.Text("此功能暂未适配服务器");
-                    ImGui.EndTooltip();
-                }
-
-                ImGui.Spacing();
-                if (ImGui.Button("生成NPC"))
-                {
-                    ShowSpawnNpcWindow = !ShowSpawnNpcWindow;
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("生成怪物或NPC在屏幕外");
-
-                if (ShowSpawnNpcWindow)
-                {
-                    SpawnNpcWindows();
-                }
-
-                // 复活NPC区域
-                ImGui.SameLine();
-                if (ImGui.Button("复活NPC"))
-                {
-                    Utils.Relive(true);
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("复活所有已解锁图鉴的城镇NPC\n" +
-                                     "注意:有重置房屋BUG,暂时不建议用");
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.NPCReliveKey, ref EditNPCReliveKey);
-                #endregion
-
-                #region NPC修改区域
-                ImGui.Separator();
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC所受伤害");
-
-                // 伤害倍率设置
-                float multiplier = Config.DamageMultiplier;
-                if (ImGui.SliderFloat("伤害倍率", ref multiplier, 1f, 10f, "%.1f 倍"))
-                {
-                    Config.DamageMultiplier = multiplier;
-                }
-                ImGui.SameLine();
-                DrawKeySelector("开关按键", ref Config.DamageMultiplierKey, ref EditDamageKey);
-
-                //自动回血
-                ImGui.Checkbox("NPC自动回血", ref nPCAutoHeal);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.NPCAutoHealKey, ref EditNPCAutoHealKey);
-                if (nPCAutoHeal)
-                {
-                    ImGui.Text("普通NPC间隔(秒):");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##NPCHealVelInterval", ref NPCHealVelInterval, 1, 60 * 5); //最久5分钟回一次
-
-                    // 普通NPC回血设置
-                    ImGui.Text("普通NPC回血(百分比):");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderFloat("##NPCHealVel", ref NPCHealVel, 0.01f, 20f, "%.2f%%");
-
-                    // BOSS回血设置
-                    ImGui.Checkbox("允许Boss回血", ref Boss);
-                    if (Boss)
-                    {
-                        ImGui.Text("BOSS回血限制");
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200);
-                        ImGui.InputInt("##BossHealCap", ref BossHealCap);
-
-                        ImGui.Text("BOSS回血间隔(秒)");
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200);
-                        ImGui.SliderInt("##BossHealInterval", ref BossHealInterval, 1, 60 * 5); //最久5分钟回一次
-
-                        ImGui.Text("BOSS回血值(百分比)");
-                        ImGui.SameLine();
-                        ImGui.SetNextItemWidth(200);
-                        ImGui.SliderFloat("##BossHealVel", ref BossHealVel, 0.01f, 20f, "%.2f%%");
-                    }
-                }
-
-                // npc自动对话
-                ImGui.Separator();
-                ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "NPC自动对话");
-                // 自动对话开关
-                ImGui.Checkbox("NPC自动对话", ref autoTalkNPC);
-                ImGui.SameLine();
-                DrawKeySelector("按键", ref Config.AutoTalkKey, ref EditAutoTalkKey);
-                if (autoTalkNPC)
-                {
-                    ImGui.Checkbox("对话NPC无敌", ref TalkingNpcImmortal);
-                    if (ImGui.IsItemHovered())
-                    {
-                        string tooltipText = "使正在对话的NPC自动无敌(对护士/渔夫无效)\n" +
-                                             "因为护士/渔夫有自动重置对话npc索引功能";
-
-                        ImGui.SetTooltip(tooltipText);
-                    }
-
-                    ImGui.Text("等待时间:");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##AutoTalkWaitTime", ref waitTime, 1, 600, "%d 帧");
-
-                    ImGui.Text("检测格数:");
-                    ImGui.SameLine();
-                    ImGui.SetNextItemWidth(200);
-                    ImGui.SliderInt("##NurseRange", ref NpcRange, 1, 85, "%d 格");
-
-                    if (ImGui.Button("NPC自动对话行为设置"))
-                    {
-                        ShowNPCBehaviorWindows = !ShowNPCBehaviorWindows;
-                    }
-
-                    // 渲染NPC行为设置窗口
-                    if (ShowNPCBehaviorWindows)
-                    {
-                        DrawNPCBehaviorSettingsWindow(ref helpTextForGuide, ref inGuideCraftMenu,
-                                                      ref openShopForPartyGirl, ref swapMusicing,
-                                                      ref openShopForDD2Bartender, ref helpTextFoDD2Bartender,
-                                                      ref openShopForDryad, ref checkBiomes,
-                                                      ref openShopForGoblin, ref inReforgeMenu,
-                                                      ref openHairWindow, ref openShopForStylist,
-                                                      ref openShopForPainter, ref openShopForWall,
-                                                      ref AutoClearAngel, ref ClearFish,
-                                                      ref taxCollectorCustomReward, ref NurseMute);
-                    }
-
-                    // NPC商店编辑器
-                    ImGui.SameLine();
-                    if (ImGui.Button("NPC商店编辑器"))
-                    {
-                        NPCShopEditorUI.ToggleWindow();
-                    }
-
-                    // 绘制商店编辑器窗口
-                    NPCShopEditorUI.Draw();
-
-                    // 显示当前对话状态
-                    ImGui.Separator();
-                    ImGui.Text("当前对话状态:");
-                    if (Utils.TalkTimes.Count > 0)
-                    {
-                        foreach (var kvp in Utils.TalkTimes)
-                        {
-                            int index = kvp.Key;
-                            if (index >= 0 && index < Main.maxNPCs && Main.npc[index].active)
-                            {
-                                NPC npc = Main.npc[index];
-                                float progress = (float)(Main.GameUpdateCount - kvp.Value) / (Config.AutoTalkNPCWaitTimes);
-                                progress = Math.Clamp(progress, 0f, 1f);
-
-                                ImGui.ProgressBar(progress, new Vector2(200, 20), $"{Lang.GetNPCNameValue(npc.type)} - {(progress * 100):F0}%");
-
-                                // 添加取消按钮
-                                ImGui.SameLine();
-                                if (ImGui.Button($"取消##{index}"))
-                                {
-                                    Utils.TalkTimes.Remove(index);
-                                    plr.SetTalkNPC(-1); // 自动关闭对话栏
-                                }
-                            }
-                        }
-                    }
-                    else
-                    {
-                        ImGui.TextColored(new Vector4(0.8f, 0.8f, 0.8f, 1f), "没有正在进行的对话");
-                    }
-                }
-                #endregion
-
-                ImGui.TreePop();
-            } 
-            #endregion
         }
 
         // 更新配置值
@@ -697,8 +674,6 @@ public class UITool : Tool
         Config.BossHealVel = BossHealVel; // BOSS回血百分比
         Config.BossHealCap = BossHealCap; // BOSS每次回血上限
         Config.BossHealInterval = BossHealInterval; //BOSS独立回血间隔(秒)
-
-        Config.FavoriteItemForJoinWorld = FavoriteItemForJoinWorld; // 进入世界自动收藏物品
 
         Config.AutoTalkNPC = autoTalkNPC; // Npc自动对话开关
         Config.AutoTalkNPCWaitTimes = waitTime; // NPC自动对话等待时间
@@ -731,7 +706,6 @@ public class UITool : Tool
             Config.PortalMaxDistance = PortalMaxDistance * 16f;
         }
         Config.ModifyPortalDistance = ModifyPortalDistance;
-
 
         // 自动钓鱼
         Config.AutoFishAcceptItems = acceptItems;
@@ -837,8 +811,6 @@ public class UITool : Tool
         if (ImGui.TreeNodeEx("渔夫", ImGuiTreeNodeFlags.Framed))
         {
             ImGui.Checkbox("清渔夫任务", ref AutoClearAngel);
-            ImGui.SameLine();
-            DrawKeySelector("按键", ref Config.ClearQuestsKey, ref EditClearAnglerQuestsKey);
             ImGui.Checkbox("消耗任务鱼", ref ClearFish);
             ImGui.TreePop();
         }
@@ -1532,10 +1504,7 @@ public class UITool : Tool
         }
         else
         {
-            ImGui.Text("选择传送目的地:");
-
             // 位置信息
-            ImGui.SameLine();
             ImGui.Text("当前位置:");
             ImGui.SameLine();
             ImGui.TextColored(new Vector4(1f, 1f, 0.5f, 1f), $"{(int)plr.position.X / 16}, {(int)plr.position.Y / 16}");
@@ -1549,6 +1518,9 @@ public class UITool : Tool
                 ImGui.Text("服务器需到过那个地方才能传送(因区块刷新问题)");
                 ImGui.EndTooltip();
             }
+
+            ImGui.SameLine();
+            DrawKeySelector("回死亡点按键", ref Config.DeathTPKey, ref EditDTPKey);
         }
 
         // 按钮区域
@@ -2598,516 +2570,79 @@ public class UITool : Tool
     }
     #endregion
 
-    #region 物品编辑管理器窗口
-    private static bool ShowItemManagerWindow = false; // 显示物品管理器窗口
-    private static string SearchFilter = ""; // 物品搜索过滤器
-    internal void DrawItemManagerWindow(Player plr)
+    #region 获取前缀表
+    private static string[]? prefixNames = null;
+    private static string[] GetPrefixNames()
     {
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(600, 450), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin("物品编辑管理器", ref ShowItemManagerWindow, ImGuiWindowFlags.NoCollapse))
+        if (prefixNames != null) return prefixNames;
+        int count = PrefixID.Count;
+        prefixNames = new string[count];
+        for (int i = 0; i < count; i++)
         {
-            // 搜索框和按钮
-            ImGui.InputTextWithHint("##SearchFilter", "输入名称或ID搜索", ref SearchFilter, 100);
+            string? name = Lang.prefix[i]?.Value;
+            prefixNames[i] = string.IsNullOrEmpty(name) ? $"无前缀({i})" : $"{i}. {name}";
+        }
+        return prefixNames;
+    }
+    #endregion
+
+    #region 自动钓鱼独立窗口
+    private static bool ShowAFW = false; // 自动钓鱼窗口显示标志
+    private void DrawAutoFishW(ref bool enabled, ref bool acceptItems, ref bool acceptAll,
+        ref bool acceptQuest, ref bool acceptCrates, ref bool acceptNormal,
+        ref bool acceptCommon, ref bool acceptUncommon, ref bool acceptRare,
+        ref bool acceptVeryRare, ref bool acceptLegendary, ref bool acceptNpc,
+        ref int min, ref int max, ref bool useSpecial)
+    {
+        ImGui.SetNextWindowSize(new Vector2(320, 400), ImGuiCond.FirstUseEver);
+        if (ImGui.Begin("自动钓鱼(修复版)", ref ShowAFW, ImGuiWindowFlags.NoCollapse))
+        {
+            // 总开关和按键
+            ImGui.Checkbox("启用自动钓鱼", ref enabled);
             ImGui.SameLine();
-            if (ImGui.Button("清空搜索"))
-            {
-                SearchFilter = "";
-            }
-            ImGui.SameLine();
-            DrawKeySelector("应用按键", ref Config.ItemModifyKey, ref EditItemManagerKey);
-
-            // 获取所有物品并应用搜索过滤
-            var AllItems = Config.ItemModifyList
-                .Select(item => new
-                {
-                    Data = item,
-                    Name = item.Name,
-                    Type = item.Type,
-                    ItemName = Lang.GetItemNameValue(item.Type) ?? $"未知物品 ({item.Type})"
-                })
-                .Where(item =>
-                    string.IsNullOrWhiteSpace(SearchFilter) ||
-                    item.Name.Contains(SearchFilter, StringComparison.OrdinalIgnoreCase) ||
-                    item.ItemName.Contains(SearchFilter, StringComparison.OrdinalIgnoreCase) ||
-                    item.Type.ToString().Contains(SearchFilter)
-                )
-                .ToList();
-
-            // 计算总页数
-            AllPages = (int)Math.Ceiling(AllItems.Count / (float)PageLimit);
-            if (AllPages == 0) AllPages = 1;
-
-            // 确保当前页在有效范围内
-            if (NowPage >= AllPages) NowPage = AllPages - 1;
-            if (NowPage < 0) NowPage = 0;
-
-            // 按钮区域
-            if (ImGui.Button($"添加(Alt+{Config.ItemModifyKey})"))
-            {
-                if (plr.HeldItem != null && !plr.HeldItem.IsAir)
-                {
-                    // 播放界面打开音效
-                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-
-                    // 创建新物品预设
-                    ItemData newItem = ItemData.FromItem(plr.HeldItem);
-
-                    // 生成唯一的预设名称
-                    string baseName = $"{plr.HeldItem.Name}";
-                    string newName = baseName;
-                    int prefix = 1;
-
-                    // 检查名称是否已存在，如果存在则添加后缀
-                    while (Config.ItemModifyList.Any(p => p.Name == newName))
-                    {
-                        newName = $"{baseName}_{prefix++}";
-                    }
-
-                    newItem.Name = newName;
-                    Config.ItemModifyList.Add(newItem);
-                    Config.Write();
-
-                    // 显示成功消息
-                    ClientLoader.Chat.WriteLine($"已添加物品预设: {newItem.Name}", Color.Green);
-                    ClientLoader.Chat.WriteLine($"使用 {Config.ItemModifyKey} 键应用此预设", Color.Yellow);
-
-                    // 清空搜索以便显示新添加的物品
-                    SearchFilter = "";
-                }
-                else
-                {
-                    ClientLoader.Chat.WriteLine($"请手持一个物品 使用{Config.ItemModifyKey}", Color.Red);
-                }
-            }
+            DrawKeySelector("按键", ref Config.AutoFishKey, ref EditAutoFishKey);
 
             ImGui.SameLine();
-            if (ImGui.Button("清空列表"))
+            if (ImGui.Button("保存设置"))
             {
-                // 播放界面关闭音效
-                SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                ShowEditWindow = false;
-                Config.ItemModifyList.Clear();
                 Config.Write();
-                SearchFilter = ""; // 清空搜索
+                ClientLoader.Chat.WriteLine("自动钓鱼设置已保存", color);
             }
 
             ImGui.SameLine();
-            ListPage(AllItems.Count); // 分页
-
-            // 显示搜索结果信息
-            if (!string.IsNullOrWhiteSpace(SearchFilter))
+            if (ImGui.Button("关闭"))
             {
-                ImGui.TextColored(new Vector4(1, 1, 0.5f, 1), $"找到 {AllItems.Count} 个匹配项");
+                ShowAFW = false;
             }
 
-            // 物品列表
+            // 物品接收设置
             ImGui.Separator();
-            ImGui.BeginChild("物品列表", new Vector2(0, 250), ImGuiChildFlags.Borders);
+            ImGui.Checkbox("接受物品", ref acceptItems);
+            ImGui.Checkbox("接受所有物品", ref acceptAll);
 
-            // 获取当前页的物品
-            var GetPage = AllItems.Skip(NowPage * PageLimit).Take(PageLimit).ToList();
-
-            // 表头
-            ImGui.Columns(5, "item_columns", false);
-            ImGui.SetColumnWidth(0, 40);   // 索引
-            ImGui.SetColumnWidth(1, 150);  // 预设名称
-            ImGui.SetColumnWidth(2, 150);  // 物品名称
-            ImGui.SetColumnWidth(3, 70);   // 物品ID
-            ImGui.SetColumnWidth(4, 150);  // 操作按钮
-
-            ImGui.Text("#"); ImGui.NextColumn();
-            ImGui.Text("预设名称"); ImGui.NextColumn();
-            ImGui.Text("物品名称"); ImGui.NextColumn();
-            ImGui.Text("物品ID"); ImGui.NextColumn();
-            ImGui.Text("操作"); ImGui.NextColumn();
-
-            ImGui.Separator();
-            ImGui.Columns(1);
-
-            // 物品行
-            for (int i = 0; i < GetPage.Count; i++)
+            if (acceptItems && !acceptAll)
             {
-                var itemInfo = GetPage[i];
-                var data = itemInfo.Data;
-
-                ImGui.PushID(data.Name);
-
-                // 使用5列布局
-                ImGui.Columns(5, "item_columns", false);
-                ImGui.SetColumnWidth(0, 40);   // 索引
-                ImGui.SetColumnWidth(1, 150);  // 预设名称
-                ImGui.SetColumnWidth(2, 150);  // 物品名称
-                ImGui.SetColumnWidth(3, 70);   // 物品ID
-                ImGui.SetColumnWidth(4, 150);  // 操作按钮
-
-                // 索引号 (当前页的序号)
-                ImGui.Text($"{NowPage * PageLimit + i + 1}");
-                ImGui.NextColumn();
-
-                // 预设名称
-                ImGui.Text($"{data.Name}");
-                ImGui.NextColumn();
-
-                // 物品名称
-                ImGui.Text($"{itemInfo.ItemName}");
-                ImGui.NextColumn();
-
-                // 物品ID
-                ImGui.Text($"{data.Type}");
-                ImGui.NextColumn();
-
-                // 操作按钮
-                if (ImGui.Button($"应用##{i}"))
-                {
-                    data.ApplyTo(Main.player[Main.myPlayer].HeldItem);
-                    ClientLoader.Chat.WriteLine($"已应用物品预设: {data.Name}", Color.Green);
-                }
-                ImGui.SameLine();
-                if (ImGui.Button($"编辑##{i}"))
-                {
-                    SoundEngine.PlaySound(SoundID.MenuOpen, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                    EditItem = data;
-                    ShowEditWindow = true;
-                }
-                ImGui.SameLine();
-                if (ImGui.Button($"删除##{i}"))
-                {
-                    SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                    ShowEditWindow = false;
-                    Config.ItemModifyList.Remove(data);
-                    Config.Write();
-                    ClientLoader.Chat.WriteLine($"已删除物品预设: {data.Name}", Color.Yellow);
-                }
-                ImGui.NextColumn();
-
-                ImGui.Columns(1);
-                ImGui.PopID();
-
-                // 悬停区域显示工具提示
-                if (ImGui.IsItemHovered(ImGuiHoveredFlags.DelayNormal | ImGuiHoveredFlags.AllowWhenDisabled))
-                {
-                    Item tempItem = new Item();
-                    tempItem.SetDefaults(data.Type);
-                    data.ApplyTo(tempItem);
-                    TerraAngel.Graphics.ImGuiUtil.ImGuiItemTooltip(tempItem);
-                }
+                ImGui.Indent();
+                ImGui.Checkbox("任务鱼", ref acceptQuest);
+                ImGui.Checkbox("宝匣", ref acceptCrates);
+                ImGui.Checkbox("普通", ref acceptNormal);
+                ImGui.Checkbox("常见", ref acceptCommon);
+                ImGui.Checkbox("罕见", ref acceptUncommon);
+                ImGui.Checkbox("稀有", ref acceptRare);
+                ImGui.Checkbox("非常稀有", ref acceptVeryRare);
+                ImGui.Checkbox("传说", ref acceptLegendary);
+                ImGui.Unindent();
             }
+            ImGui.Checkbox("接受NPC（血月敌怪）", ref acceptNpc);
 
-            // 如果没有物品显示提示
-            if (GetPage.Count == 0)
-            {
-                ImGui.Text("");
-                if (string.IsNullOrWhiteSpace(SearchFilter))
-                {
-                    ImGui.Text($"没有物品预设 请使用Alt + {Config.ItemModifyKey} 添加");
-                }
-                else
-                {
-                    ImGui.Text($"没有找到包含 '{SearchFilter}' 的物品预设");
-                }
-            }
-
-            ImGui.EndChild();
-        }
-        ImGui.End();
-
-        // 显示物品编辑窗口
-        if (ShowEditWindow && EditItem != null)
-        {
-            DrawItemEditWindow(plr);
-        }
-    }
-    #endregion
-
-    #region 分页与跳转功能
-    private static int NowPage = 0; // 当前页码
-    private const int PageLimit = 8; // 每页显示8个物品
-    private static int AllPages = 0; // 总页数
-    private static void ListPage(int totalItems)
-    {
-        // 显示分页信息和控件
-        ImGui.Text($"第 {NowPage + 1} / {AllPages} 页 (共 {totalItems} 个物品)");
-        ImGui.SameLine();
-
-        // 上一页按钮
-        if (ImGui.Button("上页") && NowPage > 0)
-        {
-            // 播放界面点击音效
-            SoundEngine.PlaySound(SoundID.MenuTick);
-            NowPage--;
-        }
-
-        // 下一页按钮
-        ImGui.SameLine();
-        if (ImGui.Button("下页") && NowPage < AllPages - 1)
-        {
-            // 播放界面点击音效
-            SoundEngine.PlaySound(SoundID.MenuTick);
-            NowPage++;
-        }
-    }
-    #endregion
-
-    #region 物品编辑器窗口
-    private static ItemData EditItem = null!; // 当前正在编辑的物品
-    private static bool ShowEditWindow = false; // 是否显示编辑窗口
-    private static void DrawItemEditWindow(Player plr)
-    {
-        ImGui.SetNextWindowSize(new Vector2(200, 200), ImGuiCond.FirstUseEver);
-        if (ImGui.Begin($"编辑物品: {EditItem.Name}", ref ShowEditWindow, ImGuiWindowFlags.NoCollapse))
-        {
-            // 基本信息
-            ImGui.Text($"物品类型: {EditItem.Type} ({Lang.GetItemNameValue(EditItem.Type)})");
-
-            // 添加悬停区域显示工具提示
-            if (ImGui.IsItemHovered(ImGuiHoveredFlags.DelayNormal | ImGuiHoveredFlags.AllowWhenDisabled))
-            {
-                Item tempItem = new Item();
-                tempItem.SetDefaults(EditItem.Type);
-                EditItem.ApplyTo(tempItem);
-                TerraAngel.Graphics.ImGuiUtil.ImGuiItemTooltip(tempItem);
-            }
-
+            // 指定鼠标位置
+            ImGui.Checkbox("使用指定鼠标位置", ref useSpecial);
+            ImGui.SameLine();
+            ImGui.TextDisabled($"(按下 Ctrl+Alt 选择抛竿位置)");
+            // 延迟随机范围
             ImGui.Separator();
-
-            // 保存按钮
-            if (ImGui.Button("保存更改"))
-            {
-                // 播放界面关闭音效
-                SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                ShowEditWindow = false;
-                Config.Write();
-                EditItem.ApplyTo(Main.player[Main.myPlayer].HeldItem);
-                ClientLoader.Chat.WriteLine($"已保存物品预设: {EditItem.Name}", Color.Green);
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("取消"))
-            {
-                // 播放界面关闭音效
-                SoundEngine.PlaySound(SoundID.MenuClose, (int)plr.position.X / 16, (int)plr.position.Y / 16, 0, 5, 0);
-                ShowEditWindow = false;
-                ClientLoader.Chat.WriteLine($"已取消本次修改: {EditItem.Name}", Color.Green);
-            }
-
-            // 名称编辑
-            string name = EditItem.Name;
-            ImGui.InputText("名称", ref name, 100);
-            EditItem.Name = name;
-
-            // 基础属性
-            ImGui.Separator();
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "基础属性:");
-
-            int damage = EditItem.Damage;
-            ImGui.InputInt("伤害", ref damage);
-            EditItem.Damage = damage;
-
-            int defense = EditItem.Defense;
-            ImGui.InputInt("防御", ref defense);
-            EditItem.Defense = defense;
-
-            int stack = EditItem.Stack;
-            ImGui.InputInt("数量", ref stack);
-            EditItem.Stack = stack;
-
-            int prefix = (byte)EditItem.Prefix;
-            ImGui.InputInt("前缀ID", ref prefix);
-            EditItem.Prefix = (byte)prefix;
-
-            int crit = EditItem.Crit;
-            ImGui.InputInt("暴击率", ref crit);
-            EditItem.Crit = crit;
-
-            float knockBack = EditItem.KnockBack;
-            ImGui.InputFloat("击退", ref knockBack);
-            EditItem.KnockBack = knockBack;
-
-            int bait = EditItem.bait; // 添加钓鱼饵属性
-            ImGui.InputInt("渔饵力", ref bait);
-            EditItem.bait = bait;
-
-            int fishingPole = EditItem.FishingPole; // 添加钓鱼竿等级属性
-            ImGui.InputInt("渔力", ref fishingPole);
-            EditItem.FishingPole = fishingPole;
-
-            int pick = EditItem.pick; // 添加镐力属性
-            ImGui.InputInt("镐力", ref pick);
-            EditItem.pick = pick;
-
-            int axe = EditItem.axe; // 添加斧力属性
-            ImGui.InputInt("斧力", ref axe);
-            EditItem.axe = axe;
-
-            int hammer = EditItem.hammer; // 添加锤力属性
-            ImGui.InputInt("锤力", ref hammer);
-            EditItem.hammer = hammer;
-
-            int createTile = EditItem.createTile; // 创建的方块类型
-            ImGui.InputInt("图格ID", ref createTile);
-            EditItem.createTile = createTile;
-
-            int createWall = EditItem.createWall; // 创建的墙类型
-            ImGui.InputInt("墙壁ID", ref createWall);
-            EditItem.createWall = createWall;
-
-            int value = EditItem.Value;
-            ImGui.InputInt("价值", ref value);
-            EditItem.Value = value;
-
-            // 射击属性
-            ImGui.Separator();
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "射击属性:");
-            int shoot = EditItem.Shoot;
-            ImGui.InputInt("弹幕ID", ref shoot);
-            EditItem.Shoot = shoot;
-            float shootSpeed = EditItem.ShootSpeed;
-            ImGui.InputFloat("发射速度", ref shootSpeed);
-            EditItem.ShootSpeed = shootSpeed;
-
-            // 使用属性
-            ImGui.Separator();
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "使用属性:");
-            int useTime = EditItem.UseTime;
-            ImGui.InputInt("使用时间", ref useTime);
-            EditItem.UseTime = useTime;
-
-            int useAnimation = EditItem.UseAnimation;
-            ImGui.InputInt("使用动画", ref useAnimation);
-            EditItem.UseAnimation = useAnimation;
-
-            int useAmmo = EditItem.UseAmmo;
-            ImGui.InputInt("使用弹药", ref useAmmo);
-            EditItem.UseAmmo = useAmmo;
-
-            int ammo = EditItem.Ammo;
-            ImGui.InputInt("是否弹药", ref ammo);
-            EditItem.Ammo = ammo;
-
-            int useStyle = EditItem.UseStyle;
-            ImGui.InputInt("使用样式", ref useStyle);
-            EditItem.UseStyle = useStyle;
-
-            int healLife = EditItem.HealLife; // 物品使用时回复的生命值
-            ImGui.InputInt("回复生命", ref healLife);
-            EditItem.HealLife = healLife;
-
-            int healMana = EditItem.HealMana; // 物品使用时回复的魔法值
-            ImGui.InputInt("回复魔法", ref healMana);
-            EditItem.HealMana = healMana;
-
-            // 武器类型
-            ImGui.Separator();
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "物品类型:");
-            bool melee = EditItem.Melee;
-            ImGui.Checkbox("近战", ref melee);
-            EditItem.Melee = melee;
-            ImGui.SameLine();
-            bool magic = EditItem.Magic;
-            ImGui.Checkbox("魔法", ref magic);
-            EditItem.Magic = magic;
-            ImGui.SameLine();
-            bool ranged = EditItem.Ranged;
-            ImGui.Checkbox("远程", ref ranged);
-            EditItem.Ranged = ranged;
-            ImGui.SameLine();
-            bool summon = EditItem.Summon;
-            ImGui.Checkbox("召唤", ref summon);
-            EditItem.Summon = summon;
-            ImGui.SameLine();
-            bool sentry = EditItem.sentry; // 是否为哨兵
-            ImGui.SameLine();
-            ImGui.Checkbox("哨兵", ref sentry);
-
-            ImGui.Separator();
-            bool accessory = EditItem.accessory; // 是否为饰品
-            ImGui.Checkbox("饰品", ref accessory);
-            EditItem.accessory = accessory;
-            ImGui.SameLine();
-            bool wornArmor = EditItem.wornArmor;
-            ImGui.Checkbox("盔甲", ref wornArmor);
-            EditItem.wornArmor = wornArmor;
-            ImGui.SameLine();
-            bool consumable = EditItem.consumable; // 是否为消耗品
-            ImGui.Checkbox("消耗品", ref consumable);
-            EditItem.consumable = consumable;
-            ImGui.SameLine();
-            bool material = EditItem.material; // 是否为材料
-            ImGui.Checkbox("材料", ref material);
-            EditItem.material = material;
-
-            ImGui.Separator();
-            int headSlot = EditItem.headSlot; // 头盔槽位
-            ImGui.InputInt("头盔槽位", ref headSlot);
-            EditItem.headSlot = headSlot;
-            int bodySlot = EditItem.bodySlot; // 上衣槽位
-            ImGui.InputInt("上衣槽位", ref bodySlot);
-            EditItem.bodySlot = bodySlot;
-            int legSlot = EditItem.legSlot; // 裤子槽位
-            ImGui.InputInt("裤子槽位", ref legSlot);
-            EditItem.legSlot = legSlot;
-
-            ImGui.Separator();
-            ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "使用类型:");
-            bool autoReuse = EditItem.AutoReuse;
-            ImGui.Checkbox("自动挥舞", ref autoReuse);
-            EditItem.AutoReuse = autoReuse;
-            ImGui.SameLine();
-            bool useTurn = EditItem.UseTurn;
-            ImGui.Checkbox("使用转向", ref useTurn);
-            EditItem.UseTurn = useTurn;
-            ImGui.SameLine();
-            bool channel = EditItem.Channel;
-            ImGui.Checkbox("持续使用", ref channel);
-            EditItem.Channel = channel;
-            ImGui.SameLine();
-            bool noMelee = EditItem.NoMelee;
-            ImGui.Checkbox("无近战伤害", ref noMelee);
-            EditItem.NoMelee = noMelee;
-            ImGui.SameLine();
-            bool noUseGraphic = EditItem.NoUseGraphic;
-            ImGui.Checkbox("无使用图像", ref noUseGraphic);
-            EditItem.NoUseGraphic = noUseGraphic;
-        }
-        ImGui.End();
-    }
-    #endregion
-
-    #region 一键修改前缀窗口
-    public static bool ShowEditPrefix = false; // 显示批量修改前缀窗口
-    public static int PrefixId = 0; // 用于存储新前缀ID的变量
-    private static void DrawEditPrefixWindow()
-    {
-        ImGui.SetNextWindowSize(new System.Numerics.Vector2(300, 150), ImGuiCond.FirstUseEver);
-        ImGui.SetNextWindowPos(ImGui.GetMainViewport().GetCenter(), ImGuiCond.Appearing, new System.Numerics.Vector2(0.5f, 0.5f));
-
-        if (ImGui.Begin("批量修改饰品前缀", ref ShowEditPrefix, ImGuiWindowFlags.NoCollapse))
-        {
-            ImGui.Text("将修改玩家饰品栏的前缀");
-
-            ImGui.Spacing();
-            ImGui.InputInt("新前缀ID", ref PrefixId);
-
-            // 限制前缀ID在有效范围内(0-84)
-            if (PrefixId < 0) PrefixId = 0;
-            if (PrefixId > 84) PrefixId = 84;
-
-            ImGui.Spacing();
-            if (ImGui.Button("应用"))
-            {
-                // 播放界面关闭音效
-                SoundEngine.PlaySound(SoundID.MenuClose);
-                Utils.ApplyPrefix();
-                ShowEditPrefix = false;
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("取消"))
-            {
-                // 播放界面关闭音效
-                SoundEngine.PlaySound(SoundID.MenuClose);
-                ShowEditPrefix = false;
-            }
+            ImGui.SliderInt("随机延迟最小（帧）", ref min, 0, 120);
+            ImGui.SliderInt("随机延迟最大（帧）", ref max, min, min + 120);
         }
         ImGui.End();
     }

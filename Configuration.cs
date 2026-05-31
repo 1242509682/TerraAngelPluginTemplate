@@ -40,17 +40,8 @@ internal class Configuration
     [JsonProperty("鼠标伤害间隔(帧)", Order = 5)]
     public int MouseStrikeInterval { get; set; } = 30; // 默认30帧
 
-    [JsonProperty("修改前缀按键", Order = 6)]
-    public Keys ShowEditPrefixKey = Keys.P;
-    [JsonProperty("快速收藏按键", Order = 6)]
-    public Keys FavoriteKey = Keys.O;
-
-    [JsonProperty("物品修改", Order = 10)]
-    public bool ItemModify { get; set; } = true;
-    [JsonProperty("应用修改按键", Order = 11)]
-    public Keys ItemModifyKey = Keys.I;
-    [JsonProperty("修改物品", Order = 12)]
-    public List<ItemData> ItemModifyList = new List<ItemData>();
+    [JsonProperty("默认前缀", Order = 6)]
+    public int DefaultPrefixId { get; set; } = 0;
 
     [JsonProperty("忽略重力药水", Order = 13)]
     public bool IgnoreGravity { get; set; } = true;
@@ -66,7 +57,9 @@ internal class Configuration
     [JsonProperty("自动垃圾桶表", Order = 14)]
     public List<TrashData> TrashItems { get; set; } = new List<TrashData>();
 
-    [JsonProperty("自定义传送点", Order = 15)]
+    [JsonProperty("回到死亡地点快捷键", Order = 15)]
+    public Keys DeathTPKey = Keys.B;
+    [JsonProperty("自定义传送点", Order = 16)]
     public Dictionary<int,Dictionary<string, Vector2>> CustomTeleportPoints = new Dictionary<int, Dictionary<string, Vector2>>();
 
     [JsonProperty("NPC自动回血", Order = 17)]
@@ -98,12 +91,9 @@ internal class Configuration
     [JsonProperty("连锁图格表", Order = 19)]
     public List<MinerItem> VeinMinerList { get; set; } = new List<MinerItem>();
 
-    [JsonProperty("进入世界收藏背包物品", Order = 20)]
-    public bool FavoriteItemForJoinWorld { get; set; } = false;
-
     #region NPC自动对话
     [JsonProperty("NPC自动对话", Order = 22)]
-    public bool AutoTalkNPC { get; set; } = true;
+    public bool AutoTalkNPC { get; set; } = false;
     [JsonProperty("NPC自动对话按键", Order = 22)]
     public Keys AutoTalkKey = Keys.Y;
     [JsonProperty("NPC自动对话的最小格数", Order = 22)]
@@ -114,8 +104,6 @@ internal class Configuration
     public bool TalkingNpcImmortal { get; set; } = true;
     [JsonProperty("清除钓鱼任务", Order = 22)]
     public bool ClearAnglerQuests { get; set; } = true;
-    [JsonProperty("清除钓鱼任务按键", Order = 22)]
-    public Keys ClearQuestsKey = Keys.F;
     [JsonProperty("消耗任务鱼", Order = 22)]
     public bool ClearFish { get; set; } = false;
     [JsonProperty("护士禁言", Order = 22)]
@@ -162,12 +150,16 @@ internal class Configuration
     public float PortalMaxDistance { get; set; } = 4000f * 16;
     public bool ProjUpdate { get; internal set; }
 
+    [JsonProperty("伤害倍率开关")]
+    public bool DamageMultiplierEnabled = false;  // 伤害倍率功能总开关
     [JsonProperty("伤害倍率")]
     public float DamageMultiplier { get; set; } = 2f;
     [JsonProperty("伤害倍率按键")]
     public Keys DamageMultiplierKey = Keys.N;
 
     // ========== 自动钓鱼 ==========
+    [JsonProperty("自动钓鱼按键", Order = 24)]
+    public Keys AutoFishKey = Keys.F;
     [JsonProperty("自动钓鱼", Order = 25)]
     public bool AutoFishEnabled { get; set; } = true;
     [JsonProperty("接受物品", Order = 26)]
@@ -199,6 +191,13 @@ internal class Configuration
     [JsonProperty("使用指定鼠标位置", Order = 39)]
     public bool AutoFishHasSpecialPosition { get; set; } = false;
 
+    [JsonProperty("显示头顶UI", Order = 50)]
+    public bool ShowPlayerHeadUI = true;
+    [JsonProperty("显示头顶UI距离", Order = 51)]
+    public float HeadDist = 40f;
+    [JsonProperty("头顶UI快捷键", Order = 52)]
+    public Keys HeadUIKey = Keys.U;
+
     #region 预设参数方法
     public void SetDefault()
     {
@@ -215,10 +214,6 @@ internal class Configuration
         MouseStrikeNPCRange = 3;
         MouseStrikeInterval = 30;
         UseItemInterval = 10;
-        ItemModify = true;
-        ItemModifyKey = Keys.I;
-        ShowEditPrefixKey = Keys.P;
-        FavoriteKey = Keys.O;
         IgnoreGravity = true;
         IgnoreGravityKey = Keys.T;
         AutoTrash = false;
@@ -240,15 +235,13 @@ internal class Configuration
         VeinMinerCount = 500;
         VeinMinerList = VeinMinerItemSetDefault();
 
-        FavoriteItemForJoinWorld = false;
-
-        AutoTalkNPC = true;
+        AutoTalkNPC = false;
         AutoTalkKey = Keys.Y;
         AutoTalkNPCWaitTimes = 30;
         AutoTalkRange = 2;
         TalkingNpcImmortal = true;
         ClearAnglerQuests = true;
-        ClearQuestsKey = Keys.F;
+        AutoFishKey = Keys.F;
         ClearFish = false;
         NurseMute = false;
         SwapMusicing = true;
@@ -275,6 +268,10 @@ internal class Configuration
 
         AutoFishFrameCountRandomizationMin = 10;
         AutoFishFrameCountRandomizationMax = 30;
+
+        ShowPlayerHeadUI = true;
+        HeadDist = 40f;
+        HeadUIKey = Keys.U;
     }
     #endregion
 

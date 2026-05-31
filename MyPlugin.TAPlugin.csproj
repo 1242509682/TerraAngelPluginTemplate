@@ -7,6 +7,7 @@
 		<CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
 		<!-- 添加输出路径设置 -->
 		<OutputPath>bin\$(Configuration)\</OutputPath>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
 	<ItemGroup>
