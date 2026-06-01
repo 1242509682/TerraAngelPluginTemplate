@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using System.Reflection;
+using ImGuiNET;
 using Microsoft.Xna.Framework;
 using ReLogic.Threading;
 using TerraAngel;
@@ -2706,7 +2707,7 @@ internal class Utils
     #endregion
 
     #region 获取图格的物品属性
-    public static WorldItem GetItem(int x, int y)
+    public static WorldItem GetTileItem(int x, int y)
     {
         var noPrefix = false;
         WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _, out noPrefix);
@@ -2714,6 +2715,39 @@ internal class Utils
         item.SetDefaults(type);
         item.stack = stack;
         return item;
-    } 
+    }
+    #endregion
+
+    #region 渐变色方法
+    /// <summary>
+    /// 在指定位置绘制渐变色文本（逐字渐变）
+    /// </summary>
+    /// <param name="drawList">ImGui 绘图列表</param>
+    /// <param name="pos">起始绘制位置（左上角）</param>
+    /// <param name="text">要绘制的文本</param>
+    /// <param name="sCol">起始颜色 (Vector4)</param>
+    /// <param name="eCol">结束颜色 (Vector4)</param>
+    public static unsafe void DrawGrad(ImDrawListPtr drawList, Vector2 pos, string text, Vector4 sCol, Vector4 eCol)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+
+        float tChars = text.Length;
+        float curX = pos.X;
+
+        for (int idx = 0; idx < text.Length; idx++)
+        {
+            // 当长度为1时，t = 0，直接使用起始颜色
+            float t = (tChars == 1) ? 0f : idx / (tChars - 1);
+            Vector4 gradVec = Vector4.Lerp(sCol, eCol, t);
+            uint gradCol = ImGui.GetColorU32(gradVec);
+
+            string ch = text[idx].ToString();
+            Vector2 chSize = ImGui.CalcTextSize(ch);
+            Vector2 chPos = new Vector2(curX, pos.Y);
+            drawList.AddText(chPos, gradCol, ch);
+
+            curX += chSize.X;
+        }
+    }
     #endregion
 }

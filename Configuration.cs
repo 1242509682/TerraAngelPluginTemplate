@@ -197,6 +197,8 @@ internal class Configuration
     public float HeadDist = 40f;
     [JsonProperty("头顶UI快捷键", Order = 52)]
     public Keys HeadUIKey = Keys.U;
+    [JsonProperty("鼠标悬停显示玩家UI", Order = 53)]
+    public bool ShowHeadUIOnlyOnHover = false;
 
     [JsonProperty("寻宝按键", Order = 60)]
     public Keys TreasureKey = Keys.O;
@@ -204,6 +206,8 @@ internal class Configuration
     public int TreasureRange = 35;
     [JsonProperty("显示图格UI", Order = 62)]
     public bool ShowTileUI = true;
+    [JsonProperty("鼠标悬停显示图格UI", Order = 64)]
+    public bool ShowTileUIOnlyOnHover = false;
     [JsonProperty("额外寻宝表", Order = 63)]
     public List<int> TreasureList = new();
 

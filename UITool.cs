@@ -155,9 +155,19 @@ public class UITool : Tool
                 ImGui.SameLine();
                 ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 10);
                 DrawKeySelector("按键", ref Config.HeadUIKey, ref EditHeadUIKey);
+
                 if (showHeadUI)
                 {
-                    ImGui.Indent();
+                    // ========== 新增：仅鼠标悬浮显示复选框 ==========
+                    bool hoverOnly = Config.ShowHeadUIOnlyOnHover;
+                    if (ImGui.Checkbox("鼠标悬停", ref hoverOnly))
+                    {
+                        Config.ShowHeadUIOnlyOnHover = hoverOnly;
+                    }
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip("只有鼠标指向玩家时才显示头顶UI，否则隐藏（远距离标记不受影响）");
+
+                    ImGui.SameLine();
                     ImGui.Text("显示距离:");
                     ImGui.SameLine();
                     ImGui.SetNextItemWidth(150);
@@ -166,7 +176,6 @@ public class UITool : Tool
                     {
                         Config.HeadDist = headDist;
                     }
-                    ImGui.Unindent();
                 }
 
                 // 寻宝功能设置
@@ -180,12 +189,26 @@ public class UITool : Tool
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.TreasureKey, ref EditTreasureKey);
                 ImGui.SameLine();
+
                 // 显示图格头顶UI（在玩家头顶UI代码块之后添加）
                 bool showTileUI = Config.ShowTileUI;
                 if (ImGui.Checkbox("显示图格UI", ref showTileUI))
                 {
                     Config.ShowTileUI = showTileUI;
                 }
+
+                if (showTileUI)
+                {
+                    // 新增：仅鼠标悬浮显示
+                    bool tileHoverOnly = Config.ShowTileUIOnlyOnHover;
+                    if (ImGui.Checkbox("图格悬停", ref tileHoverOnly))
+                    {
+                        Config.ShowTileUIOnlyOnHover = tileHoverOnly;
+                    }
+                    if (ImGui.IsItemHovered())
+                        ImGui.SetTooltip("只有鼠标指向图格面板时才显示");
+                }
+
                 ImGui.SetNextItemWidth(150);
                 int range = Config.TreasureRange;
                 if (ImGui.SliderInt("扫描半径(格)", ref range, 10, 200))
@@ -576,7 +599,7 @@ public class UITool : Tool
                 {
                     DrawDeathTeleportWindow(plr);
                 }
-            } 
+            }
             #endregion
 
             #region 事件控制区域
