@@ -413,7 +413,7 @@ public class MyPlugin(string path) : Plugin(path)
 
     private unsafe void DrawHeadUI()
     {
-        // 使用中文字体（用于显示中文名称和数值）
+        // 使用中文字体
         ImGui.PushFont(chineseFont);
 
         ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
@@ -425,7 +425,13 @@ public class MyPlugin(string path) : Plugin(path)
         Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f);
         Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f);
 
-        // ========== 1. 远距离标记（直接绘制，无呼吸流光）==========
+        // 鼠标位置（用于悬浮检测）
+        Vector2 mousePos = InputSystem.MousePosition;
+
+        // 近距离候选列表
+        List<PInfo> cand = new();
+
+        // ========== 单次遍历所有玩家 ==========
         for (int i = 0; i < Main.maxPlayers; i++)
         {
             Player plr = Main.player[i];
@@ -436,6 +442,7 @@ public class MyPlugin(string path) : Plugin(path)
 
             if (distGrid > Config.HeadDist)
             {
+                // ----- 远距离标记：直接绘制 -----
                 string fullText = $"{plr.name} {(int)distGrid}格";
                 Vector2 txtSz = ImGui.CalcTextSize(fullText);
                 float pad = 4f;
@@ -471,42 +478,30 @@ public class MyPlugin(string path) : Plugin(path)
                 // 渐变色文本（整体）
                 Utils.DrawGrad(drawList, finalPos, fullText, gS, gE);
             }
-        }
-
-        // ========== 2. 近距离完整面板 ==========
-        // 鼠标位置（用于悬浮检测）
-        Vector2 mousePos = InputSystem.MousePosition;
-        List<PInfo> cand = new();
-
-        // 收集符合条件的玩家（距离小于阈值，且若启用“仅悬浮显示”则鼠标必须在玩家碰撞箱内）
-        for (int i = 0; i < Main.maxPlayers; i++)
-        {
-            Player plr = Main.player[i];
-            if (!plr.active || plr.dead || plr.whoAmI == Main.myPlayer) continue;
-
-            // 悬浮检测
-            if (Config.ShowHeadUIOnlyOnHover)
+            else
             {
-                Rectangle hitboxScr = new Rectangle(
-                    (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).X,
-                    (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).Y,
-                    plr.Hitbox.Width,
-                    plr.Hitbox.Height
-                );
-                if (!hitboxScr.Contains((int)mousePos.X, (int)mousePos.Y))
-                    continue;
+                // ----- 近距离玩家：收集候选 -----
+                if (plr.dead) continue; // 死亡的玩家不显示完整面板
+
+                // 若开启“仅悬浮显示”，则检查鼠标是否在玩家碰撞箱内
+                if (Config.ShowHeadUIOnlyOnHover)
+                {
+                    Rectangle hitboxScr = new Rectangle(
+                        (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).X,
+                        (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).Y,
+                        plr.Hitbox.Width,
+                        plr.Hitbox.Height);
+                    if (!hitboxScr.Contains((int)mousePos.X, (int)mousePos.Y))
+                        continue;
+                }
+
+                Vector2 pSz = new Vector2(300, 100);
+                Vector2 pPos = hPos - new Vector2(pSz.X / 2, pSz.Y) + new Vector2(0, -22); // 上移22像素
+                cand.Add(new PInfo { plr = plr, pPos = pPos, pSz = pSz, dist = distGrid });
             }
-
-            Vector2 hPos = Util.WorldToScreenDynamic(plr.Top - new Vector2(0, 10));
-            float distGrid = local.Center.Distance(plr.Center) / 16f;
-            if (distGrid > Config.HeadDist) continue;   // 距离太远，不显示完整面板
-
-            Vector2 pSz = new Vector2(300, 100);
-            Vector2 pPos = hPos - new Vector2(pSz.X / 2, pSz.Y) + new Vector2(0, -22);  // 上移22像素避开头顶
-            cand.Add(new PInfo { plr = plr, pPos = pPos, pSz = pSz, dist = distGrid });
         }
 
-        // 没有符合条件的玩家则直接返回
+        // 没有符合条件的近距离玩家则直接返回
         if (cand.Count == 0) { ImGui.PopFont(); return; }
 
         // 按距离从小到大排序（近的优先绘制）
@@ -522,12 +517,9 @@ public class MyPlugin(string path) : Plugin(path)
         List<Rectangle> occ = new();
 
         // ========== 流光 + 呼吸效果参数（每帧变化）==========
-        // 流光速度（顺时针流动）
-        float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;
-        // 呼吸亮度：使用余弦，亮暗时间对称，且提高最低亮度
+        float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;          // 流光速度（顺时针）
         float breath = 0.85f + 0.25f * (float)Math.Cos(Main.GameUpdateCount * 0.06);
-        // 亮度范围 0.6 ~ 1.1，暗部不会太暗，亮部足够亮
-        breath = Math.Clamp(breath, 0.6f, 1.1f);
+        breath = Math.Clamp(breath, 0.6f, 1.1f);                          // 呼吸亮度范围 0.6~1.1
 
         // 高对比颜色：青与橙
         Vector4 colA = new Vector4(0.2f, 0.8f, 1.0f, 1f);
@@ -565,7 +557,7 @@ public class MyPlugin(string path) : Plugin(path)
 
             // ---------- 左侧框（手持物品，右移4像素）----------
             float leftW = 52;
-            Vector2 leftPos = pPos + new Vector2(8, 4);     // 原为4，现右移4像素
+            Vector2 leftPos = pPos + new Vector2(8, 4);     // 右移4像素
             Vector2 leftSz = new Vector2(leftW, pSz.Y - 8);
             drawList.AddRectFilled(leftPos, leftPos + leftSz, ImGui.GetColorU32(new Vector4(0.15f, 0.15f, 0.15f, 0.8f)), 4f);
 
