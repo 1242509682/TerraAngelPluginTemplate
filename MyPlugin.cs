@@ -299,6 +299,19 @@ public class MyPlugin(string path) : Plugin(path)
         {
             unsafe { DrawHeadUI(); }
         }
+
+        // 寻宝功能 快捷键 O
+        if (InputSystem.IsKeyPressed(Config.TreasureKey))
+        {
+            SoundEngine.PlaySound(SoundID.MenuOpen);
+            Utils.ScanTreasure(Main.LocalPlayer, Config.TreasureRange);
+        }
+
+        // 绘制图格头顶UI
+        if (Config.ShowTileUI && !Main.mapFullscreen && !Main.gameMenu)
+        {
+            DrawTileUI();
+        }
     }
     #endregion
 
@@ -507,12 +520,10 @@ public class MyPlugin(string path) : Plugin(path)
 
         for (int idx = 0; idx < text.Length; idx++)
         {
-            // 计算当前字符的渐变比例（0~1）
             float t = (float)idx / (tChars - 1);
             Vector4 gradVec = Vector4.Lerp(sCol, eCol, t);
             uint gradCol = ImGui.GetColorU32(gradVec);
 
-            // 单独绘制每个字符
             string ch = text[idx].ToString();
             Vector2 chSize = ImGui.CalcTextSize(ch);
             Vector2 chPos = new Vector2(curX, pos.Y);
@@ -520,6 +531,162 @@ public class MyPlugin(string path) : Plugin(path)
 
             curX += chSize.X;
         }
+    }
+    #endregion
+
+    #region 渲染图格头顶UI
+    private class TileInfo
+    {
+        public Point pos;           // 位置
+        public WorldItem? item;      // 物品
+        public string? name;         // 名称
+        public float dist;          // 距离
+        public Vector2 spos;        // 屏幕位置 (panelPos)
+        public Vector2 psize;       // 面板尺寸
+    }
+
+    // 缓存图格物品，避免每帧重复调用 GetItem
+    private Dictionary<Point, WorldItem> tileCache = new();
+    private long CacheRefresh = 0;
+    private const int ShowTileInterval = 60; // 每60帧刷新一次
+
+    private void DrawTileUI()
+    {
+        if (!Config.ShowTileUI || Main.gameMenu) return;
+
+        Player local = Main.LocalPlayer;
+        if (local == null) return;
+
+        ImGui.PushFont(chineseFont);
+        ImDrawListPtr drawList = ImGui.GetBackgroundDrawList();
+
+        Vector2 screenSize = ImGui.GetIO().DisplaySize;
+        int range = Config.TreasureRange;
+        int left = Math.Max(0, (int)(local.Center.X / 16) - range);
+        int right = Math.Min(Main.maxTilesX - 1, (int)(local.Center.X / 16) + range);
+        int top = Math.Max(0, (int)(local.Center.Y / 16) - range);
+        int bottom = Math.Min(Main.maxTilesY - 1, (int)(local.Center.Y / 16) + range);
+
+        float TileX = local.Center.X / 16f;
+        float TileY = local.Center.Y / 16f;
+
+        // 刷新缓存
+        if (Main.GameUpdateCount - CacheRefresh >= ShowTileInterval)
+        {
+            tileCache.Clear();
+            CacheRefresh = (int)Main.GameUpdateCount;
+        }
+
+        // 收集所有需要绘制的图格信息
+        List<TileInfo> candidates = new();
+
+        for (int x = left; x <= right; x++)
+        {
+            for (int y = top; y <= bottom; y++)
+            {
+                Tile? tile = Main.tile[x, y];
+                if (tile == null || !tile.Value.active()) continue;
+                int tileID = tile.Value.type;
+                if (!Config.TreasureList.Contains(tileID)) continue;
+
+                Point p = new Point(x, y);
+                if (!tileCache.TryGetValue(p, out WorldItem? item))
+                {
+                    item = Utils.GetItem(x, y);
+                    if (item == null || item.type <= 0) continue;
+                    tileCache[p] = item;
+                }
+
+                string name = item.Name;
+                if (string.IsNullOrEmpty(name)) name = Utils.GetTileName(tileID);
+                if (string.IsNullOrEmpty(name)) name = $"图格{tileID}";
+
+                float dx = TileX - x;
+                float dy = TileY - y;
+                float distSq = dx * dx + dy * dy;
+                float dist = (float)Math.Sqrt(distSq);
+
+                Vector2 worldCenter = new Vector2(x * 16 + 8, y * 16 + 8);
+                Vector2 screenPos = Util.WorldToScreenDynamic(worldCenter);
+                if (screenPos.X < -100 || screenPos.X > screenSize.X + 100 ||
+                    screenPos.Y < -100 || screenPos.Y > screenSize.Y + 100)
+                    continue;
+
+                // 计算面板尺寸（增加内边距20像素）
+                int pad = 10; // 四周各10像素，总宽高增加20
+                Vector2 iconSize = new Vector2(24, 24);
+                Vector2 nameSize = ImGui.CalcTextSize(name);
+                string distText = $"{(int)dist}格";
+                Vector2 distSize = ImGui.CalcTextSize(distText);
+                float totalWidth = iconSize.X + 8 + nameSize.X + 8 + distSize.X + pad * 2;
+                float totalHeight = Math.Max(iconSize.Y, Math.Max(nameSize.Y, distSize.Y)) + 8 + pad * 2;
+                Vector2 panelSize = new Vector2(totalWidth, totalHeight);
+                Vector2 panelPos = new Vector2(screenPos.X - panelSize.X / 2, screenPos.Y - 40);
+
+                TileInfo info = new TileInfo();
+                info.pos = p;
+                info.item = item;
+                info.name = name;
+                info.dist = dist;
+                info.spos = panelPos;
+                info.psize = panelSize;
+                candidates.Add(info);
+            }
+        }
+
+        // 按距离从小到大排序
+        candidates.Sort((a, b) => a.dist.CompareTo(b.dist));
+
+        List<Rectangle> occupied = new();
+
+        // 渐变色起始和结束（可根据喜好调整）
+        Vector4 gradStart = new Vector4(1f, 1f, 0.9f, 1f);   // 米白
+        Vector4 gradEnd = new Vector4(1f, 0.8f, 0.2f, 1f);   // 橙黄
+
+        
+        foreach (TileInfo info in candidates)
+        {
+            if (info == null) continue;
+            Rectangle rect = new Rectangle((int)info.spos.X, (int)info.spos.Y, (int)info.psize.X, (int)info.psize.Y);
+            bool overlap = false;
+            foreach (var occ in occupied)
+            {
+                if (rect.Intersects(occ))
+                {
+                    overlap = true;
+                    break;
+                }
+            }
+            if (overlap) continue;
+
+            occupied.Add(rect);
+
+            // 绘制背景
+            uint bgCol = ImGui.GetColorU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
+            drawList.AddRectFilled(info.spos, info.spos + info.psize, bgCol, 6f);
+
+            // 图标
+            Vector2 iconSize = new Vector2(24, 24);
+            Vector2 iconPos = info.spos + new Vector2(10, (info.psize.Y - iconSize.Y) / 2);
+
+            if (info.item == null) continue;
+            ImGuiUtil.DrawItemCentered(drawList, info.item.inner, iconPos + iconSize / 2, iconSize.X);
+
+            // 名称（渐变色）
+            Vector2 nameSize = ImGui.CalcTextSize(info.name);
+            Vector2 namePos = info.spos + new Vector2(iconSize.X + 8 + 10, (info.psize.Y - nameSize.Y) / 2);
+
+            if (string.IsNullOrEmpty(info.name)) continue;
+            DrawGrad(drawList, namePos, info.name, gradStart, gradEnd);
+
+            // 距离（渐变色）
+            string distText = $"{(int)info.dist}格";
+            Vector2 distSize = ImGui.CalcTextSize(distText);
+            Vector2 distPos = info.spos + new Vector2(iconSize.X + 8 + nameSize.X + 8 + 10, (info.psize.Y - distSize.Y) / 2);
+            DrawGrad(drawList, distPos, distText, gradStart, gradEnd);
+        }
+
+        ImGui.PopFont();
     }
     #endregion
 }

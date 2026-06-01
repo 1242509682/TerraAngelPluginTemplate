@@ -32,6 +32,7 @@ public class UITool : Tool
     public bool EditAutoTalkKey = false; // NPC自动对话按键编辑状态
     private bool EditHeadUIKey = false; // 头顶UI开关按键编辑状态
     private bool EditDTPKey = false; // 死亡传送按键编辑状态
+    private bool EditTreasureKey = false; // 寻宝按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -145,7 +146,7 @@ public class UITool : Tool
 
                 // 渲染头顶UI
                 bool showHeadUI = Config.ShowPlayerHeadUI;
-                if (ImGui.Checkbox("显示头顶UI", ref showHeadUI))
+                if (ImGui.Checkbox("玩家头顶UI", ref showHeadUI))
                 {
                     Config.ShowPlayerHeadUI = showHeadUI;
                 }
@@ -166,6 +167,30 @@ public class UITool : Tool
                         Config.HeadDist = headDist;
                     }
                     ImGui.Unindent();
+                }
+
+                // 寻宝功能设置
+                ImGui.Separator();
+                if (ImGui.Button("自动寻宝"))
+                {
+                    SoundEngine.PlaySound(SoundID.MenuOpen);
+                    ShowETW = !ShowETW;
+                }
+                if (ShowETW) DrawETW();
+                ImGui.SameLine();
+                DrawKeySelector("按键", ref Config.TreasureKey, ref EditTreasureKey);
+                ImGui.SameLine();
+                // 显示图格头顶UI（在玩家头顶UI代码块之后添加）
+                bool showTileUI = Config.ShowTileUI;
+                if (ImGui.Checkbox("显示图格UI", ref showTileUI))
+                {
+                    Config.ShowTileUI = showTileUI;
+                }
+                ImGui.SetNextItemWidth(150);
+                int range = Config.TreasureRange;
+                if (ImGui.SliderInt("扫描半径(格)", ref range, 10, 200))
+                {
+                    Config.TreasureRange = range;
                 }
 
                 ImGui.TreePop();
@@ -2644,6 +2669,142 @@ public class UITool : Tool
             ImGui.SliderInt("随机延迟最小（帧）", ref min, 0, 120);
             ImGui.SliderInt("随机延迟最大（帧）", ref max, min, min + 120);
         }
+        ImGui.End();
+    }
+    #endregion
+
+    #region 自动寻宝表编辑窗口
+    private static bool ShowETW = false;
+    private string TSearch = "";
+    private string newId = "";
+    private int CurID = -1;
+    private void DrawETW()
+    {
+        ImGui.SetNextWindowSize(new Vector2(450, 500), ImGuiCond.FirstUseEver);
+        if (!ImGui.Begin("额外寻宝表", ref ShowETW, ImGuiWindowFlags.NoCollapse))
+        {
+            ImGui.End();
+            return;
+        }
+
+        // 顶部：添加新图格区域 + 清空按钮
+        ImGui.TextColored(new Vector4(1f, 0.8f, 0.6f, 1f), "添加新图格");
+
+        if (ImGui.Button("清空列表"))
+        {
+            Config.TreasureList.Clear();
+            Config.Write();
+            CurID = -1;
+        }
+        ImGui.SameLine();
+
+        // 手持物品添加
+        Item held = Main.LocalPlayer.HeldItem;
+        int heldTile = (held != null && !held.IsAir) ? held.createTile : -1;
+        if (heldTile > 0)
+        {
+            if (ImGui.Button($"添加手持物品：{held.Name}"))
+            {
+                if (!Config.TreasureList.Contains(heldTile))
+                {
+                    Config.TreasureList.Add(heldTile);
+                    Config.Write();
+                    ClientLoader.Chat.WriteLine($"已添加 {held.Name}", color);
+                }
+                else
+                {
+                    ClientLoader.Chat.WriteLine("该图格已在列表中", Color.Yellow);
+                }
+            }
+        }
+        else
+        {
+            ImGui.BeginDisabled();
+            ImGui.Button("手持物品不是可放置图格");
+            ImGui.EndDisabled();
+        }
+
+        // 手动输入ID
+        ImGui.Spacing();
+        ImGui.Text("手动添加（图格ID）:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(100);
+        ImGui.InputText("##newId", ref newId, 10);
+        ImGui.SameLine();
+        if (ImGui.Button("添加"))
+        {
+            if (int.TryParse(newId, out int id) && id > 0 && id < TileID.Count)
+            {
+                string tileName = Utils.GetTileName(id);
+                if (!Config.TreasureList.Contains(id))
+                {
+                    Config.TreasureList.Add(id);
+                    Config.Write();
+                    ClientLoader.Chat.WriteLine($"已添加图格：{tileName} (ID:{id})", color);
+                }
+                else
+                {
+                    ClientLoader.Chat.WriteLine("该图格已在列表中", Color.Yellow);
+                }
+            }
+            else
+            {
+                ClientLoader.Chat.WriteLine("无效的图格ID", Color.Red);
+            }
+            newId = "";
+        }
+        if (int.TryParse(newId, out int previewId) && previewId > 0 && previewId < TileID.Count)
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(0.8f, 0.9f, 1f, 1f), $"预览：{Utils.GetTileName(previewId)}");
+        }
+
+        ImGui.Separator();
+
+        // 搜索框
+        ImGui.Text("搜索图格:");
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150);
+        ImGui.InputTextWithHint("##search", "名称或ID", ref TSearch, 100);
+        ImGui.SameLine();
+        ImGui.TextDisabled($"(共 {Config.TreasureList.Count})");
+
+        // 图格列表（按钮网格）
+        ImGui.BeginChild("list", new Vector2(0, 200), ImGuiChildFlags.Borders);
+        var items = Config.TreasureList
+            .Select(id => new { ID = id, Name = Utils.GetTileName(id) })
+            .Where(t => string.IsNullOrWhiteSpace(TSearch) ||
+                        t.Name.Contains(TSearch, StringComparison.OrdinalIgnoreCase) ||
+                        t.ID.ToString().Contains(TSearch))
+            .OrderBy(t => t.Name)
+            .ToList();
+
+        int columns = 4;
+        int idx = 0;
+        foreach (var t in items)
+        {
+            if (idx % columns != 0) ImGui.SameLine();
+            string label = $"{t.Name}##{t.ID}";
+            if (ImGui.Button(label, new Vector2(ImGui.GetContentRegionAvail().X / columns - 5, 0)))
+            {
+                CurID = t.ID;
+            }
+            idx++;
+        }
+        ImGui.EndChild();
+
+        // 移除选中
+        if (CurID > 0 && Config.TreasureList.Contains(CurID))
+        {
+            ImGui.Spacing();
+            if (ImGui.Button($"移除选中：{Utils.GetTileName(CurID)}"))
+            {
+                Config.TreasureList.Remove(CurID);
+                Config.Write();
+                CurID = -1;
+            }
+        }
+
         ImGui.End();
     }
     #endregion

@@ -191,12 +191,21 @@ internal class Configuration
     [JsonProperty("使用指定鼠标位置", Order = 39)]
     public bool AutoFishHasSpecialPosition { get; set; } = false;
 
-    [JsonProperty("显示头顶UI", Order = 50)]
+    [JsonProperty("显示玩家头顶UI", Order = 50)]
     public bool ShowPlayerHeadUI = true;
-    [JsonProperty("显示头顶UI距离", Order = 51)]
+    [JsonProperty("显示玩家头顶UI距离", Order = 51)]
     public float HeadDist = 40f;
     [JsonProperty("头顶UI快捷键", Order = 52)]
     public Keys HeadUIKey = Keys.U;
+
+    [JsonProperty("寻宝按键", Order = 60)]
+    public Keys TreasureKey = Keys.O;
+    [JsonProperty("寻宝范围", Order = 61)]
+    public int TreasureRange = 35;
+    [JsonProperty("显示图格UI", Order = 62)]
+    public bool ShowTileUI = true;
+    [JsonProperty("额外寻宝表", Order = 63)]
+    public List<int> TreasureList = new();
 
     #region 预设参数方法
     public void SetDefault()
@@ -272,6 +281,9 @@ internal class Configuration
         ShowPlayerHeadUI = true;
         HeadDist = 40f;
         HeadUIKey = Keys.U;
+
+        TreasureRange = 35;
+        TreasureList = new();
     }
     #endregion
 

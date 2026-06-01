@@ -2641,42 +2641,79 @@ internal class Utils
     }
     #endregion
 
-    #region 地图区块更新工具（用于传送）
-    // 更新指定位置周围的地图区块
-    public static void UpdatePosMap(Vector2 pos)
+    #region 寻宝功能
+    // 判断是否为宝藏图格（箱子、生命水晶、矿物）
+    public static bool IsTreasure(int tileID)
     {
-        UpdateMapSection((int)pos.X, (int)pos.Y);
+        // 箱子
+        if (TileID.Sets.BasicChest[tileID])
+            return true;
+
+        // 生命水晶
+        if (tileID == TileID.Heart) return true;
+
+        // 额外图格列表
+        if (Config.TreasureList.Contains(tileID)) return true;
+
+        // 矿物列表
+        return TileID.Sets.Ore[tileID];
     }
 
-    // 更新单个地图区块
-    private static void UpdateMapSection(int sectionX, int sectionY)
+    // 扫描指定范围内的宝藏，并产生粒子提示
+    public static void ScanTreasure(Player plr, int range)
     {
-        if (Main.mapDelay > 0)
-        {
-            Main.mapDelay--;
-        }
-        else
-        {
-            int startX = sectionX * 200;
-            int endX = Math.Min(startX + 200, Main.maxTilesX);
-            int startY = sectionY * 150;
-            int endY = Math.Min(startY + 150, Main.maxTilesY);
+        // 计算扫描区域（以玩家为中心）
+        int left = Math.Max(0, (int)(plr.position.X / 16) - range);
+        int right = Math.Min(Main.maxTilesX - 1, (int)(plr.position.X / 16) + range);
+        int top = Math.Max(0, (int)(plr.position.Y / 16) - range);
+        int bottom = Math.Min(Main.maxTilesY - 1, (int)(plr.position.Y / 16) + range);
 
-            // 并行更新区块内的所有图块
-            FastParallel.For(startX, endX, delegate (int start, int end, object context)
+        int found = 0;
+        for (int x = left; x <= right; x++)
+        {
+            for (int y = top; y <= bottom; y++)
             {
-                for (int x = start; x < end; x++)
+                Tile? tile = Main.tile[x, y];
+                if (tile.HasValue && tile.Value.active() && IsTreasure(tile.Value.type))
                 {
-                    for (int y = startY; y < endY; y++)
-                    {
-                        Main.Map.Update(x, y, 255);
-                    }
-                }
-            });
+                    // 在方块中心产生金色粒子
+                    Vector2 worldPos = new Vector2(x * 16 + 8, y * 16 + 8);
 
-            // 标记地图需要刷新
-            Main.refreshMap = true;
+                    for (int i = 0; i < 3; i++)
+                    {
+                        Dust.NewDust(worldPos, 0, 0, DustID.GoldFlame, 0f, 0f, 0, default, 1.2f);
+                    }
+                    found++;
+                }
+            }
         }
     }
+    #endregion
+
+    #region 获取图格的中文名称
+    public static string GetTileName(int tileID)
+    {
+        // 通过 createTile 反向查找物品名
+        foreach (var kv in ContentSamples.ItemsByType)
+        {
+            Item item = kv.Value;
+            if (item != null && item.createTile == tileID)
+                return Lang.GetItemNameValue(item.type);
+        }
+
+        return string.Empty;
+    }
+    #endregion
+
+    #region 获取图格的物品属性
+    public static WorldItem GetItem(int x, int y)
+    {
+        var noPrefix = false;
+        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _, out noPrefix);
+        WorldItem item = new();
+        item.SetDefaults(type);
+        item.stack = stack;
+        return item;
+    } 
     #endregion
 }
