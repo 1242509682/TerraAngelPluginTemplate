@@ -214,10 +214,10 @@ public class UITool : Tool
                 ImGui.Text("扫描半径:");
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(150);
-                int range = Config.TreasureRange;
-                if (ImGui.SliderInt("##HeadDist2", ref range, 10, 200, "%.0f格"))
+                float range = Config.TreasureRange;
+                if (ImGui.SliderFloat("##HeadDist2", ref range, 10, 200, "%.0f格"))
                 {
-                    Config.TreasureRange = range;
+                    Config.TreasureRange = (int)range;
                 }
 
                 ImGui.TreePop();
