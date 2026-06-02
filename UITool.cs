@@ -30,9 +30,9 @@ public class UITool : Tool
     public bool EditNPCReliveKey = false; // 复活NPC按键编辑状态
     public bool EditVeinMinerKey = false; // 连锁挖矿按键编辑状态
     public bool EditAutoTalkKey = false; // NPC自动对话按键编辑状态
-    private bool EditHeadUIKey = false; // 头顶UI开关按键编辑状态
     private bool EditDTPKey = false; // 死亡传送按键编辑状态
-    private bool EditTreasureKey = false; // 寻宝按键编辑状态
+    public static bool EditHeadUIKey = false; // 头顶UI开关按键编辑状态
+    public static bool EditTreasureKey = false; // 寻宝按键编辑状态
 
     #region UI与配置文件交互方法
     public override void DrawUI(ImGuiIOPtr io)
@@ -145,6 +145,7 @@ public class UITool : Tool
                 }
 
                 // 渲染头顶UI
+                ImGui.Separator();
                 bool showHeadUI = Config.ShowPlayerHeadUI;
                 if (ImGui.Checkbox("玩家头顶UI", ref showHeadUI))
                 {
@@ -188,9 +189,9 @@ public class UITool : Tool
                 if (ShowETW) DrawETW();
                 ImGui.SameLine();
                 DrawKeySelector("按键", ref Config.TreasureKey, ref EditTreasureKey);
-                ImGui.SameLine();
 
-                // 显示图格头顶UI（在玩家头顶UI代码块之后添加）
+                // 显示图格头顶UI
+                ImGui.SameLine();
                 bool showTileUI = Config.ShowTileUI;
                 if (ImGui.Checkbox("显示图格UI", ref showTileUI))
                 {
@@ -199,8 +200,8 @@ public class UITool : Tool
 
                 if (showTileUI)
                 {
-                    // 新增：仅鼠标悬浮显示
                     bool tileHoverOnly = Config.ShowTileUIOnlyOnHover;
+                    ImGui.SameLine();
                     if (ImGui.Checkbox("图格悬停", ref tileHoverOnly))
                     {
                         Config.ShowTileUIOnlyOnHover = tileHoverOnly;
@@ -209,9 +210,11 @@ public class UITool : Tool
                         ImGui.SetTooltip("只有鼠标指向图格面板时才显示");
                 }
 
+                ImGui.Text("扫描半径:");
+                ImGui.SameLine();
                 ImGui.SetNextItemWidth(150);
                 int range = Config.TreasureRange;
-                if (ImGui.SliderInt("扫描半径(格)", ref range, 10, 200))
+                if (ImGui.SliderInt("##HeadDist2", ref range, 10, 200, "%.0f格"))
                 {
                     Config.TreasureRange = range;
                 }
@@ -805,6 +808,9 @@ public class UITool : Tool
             WorldInfo();
             ClientLoader.Chat.WriteLine("已显示当前世界信息,请查看终端", color);
         }
+
+        // 绘制头顶UI的更多操作弹窗
+        HeadUIManager.DrawMoreWin();
     }
     #endregion
 
@@ -1152,7 +1158,7 @@ public class UITool : Tool
     #endregion
 
     #region 按键选择器辅助方法
-    private void DrawKeySelector(string label, ref Keys key, ref bool editing)
+    public static void DrawKeySelector(string label, ref Keys key, ref bool editing)
     {
         // 显示按键标签和当前按键
         ImGui.Text($"{label}:");
@@ -2697,11 +2703,11 @@ public class UITool : Tool
     #endregion
 
     #region 自动寻宝表编辑窗口
-    private static bool ShowETW = false;
-    private string TSearch = "";
-    private string newId = "";
-    private int CurID = -1;
-    private void DrawETW()
+    public static bool ShowETW = false;
+    private static string TSearch = "";
+    private static string newId = "";
+    private static int CurID = -1;
+    public static void DrawETW()
     {
         ImGui.SetNextWindowSize(new Vector2(450, 500), ImGuiCond.FirstUseEver);
         if (!ImGui.Begin("额外寻宝表", ref ShowETW, ImGuiWindowFlags.NoCollapse))
@@ -2722,9 +2728,9 @@ public class UITool : Tool
         ImGui.SameLine();
 
         // 手持物品添加
-        Item held = Main.LocalPlayer.HeldItem;
+        Item? held = Main.LocalPlayer.HeldItem;
         int heldTile = (held != null && !held.IsAir) ? held.createTile : -1;
-        if (heldTile > 0)
+        if (held != null && held.IsAir && heldTile > 0)
         {
             if (ImGui.Button($"添加手持物品：{held.Name}"))
             {
@@ -2758,7 +2764,7 @@ public class UITool : Tool
         {
             if (int.TryParse(newId, out int id) && id > 0 && id < TileID.Count)
             {
-                string tileName = Utils.GetTileName(id);
+                string tileName = HeadUIManager.GetTileName(id);
                 if (!Config.TreasureList.Contains(id))
                 {
                     Config.TreasureList.Add(id);
@@ -2779,7 +2785,7 @@ public class UITool : Tool
         if (int.TryParse(newId, out int previewId) && previewId > 0 && previewId < TileID.Count)
         {
             ImGui.SameLine();
-            ImGui.TextColored(new Vector4(0.8f, 0.9f, 1f, 1f), $"预览：{Utils.GetTileName(previewId)}");
+            ImGui.TextColored(new Vector4(0.8f, 0.9f, 1f, 1f), $"预览：{HeadUIManager.GetTileName(previewId)}");
         }
 
         ImGui.Separator();
@@ -2795,7 +2801,7 @@ public class UITool : Tool
         // 图格列表（按钮网格）
         ImGui.BeginChild("list", new Vector2(0, 200), ImGuiChildFlags.Borders);
         var items = Config.TreasureList
-            .Select(id => new { ID = id, Name = Utils.GetTileName(id) })
+            .Select(id => new { ID = id, Name = HeadUIManager.GetTileName(id) })
             .Where(t => string.IsNullOrWhiteSpace(TSearch) ||
                         t.Name.Contains(TSearch, StringComparison.OrdinalIgnoreCase) ||
                         t.ID.ToString().Contains(TSearch))
@@ -2820,7 +2826,7 @@ public class UITool : Tool
         if (CurID > 0 && Config.TreasureList.Contains(CurID))
         {
             ImGui.Spacing();
-            if (ImGui.Button($"移除选中：{Utils.GetTileName(CurID)}"))
+            if (ImGui.Button($"移除选中：{HeadUIManager.GetTileName(CurID)}"))
             {
                 Config.TreasureList.Remove(CurID);
                 Config.Write();

@@ -205,7 +205,7 @@ internal class Configuration
     [JsonProperty("寻宝范围", Order = 61)]
     public int TreasureRange = 35;
     [JsonProperty("显示图格UI", Order = 62)]
-    public bool ShowTileUI = true;
+    public bool ShowTileUI = false;
     [JsonProperty("鼠标悬停显示图格UI", Order = 64)]
     public bool ShowTileUIOnlyOnHover = false;
     [JsonProperty("额外寻宝表", Order = 63)]
@@ -286,8 +286,12 @@ internal class Configuration
         HeadDist = 40f;
         HeadUIKey = Keys.U;
 
+        ShowTileUI = false;
         TreasureRange = 35;
-        TreasureList = new();
+        TreasureList = new()
+        {
+            TileID.Torches
+        };
     }
     #endregion
 
