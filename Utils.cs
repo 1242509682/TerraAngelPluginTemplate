@@ -2641,4 +2641,40 @@ internal class Utils
         return unlockState == (BestiaryEntryUnlockState)state;
     }
     #endregion
+
+    #region 获取图格的中文名称
+    /// <summary>
+    /// 通过图格ID反向查找对应的物品名称（因为图格本身没有中文名，利用 createTile 映射物品）。
+    /// </summary>
+    public static string GetTileName(int tileID)
+    {
+        var name = string.Empty;
+        foreach (var kv in ContentSamples.ItemsByType)
+        {
+            Item item = kv.Value;
+            if (item != null && item.createTile == tileID)
+                name = Lang.GetItemNameValue(item.type);
+        }
+
+        if (string.IsNullOrEmpty(name))
+            name = $"{TileID.Search.GetName(tileID)}({tileID})";
+
+        return name;
+    }
+    #endregion
+
+    #region 获取图格的物品属性
+    /// <summary>
+    /// 模拟破坏图格，返回其掉落的 WorldItem 对象（包含类型和堆叠数）。
+    /// </summary>
+    public static WorldItem GetTileItem(int x, int y)
+    {
+        var noPrefix = false;
+        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _, out noPrefix);
+        WorldItem item = new();
+        item.SetDefaults(type);
+        item.stack = stack;
+        return item;
+    }
+    #endregion
 }

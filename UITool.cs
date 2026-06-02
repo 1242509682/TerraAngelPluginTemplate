@@ -10,6 +10,7 @@ using Terraria.Audio;
 using Terraria.GameContent.Events;
 using Terraria.ID;
 using static MyPlugin.MyPlugin;
+using static MyPlugin.Utils;
 
 namespace MyPlugin;
 
@@ -2761,7 +2762,7 @@ public class UITool : Tool
         {
             if (int.TryParse(newId, out int id) && id > 0 && id < TileID.Count)
             {
-                string tileName = HeadUIManager.GetTileName(id);
+                string tileName = GetTileName(id);
                 if (!Config.TreasureList.Contains(id))
                 {
                     Config.TreasureList.Add(id);
@@ -2782,7 +2783,7 @@ public class UITool : Tool
         if (int.TryParse(newId, out int previewId) && previewId > 0 && previewId < TileID.Count)
         {
             ImGui.SameLine();
-            ImGui.TextColored(new Vector4(0.8f, 0.9f, 1f, 1f), $"预览：{HeadUIManager.GetTileName(previewId)}");
+            ImGui.TextColored(new Vector4(0.8f, 0.9f, 1f, 1f), $"预览：{GetTileName(previewId)}");
         }
 
         ImGui.Separator();
@@ -2798,7 +2799,7 @@ public class UITool : Tool
         // 图格列表（按钮网格）
         ImGui.BeginChild("list", new Vector2(0, 200), ImGuiChildFlags.Borders);
         var items = Config.TreasureList
-            .Select(id => new { ID = id, Name = HeadUIManager.GetTileName(id) })
+            .Select(id => new { ID = id, Name = GetTileName(id) })
             .Where(t => string.IsNullOrWhiteSpace(TSearch) ||
                         t.Name.Contains(TSearch, StringComparison.OrdinalIgnoreCase) ||
                         t.ID.ToString().Contains(TSearch))
@@ -2823,7 +2824,7 @@ public class UITool : Tool
         if (CurID > 0 && Config.TreasureList.Contains(CurID))
         {
             ImGui.Spacing();
-            if (ImGui.Button($"移除选中：{HeadUIManager.GetTileName(CurID)}"))
+            if (ImGui.Button($"移除选中：{GetTileName(CurID)}"))
             {
                 Config.TreasureList.Remove(CurID);
                 Config.Write();

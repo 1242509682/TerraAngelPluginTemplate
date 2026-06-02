@@ -9,103 +9,132 @@ using Terraria;
 using Terraria.Audio;
 using Terraria.ID;
 using static MyPlugin.MyPlugin;
-using static MyPlugin.UITool;
+using static MyPlugin.Utils;
 
 namespace MyPlugin;
 
+/// <summary>
+/// 玩家头顶UI与图格头顶UI的管理类，负责绘制、交互及额外窗口。
+/// </summary>
 internal class HeadUIManager
 {
     // 公共静态字段，供主类赋值
-    public static ImFontPtr chFont;      // 中文字体
-    public static Item? atkIcon;
-    public static Item? defIcon;
-    public static Item? lifeIcon;
+    public static ImFontPtr chFont;      // 中文字体指针（用于正确显示中文）
+    public static Item? atkIcon;         // 攻击图标（物品实例，如光束剑）
+    public static Item? defIcon;         // 防御图标（物品实例，如钴蓝护盾）
+    public static Item? lifeIcon;        // 生命图标（物品实例，如心）
 
-    // 玩家UI内部类
+    // 玩家UI内部类：存储单个玩家的屏幕面板位置、尺寸和距离
     private class PInfo
     {
-        public Player? plr;
-        public Vector2 pPos;
-        public Vector2 pSz;
-        public float dist;
+        public Player? plr;      // 玩家对象引用
+        public Vector2 pPos;     // 面板左上角屏幕坐标
+        public Vector2 pSz;      // 面板尺寸（宽、高）
+        public float dist;       // 玩家与本地玩家的距离（格数）
     }
 
-    // 图格UI内部类
+    // 图格UI内部类：存储单个宝藏图格的物品信息及屏幕面板
     private class TileInfo
     {
-        public Point pos;
-        public WorldItem? it;
-        public string? n;
-        public float d;
-        public Vector2 p;
-        public Vector2 s;
+        public Point pos;        // 图格坐标（x, y）
+        public WorldItem? it;    // 图格掉落的物品对象
+        public string? n;        // 物品名称（中文）
+        public float d;          // 图格与本地玩家的距离（格数）
+        public Vector2 p;        // 面板左上角屏幕坐标
+        public Vector2 s;        // 面板尺寸
     }
 
-    // 可点击区域
+    // 可点击区域：记录面板的矩形区域及其关联数据（用于点击交互）
     private class CArea
     {
-        public Rectangle rect;
-        public int type;
-        public object? data;
+        public Rectangle rect;   // 屏幕矩形区域
+        public Player? player;     // 关联数据（玩家对象）
     }
 
-    private static List<CArea> areas = new();
-    private static bool showMenu = false;      // 更多菜单是否显示
-    private static Vector2 menuPos;            // 菜单位置
-    private static Player? curPlayer = null;
+    private static List<CArea> areas = new();      // 存储当前帧所有可点击面板区域
+    private static bool showMenu = false;          // 是否显示“更多设置”窗口
+    private static Vector2 menuPos;                // “更多设置”窗口的屏幕位置
+    private static Player? curPlayer = null;       // 当前选中的玩家对象
 
-    // 高亮/点击效果
-    private static int clickIdx = -1;
-    private static long clickTime = 0;
+    // 高亮/点击效果：用于点击反馈（短暂改变背景色）
+    private static int clickIdx = -1;              // 被点击的区域索引
+    private static long clickTime = 0;             // 点击时的游戏帧计数
 
-    // 图格UI缓存
+    // 图格UI缓存：避免每帧重复调用 GetTileItem（性能优化）
     private static Dictionary<Point, WorldItem> tileCache = new();
-    private static long lastRef = 0;
-    private const int refInt = 60;
+    private static long lastRef = 0;               // 上次清空缓存的帧计数
+    private const int refInt = 60;                 // 每 60 帧清空一次缓存
 
     #region 玩家头顶UI
+    /// <summary>
+    /// 绘制其他玩家的头顶信息面板（包含名称、属性、血条等）。
+    /// 支持远距离简化标记、近距离动态面板、鼠标悬浮/点击交互。
+    /// </summary>
     public static unsafe void DrawHeadUI()
     {
+        // 使用中文字体，确保名称和数值正常显示
         ImGui.PushFont(chFont);
 
         ImDrawListPtr dl = ImGui.GetBackgroundDrawList();
         if (dl.NativePtr == null) return;
 
-        Vector2 dSize = ImGui.GetIO().DisplaySize;
-        Player local = Main.LocalPlayer;
-        Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f);
-        Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f);
-        Vector2 mouse = InputSystem.MousePosition;
+        Vector2 dSize = ImGui.GetIO().DisplaySize;          // 屏幕尺寸
+        Player local = Main.LocalPlayer;                    // 本地玩家
+        Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f); // 渐变起始色（淡青）
+        Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f); // 渐变结束色（淡黄）
+        Vector2 mouse = InputSystem.MousePosition;          // 鼠标屏幕坐标
 
-        List<PInfo> cand = new();
-        areas.Clear();
+        List<PInfo> cand = new();   // 候选玩家列表（近距离且可能显示完整面板）
+        areas.Clear(); // 清空上一帧的可点击区域
 
-        // 第一遍遍历：收集近距离玩家（使用粗略尺寸初步判定）
+        // === 第一遍遍历：收集所有玩家并区分远距离/近距离 ===
         for (int i = 0; i < Main.maxPlayers; i++)
         {
             Player plr = Main.player[i];
-            if (!plr.active || plr.whoAmI == Main.myPlayer) continue;
+            if (!plr.active || plr.dead || plr.whoAmI == Main.myPlayer) continue;
 
+            // 计算玩家头顶的屏幕坐标（头顶上方10像素）
             Vector2 hPos = Util.WorldToScreenDynamic(plr.Top - new Vector2(0, 10));
+            // 计算与本地玩家的距离（格数）
             float dist = local.Center.Distance(plr.Center) / 16f;
+            // 临时面板尺寸和位置（仅用于初步判定是否在屏幕内或鼠标悬浮）
             Vector2 tmpSz = new Vector2(200, 60);
             Vector2 tmpPos = hPos - new Vector2(tmpSz.X / 2, tmpSz.Y) + new Vector2(0, -22);
 
+            // 如果开启了“仅鼠标悬浮显示”，则检查鼠标是否在玩家碰撞箱或粗略面板内
+            if (Config.ShowHeadUIOnlyOnHover)
+            {
+                // 玩家碰撞箱屏幕矩形
+                Rectangle hit = new Rectangle(
+                    (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).X,
+                    (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).Y,
+                    plr.Hitbox.Width, plr.Hitbox.Height);
+
+                // 粗略面板矩形（临时尺寸）
+                Rectangle preRect = new Rectangle((int)tmpPos.X, (int)tmpPos.Y, (int)tmpSz.X, (int)tmpSz.Y);
+                if (!hit.Contains((int)mouse.X, (int)mouse.Y) && !preRect.Contains((int)mouse.X, (int)mouse.Y))
+                    continue; // 鼠标既不在玩家身上也不在粗略面板上，跳过
+            }
+
+            // 远距离标记（距离大于设定阈值）
             if (dist > Config.HeadDist)
             {
-                // 远距离标记
+                // 合成文本：“玩家名 距离格”
                 string full = $"{plr.name} {(int)dist}格";
                 Vector2 tSz = ImGui.CalcTextSize(full);
                 float pad = 4f;
                 bool onScr = hPos.X >= 0 && hPos.X <= dSize.X && hPos.Y >= 0 && hPos.Y <= dSize.Y;
-                Vector2 fPos;
+                Vector2 fPos; // 最终屏幕位置
+
                 if (onScr)
                 {
+                    // 屏幕内：显示在头顶上方30像素
                     fPos = hPos - new Vector2(0, 30);
                     fPos.Y = Math.Max(fPos.Y, 10);
                 }
                 else
                 {
+                    // 屏幕外：计算屏幕边缘指示器位置（指向玩家方向）
                     Vector2 dir = (hPos - dSize / 2).SafeNormalize(Vector2.Zero);
                     if (dir == Vector2.Zero) dir = Vector2.UnitX;
                     float ex, ey;
@@ -121,67 +150,64 @@ internal class HeadUIManager
                     }
                     fPos = new Vector2(ex, ey);
                 }
+                // 绘制半透明黑色背景
                 Vector2 bgMin = fPos - new Vector2(pad, pad);
                 Vector2 bgMax = fPos + tSz + new Vector2(pad, pad);
                 dl.AddRectFilled(bgMin, bgMax, ImGui.GetColorU32(new Vector4(0f, 0f, 0f, 0.6f)), 4f);
+                // 绘制渐变色文本（名称+距离）
                 DrawGrad(dl, fPos, full, gS, gE);
             }
             else
             {
-                if (plr.dead) continue;
-                if (Config.ShowHeadUIOnlyOnHover)
-                {
-                    Rectangle hit = new Rectangle(
-                        (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).X,
-                        (int)Util.WorldToScreenDynamic(plr.Hitbox.TopLeft()).Y,
-                        plr.Hitbox.Width, plr.Hitbox.Height);
-                    if (!hit.Contains((int)mouse.X, (int)mouse.Y))
-                    {
-                        Rectangle preRect = new Rectangle((int)tmpPos.X, (int)tmpPos.Y, (int)tmpSz.X, (int)tmpSz.Y);
-                        if (!preRect.Contains((int)mouse.X, (int)mouse.Y))
-                            continue;
-                    }
-                }
+                // 加入候选列表（后续会重新计算精确面板尺寸）
                 cand.Add(new PInfo { plr = plr, pPos = tmpPos, pSz = tmpSz, dist = dist });
             }
         }
 
+        // 如果没有候选近距离玩家，直接返回
         if (cand.Count == 0) { ImGui.PopFont(); return; }
 
+        // 按距离从小到大排序（近的优先绘制，减少遮挡）
         cand.Sort((a, b) => a.dist.CompareTo(b.dist));
 
+        // 本地玩家碰撞箱（屏幕空间），用于避免UI遮挡自己
         Rectangle localHit = new Rectangle(
             (int)Util.WorldToScreenDynamic(local.Hitbox.TopLeft()).X,
             (int)Util.WorldToScreenDynamic(local.Hitbox.TopLeft()).Y,
             local.Hitbox.Width, local.Hitbox.Height);
 
-        List<Rectangle> occ = new();
+        List<Rectangle> occ = new(); // 已绘制的面板矩形（用于防止UI重叠）
 
-        float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;
-        float breath = 0.85f + 0.25f * (float)Math.Cos(Main.GameUpdateCount * 0.06);
+        // === 流光 + 呼吸效果参数（每帧变化） ===
+        float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;  // 颜色流动相位（0~1）
+        float breath = 0.85f + 0.25f * (float)Math.Cos(Main.GameUpdateCount * 0.06); // 呼吸亮度因子
         breath = Math.Clamp(breath, 0.6f, 1.1f);
-        Vector4 colA = new Vector4(0.2f, 0.8f, 1.0f, 1f);
-        Vector4 colB = new Vector4(1.0f, 0.6f, 0.2f, 1f);
+        Vector4 colA = new Vector4(0.2f, 0.8f, 1.0f, 1f);  // 流光起始色（青）
+        Vector4 colB = new Vector4(1.0f, 0.6f, 0.2f, 1f);  // 流光结束色（橙）
+        // 计算外框四个角的渐变颜色（顺时针方向）
         uint cTL = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.00f + flow) % 1f) * breath);
         uint cTR = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.25f + flow) % 1f) * breath);
         uint cBR = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.50f + flow) % 1f) * breath);
         uint cBL = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.75f + flow) % 1f) * breath);
 
-        int idx = 0;
+        int idx = 0; // 当前面板索引（用于点击反馈）
         foreach (PInfo info in cand)
         {
             Player plr = info.plr!;
+            // 重新计算精确的头顶屏幕坐标（因为玩家可能移动）
             Vector2 hPos = Util.WorldToScreenDynamic(plr.Top - new Vector2(0, 10));
 
-            // ---------- 动态计算面板尺寸 ----------
+            // --- 动态计算面板尺寸（根据内容自适应） ---
             Item held = plr.inventory[plr.selectedItem];
             bool hasHeld = held?.type > 0 && !held.IsAir;
-            Vector2 iSz = new Vector2(16, 16);  // 图标大小
+            Vector2 iSz = new Vector2(16, 16);   // 图标大小（16x16）
 
+            // 玩家名称（超过6字截断并加省略号）
             string rawName = plr.name;
             string pName = rawName.Length > 6 ? rawName.Substring(0, 5) + "…" : rawName;
             Vector2 nameSz = ImGui.CalcTextSize(pName);
 
+            // 攻击、防御、生命数值及文本尺寸
             int atk = plr.GetWeaponDamage(plr.HeldItem);
             int def = plr.statDefense;
             int life = plr.statLife;
@@ -189,55 +215,60 @@ internal class HeadUIManager
             Vector2 dSz = ImGui.CalcTextSize(def.ToString());
             Vector2 lSz = ImGui.CalcTextSize(life.ToString());
 
-            float itemW = hasHeld ? iSz.X + 4 : 0;
-            float atkItemW = iSz.X + 4 + aSz.X;
-            float defItemW = iSz.X + 4 + dSz.X;
-            float lifeItemW = iSz.X + 4 + lSz.X;
-            float spc = 8;          // 项目间距
+            // 各项宽度计算（图标+数值+间距）
+            float itemW = hasHeld ? iSz.X + 4 : 0;                    // 手持物品宽度
+            float atkItemW = iSz.X + 4 + aSz.X;                      // 攻击项（图标+数值）
+            float defItemW = iSz.X + 4 + dSz.X;                      // 防御项
+            float lifeItemW = iSz.X + 4 + lSz.X;                     // 生命项
+            float spc = 8;                                           // 项间间距
             float totalW = itemW + nameSz.X + spc + atkItemW + spc + defItemW + spc + lifeItemW;
-            float pad = 8;          // 左右内边距
-            float panelW = totalW + pad * 2;
+            float pad = 8;                                           // 左右内边距
+            float panelW = totalW + pad * 2;                         // 面板总宽度
+
+            // 行高：取图标和各文本高度的最大值
             float rowH = Math.Max(iSz.Y, Math.Max(nameSz.Y, Math.Max(aSz.Y, Math.Max(dSz.Y, lSz.Y))));
-
-            // 间距高度
-            float panelH = rowH + 1;
-            panelH = Math.Max(panelH, 36);   // 最小高度从60降到52
-
+            float panelH = Math.Max(rowH + 1, 36);                   // 面板高度，最小36像素
             Vector2 pSz = new Vector2(panelW, panelH);
+            // 面板位置：头顶上方22像素，水平居中
             Vector2 pPos = hPos - new Vector2(pSz.X / 2, pSz.Y) + new Vector2(0, -22);
 
             // 重叠与遮挡检测
             Rectangle rect = new Rectangle((int)pPos.X, (int)pPos.Y, (int)pSz.X, (int)pSz.Y);
+            // 避免遮挡本地玩家自己
             if (rect.Intersects(localHit)) continue;
+            // 避免与其他已绘制面板重叠
             bool overlap = false;
             foreach (var r in occ) if (rect.Intersects(r)) { overlap = true; break; }
             if (overlap) continue;
             occ.Add(rect);
 
+            // 将计算好的精确位置和尺寸存回候选信息（供后续点击区域使用）
             info.pPos = pPos;
             info.pSz = pSz;
 
-            // ---------- 外框渐变 ----------
+            // --- 绘制外框（流光渐变） ---
             Vector2 outPos = pPos - new Vector2(1, 1);
             Vector2 outSz = pSz + new Vector2(2, 2);
             dl.AddRectFilledMultiColor(outPos, outPos + outSz, cTL, cTR, cBR, cBL);
 
-            // ---------- 内部背景 ----------
+            // --- 内部背景（根据鼠标悬浮和点击状态改变颜色） ---
             bool isHover = rect.Contains((int)mouse.X, (int)mouse.Y);
             uint bgCol;
+            // 如果刚被点击（10帧内），显示橘黄色
             if (isHover && clickIdx == idx && Main.GameUpdateCount - clickTime < 10)
                 bgCol = ImGui.GetColorU32(new Vector4(0.8f, 0.6f, 0.2f, 0.9f));
-            else if (isHover)
+            else if (isHover)  // 悬浮时深蓝灰色
                 bgCol = ImGui.GetColorU32(new Vector4(0.2f, 0.3f, 0.4f, 0.9f));
-            else
+            else               // 默认半透明黑色
                 bgCol = ImGui.GetColorU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
-            dl.AddRectFilled(pPos, pPos + pSz, bgCol, 6f);
+            dl.AddRectFilled(pPos, pPos + pSz, bgCol, 6f);  // 圆角矩形
 
-            // ---------- 第一行绘制（手持图标、名称、攻击、防御、生命）----------
+            // --- 第一行：手持图标、名称、攻击、防御、生命 ---
             float startX = pPos.X + pad;
-            float centerY = pPos.Y + 6 + rowH / 2;   // 上边距8像素，垂直居中
+            float centerY = pPos.Y + 6 + rowH / 2;           // 垂直中心线（y坐标）
             float curX = startX;
 
+            // 手持物品图标
             if (hasHeld)
             {
                 Vector2 iconPos = new Vector2(curX, centerY - iSz.Y / 2);
@@ -245,46 +276,60 @@ internal class HeadUIManager
                 curX += iSz.X + 4;
             }
 
-            // 名称
+            // 玩家名称（渐变色）
             Vector2 namePos = new Vector2(curX, centerY - nameSz.Y / 2);
             DrawGrad(dl, namePos, pName, gS, gE);
             curX += nameSz.X + spc;
 
-            // 攻击
+            // 攻击数值（青色）
             Vector2 aIconPos = new Vector2(curX, centerY - iSz.Y / 2);
             ImGuiUtil.DrawItemCentered(dl, atkIcon!, aIconPos + iSz / 2, iSz.X);
             Vector2 aTxtPos = new Vector2(curX + iSz.X + 4, centerY - aSz.Y / 2);
-            DrawGrad(dl, aTxtPos, atk.ToString(), gS, gE);
+            Vector4 cyan = new Vector4(0f, 1f, 1f, 1f);        // 纯青色
+            DrawGrad(dl, aTxtPos, atk.ToString(), cyan, cyan);
             curX += iSz.X + 4 + aSz.X + spc;
 
-            // 防御
+            // 防御数值（天蓝色）
             Vector2 dIconPos = new Vector2(curX, centerY - iSz.Y / 2);
             ImGuiUtil.DrawItemCentered(dl, defIcon!, dIconPos + iSz / 2, iSz.X);
             Vector2 dTxtPos = new Vector2(curX + iSz.X + 4, centerY - dSz.Y / 2);
-            DrawGrad(dl, dTxtPos, def.ToString(), gS, gE);
+            Vector4 skyBlue = new Vector4(0.53f, 0.81f, 0.98f, 1f); // 天蓝色
+            DrawGrad(dl, dTxtPos, def.ToString(), skyBlue, skyBlue);
             curX += iSz.X + 4 + dSz.X + spc;
 
-            // 生命
+            // 生命数值（深红色）
             Vector2 lIconPos = new Vector2(curX, centerY - iSz.Y / 2);
             ImGuiUtil.DrawItemCentered(dl, lifeIcon!, lIconPos + iSz / 2, iSz.X);
             Vector2 lTxtPos = new Vector2(curX + iSz.X + 4, centerY - lSz.Y / 2);
-            DrawGrad(dl, lTxtPos, life.ToString(), gS, gE);
+            Vector4 darkRed = new Vector4(1f, 0.4f, 0.4f, 1f);     // 深红色
+            DrawGrad(dl, lTxtPos, life.ToString(), darkRed, darkRed);
+            curX += iSz.X + 4 + lSz.X + spc;
 
-            // ---------- 血条（底部细条，无文字）----------
-            float hpW = pSz.X - pad * 2;
+            // --- 血条（底部细条，渐变） ---
+            float hpW = pSz.X - pad * 2;               // 血条宽度（扣除左右边距）
             float hpX = pPos.X + pad;
-            float hpY = pPos.Y + panelH - 8;   // 距离底部8像素
+            float hpY = pPos.Y + panelH - 8;           // 距离底部8像素
             float lp = (float)plr.statLife / plr.statLifeMax;
             Vector2 hpPos = new Vector2(hpX, hpY);
-            Vector2 hpSz = new Vector2(hpW, 4);
+            Vector2 hpSz = new Vector2(hpW, 4);        // 血条高度4像素
+            // 深灰色背景
             dl.AddRectFilled(hpPos, hpPos + hpSz, ImGui.GetColorU32(new Vector4(0.3f, 0.3f, 0.3f, 1f)));
-            dl.AddRectFilled(hpPos, hpPos + new Vector2(hpSz.X * lp, hpSz.Y), ImGui.GetColorU32(new Vector4(1f, 0.2f, 0.2f, 1f)));
+            if (lp > 0f)
+            {
+                // 渐变前景（从左到右 colA -> colB，并乘以呼吸亮度）
+                Vector2 fillPos = hpPos;
+                Vector2 fillSz = new Vector2(hpSz.X * lp, hpSz.Y);
+                uint leftCol = ImGui.GetColorU32(colA * breath);
+                uint rightCol = ImGui.GetColorU32(colB * breath);
+                // 水平渐变（左上/右上同左色，右下/左下同右色，实际上需要左->右渐变，这里设置四个角）
+                dl.AddRectFilledMultiColor(fillPos, fillPos + fillSz, leftCol, rightCol, rightCol, leftCol);
+            }
 
-            // ---------- 记录点击区域 ----------
+            // --- 记录可点击区域（用于打开更多菜单） ---
             Rectangle wholeRect = new Rectangle((int)pPos.X, (int)pPos.Y, (int)pSz.X, (int)pSz.Y);
-            areas.Add(new CArea { rect = wholeRect, type = 10, data = plr });
+            areas.Add(new CArea { rect = wholeRect, player = plr });
 
-            idx++;
+            idx++; // 面板索引递增
         }
 
         ImGui.PopFont();
@@ -292,40 +337,54 @@ internal class HeadUIManager
     #endregion
 
     #region 图格头顶UI
+    /// <summary>
+    /// 绘制宝藏图格头顶信息面板（图标+名称+距离），支持流光边框、自动避开玩家。
+    /// </summary>
     public static void DrawTileUI()
     {
+        // 如果配置中未启用图格UI或者当前处于游戏菜单界面，则直接返回
         if (!Config.ShowTileUI || Main.gameMenu) return;
 
+        // 获取本地玩家实例，若为空则返回
         Player pl = Main.LocalPlayer;
         if (pl == null) return;
 
+        // 使用中文字体，确保中文名称正常显示
         ImGui.PushFont(chFont);
+        // 获取背景绘制列表，用于在游戏世界中绘制UI
         var dl = ImGui.GetBackgroundDrawList();
+        // 获取当前屏幕尺寸（用于屏幕外剔除）
         var scr = ImGui.GetIO().DisplaySize;
+        // 获取鼠标屏幕坐标（用于悬浮检测）
         Vector2 mouse = InputSystem.MousePosition;
 
+        // 扫描半径（格数）
         int rng = Config.TreasureRange;
+        // 计算扫描区域的图格边界（左上角、右下角）
         int l = Math.Max(0, (int)(pl.Center.X / 16) - rng);
         int r = Math.Min(Main.maxTilesX - 1, (int)(pl.Center.X / 16) + rng);
         int t = Math.Max(0, (int)(pl.Center.Y / 16) - rng);
         int b = Math.Min(Main.maxTilesY - 1, (int)(pl.Center.Y / 16) + rng);
 
+        // 玩家中心所在的图格坐标（浮点数）
         float px = pl.Center.X / 16f;
         float py = pl.Center.Y / 16f;
 
+        // 定期清空物品缓存（防止无限增长，同时保证掉落物变化后能及时更新）
         if (Main.GameUpdateCount - lastRef >= refInt)
         {
             tileCache.Clear();
             lastRef = Main.GameUpdateCount;
         }
 
-        // 预计算所有玩家碰撞箱（用于自动隐藏）
+        // 预计算所有活跃玩家的屏幕碰撞箱（用于自动隐藏，避免UI遮挡玩家）
         List<Rectangle> hits = new();
         for (int i = 0; i < Main.maxPlayers; i++)
         {
             Player p = Main.player[i];
             if (p.active && !p.dead)
             {
+                // 将玩家的世界碰撞箱转换为屏幕坐标矩形
                 Rectangle hit = new Rectangle(
                     (int)Util.WorldToScreenDynamic(p.Hitbox.TopLeft()).X,
                     (int)Util.WorldToScreenDynamic(p.Hitbox.TopLeft()).Y,
@@ -334,56 +393,71 @@ internal class HeadUIManager
             }
         }
 
-        // 收集候选图格
+        // 收集所有需要绘制的候选图格（在扫描范围内且属于额外寻宝表）
         List<TileInfo> cand = new();
         for (int x = l; x <= r; x++)
             for (int y = t; y <= b; y++)
             {
+                // 获取图格实例
                 Tile? tile = Main.tile[x, y];
                 if (tile == null || !tile.Value.active()) continue;
                 int id = tile.Value.type;
+
+                // 仅处理配置中的额外寻宝表图格（用户自定义）
                 if (!Config.TreasureList.Contains(id)) continue;
 
+                // 使用缓存获取物品信息（避免每帧调用 GetTileItem）
                 Point pt = new Point(x, y);
                 if (!tileCache.TryGetValue(pt, out WorldItem? it))
                 {
+                    // 根据图格坐标获取对应的掉落物品
                     it = GetTileItem(x, y);
                     if (it == null || it.type <= 0) continue;
                     tileCache[pt] = it;
                 }
 
+                // 获取物品名称（优先使用物品名，否则通过图格ID查找，最后用ID作为后备）
                 string nm = it.Name;
-                if (string.IsNullOrEmpty(nm)) nm = GetTileName(id);
-                if (string.IsNullOrEmpty(nm)) nm = $"图格{id}";
+                if (string.IsNullOrEmpty(nm))
+                    nm = GetTileName(id);
+                if (string.IsNullOrEmpty(nm))
+                    nm = $"图格{id}";
 
+                // 计算图格与玩家的距离（格数，取整用于显示）
                 float dx = px - x, dy = py - y;
                 float dst = (float)Math.Sqrt(dx * dx + dy * dy);
 
+                // 图格中心的世界坐标 -> 屏幕坐标
                 Vector2 wc = new Vector2(x * 16 + 8, y * 16 + 8);
                 Vector2 sp = Util.WorldToScreenDynamic(wc);
+                // 如果屏幕坐标远离可视区域，则跳过（性能优化）
                 if (sp.X < -100 || sp.X > scr.X + 100 || sp.Y < -100 || sp.Y > scr.Y + 100)
                     continue;
 
-                // 紧凑布局参数
-                int iconSz = 16; // 图标大小16x16
+                // 紧凑布局参数：图标大小、内边距、间距
+                int iconSz = 16;
                 string txt = $"{nm} {(int)dst}格";
                 Vector2 txtSz = ImGui.CalcTextSize(txt);
-                int pad = 4;  // 内边距
-                int spc = 4;  // 图标与文字间距
+                int pad = 4;   // 内边距
+                int spc = 4;   // 图标与文字间距
+                               // 面板宽度 = 图标 + 间距 + 文字宽度 + 左右内边距
                 float w = iconSz + spc + txtSz.X + pad * 2;
+                // 面板高度 = 图标/文字最大高度 + 上下内边距
                 float h = Math.Max(iconSz, txtSz.Y) + pad * 2;
                 Vector2 pSz = new Vector2(w, h);
-                // 面板位置：上移4像素
+                // 面板位置：图格中心屏幕坐标上方偏移40+4像素，水平居中
                 Vector2 pPos = new Vector2(sp.X - pSz.X / 2, sp.Y - 40 - 4);
 
                 cand.Add(new TileInfo { pos = pt, it = it, n = nm, d = dst, p = pPos, s = pSz });
             }
 
+        // 如果没有候选图格，则直接返回（恢复字体后返回）
         if (cand.Count == 0) { ImGui.PopFont(); return; }
 
+        // 按距离从小到大排序（近的优先绘制，便于重叠检测）
         cand.Sort((a, b) => a.d.CompareTo(b.d));
 
-        // 悬浮过滤
+        // 悬浮过滤：如果配置了“仅悬浮显示”，则只保留鼠标指针位于面板矩形内的图格
         List<TileInfo> toDraw;
         if (Config.ShowTileUIOnlyOnHover)
         {
@@ -399,101 +473,117 @@ internal class HeadUIManager
             toDraw = cand;
         }
 
+        // 用于记录已经绘制过的面板矩形，避免重叠
         List<Rectangle> occ = new();
+
+        // 渐变色起始和结束（用于文本）
         Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f);
         Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f);
-        float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;
-        float breath = 0.85f + 0.25f * (float)Math.Cos(Main.GameUpdateCount * 0.06);
-        breath = Math.Clamp(breath, 0.6f, 1.1f);
-        Vector4 colA = new Vector4(0.2f, 0.8f, 1.0f, 1f);
-        Vector4 colB = new Vector4(1.0f, 0.6f, 0.2f, 1f);
 
+        // 流光 + 呼吸效果参数（与玩家UI保持一致）
+        float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;          // 颜色相位
+        float breath = 0.85f + 0.25f * (float)Math.Cos(Main.GameUpdateCount * 0.06);
+        breath = Math.Clamp(breath, 0.6f, 1.1f);                          // 呼吸亮度系数
+        Vector4 colA = new Vector4(0.2f, 0.8f, 1.0f, 1f);                 // 流光起始色（青）
+        Vector4 colB = new Vector4(1.0f, 0.6f, 0.2f, 1f);                 // 流光结束色（橙）
+
+        // 布局常量（与上面计算一致，再次声明便于阅读）
         int iconSize = 16;
         int padVal = 4;
         int spcVal = 4;
 
         foreach (var info in toDraw)
         {
+            // 当前图格面板的矩形（屏幕空间）
             Rectangle rect = new Rectangle((int)info.p.X, (int)info.p.Y, (int)info.s.X, (int)info.s.Y);
-            // 避开玩家碰撞箱
+
+            // 自动隐藏：如果面板与任何玩家的碰撞箱重叠，则跳过绘制（避免遮挡玩家）
             bool blocked = false;
             foreach (var hit in hits) if (rect.Intersects(hit)) { blocked = true; break; }
             if (blocked) continue;
 
-            // 避免面板间重叠
+            // 避免与已经绘制的其他图格面板重叠
             bool overlap = false;
             foreach (var o in occ) if (rect.Intersects(o)) { overlap = true; break; }
             if (overlap) continue;
-            occ.Add(rect);
+            occ.Add(rect);   // 记录当前面板区域
 
-            // 外框流光渐变
+            // 计算外框流光渐变矩形的四个角颜色（随流动和时间变化）
             uint cTL = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.00f + flow) % 1f) * breath);
             uint cTR = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.25f + flow) % 1f) * breath);
             uint cBR = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.50f + flow) % 1f) * breath);
             uint cBL = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.75f + flow) % 1f) * breath);
+            // 外框比面板大一圈（1像素），形成边框效果
             Vector2 outPos = info.p - new Vector2(1, 1);
             Vector2 outSz = info.s + new Vector2(2, 2);
+            // 绘制四色渐变填充矩形（流光走马灯）
             dl.AddRectFilledMultiColor(outPos, outPos + outSz, cTL, cTR, cBR, cBL);
 
-            // 内部背景（悬停高亮）
-            bool hover = rect.Contains((int)mouse.X, (int)mouse.Y);
-            uint bgCol = hover ? ImGui.GetColorU32(new Vector4(0.2f, 0.3f, 0.4f, 0.9f))
-                               : ImGui.GetColorU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
-            dl.AddRectFilled(info.p, info.p + info.s, bgCol, 6f);
+            // 叠加半透明黑色遮罩，降低背景纹理亮度，使文字和图标更清晰
+            dl.AddRectFilled(info.p, info.p + info.s, ImGui.GetColorU32(new Vector4(0f, 0f, 0f, 0.6f)), 6f);
 
-            // 图标
+            // 绘制物品图标（居中在面板左侧）
             Vector2 iPos = info.p + new Vector2(padVal, (info.s.Y - iconSize) / 2);
             ImGuiUtil.DrawItemCentered(dl, info.it!.inner, iPos + new Vector2(iconSize / 2, iconSize / 2), iconSize);
 
-            // 文字（名称+距离）
+            // 绘制文本（名称+距离，整体渐变色）
             string txt = $"{info.n} {(int)info.d}格";
             Vector2 txtSz = ImGui.CalcTextSize(txt);
             Vector2 tPos = info.p + new Vector2(padVal + iconSize + spcVal, (info.s.Y - txtSz.Y) / 2);
             DrawGrad(dl, tPos, txt, gS, gE);
         }
 
+        // 恢复字体
         ImGui.PopFont();
     }
     #endregion
 
-    #region 交互检测（修改）
+    #region 交互检测（点击玩家面板打开更多菜单）
+    /// <summary>
+    /// 检测鼠标左键点击，如果点在可点击区域内，则打开/关闭“更多设置”窗口。
+    /// 应在 Update 循环中每帧调用。
+    /// </summary>
     public static void CheckClicks()
     {
-        if (!InputSystem.LeftMousePressed) return;
+        if (!InputSystem.LeftMousePressed) return;          // 左键未按下
         Vector2 mouse = InputSystem.MousePosition;
         for (int i = 0; i < areas.Count; i++)
         {
             if (areas[i].rect.Contains((int)mouse.X, (int)mouse.Y))
             {
-                clickIdx = i;
-                clickTime = Main.GameUpdateCount;
-                SoundEngine.PlaySound(SoundID.MenuTick);
-                if (areas[i].type == 10)  // 玩家面板
+                clickIdx = i;                               // 记录点击的面板索引
+                clickTime = Main.GameUpdateCount;           // 记录点击时的帧数（用于高亮反馈）
+                SoundEngine.PlaySound(SoundID.MenuTick);    // 播放音效
+                if (areas[i].player != null) // 玩家面板
                 {
-                    // 存储当前选中的玩家
-                    curPlayer = areas[i].data as Player;
-                    showMenu = !showMenu;          // 切换窗口显示状态
+                    curPlayer = areas[i].player;    // 获取玩家对象
+                    showMenu = !showMenu;                   // 切换窗口显示状态
                     if (showMenu)
-                        menuPos = areas[i].rect.TopLeft(); // 将窗口定位到面板左上角
+                        menuPos = areas[i].rect.BottomRight();  // 将窗口定位到面板右下面
                 }
-                break;
+                break; // 只处理第一个点击的区域
             }
         }
     }
     #endregion
 
-    #region 独立窗口（UITool中渲染）
+    #region 独立窗口（更多设置）
+    /// <summary>
+    /// 绘制“更多设置”窗口，显示选中玩家的装备信息，并允许一键获取物品。
+    /// 需在 Update 中每帧调用（若 showMenu 为 true）。
+    /// </summary>
     public static void DrawMoreWin()
     {
         if (!showMenu) return;
 
         ImGui.Separator();
         ImGui.PushFont(chFont);
+        // 设置窗口初始位置（最近一次点击的面板左上角）
         ImGui.SetNextWindowPos(menuPos, ImGuiCond.FirstUseEver);
         ImGui.SetNextWindowSize(new Vector2(380, 500), ImGuiCond.FirstUseEver);
         if (ImGui.Begin("玩家UI设置", ref showMenu, ImGuiWindowFlags.NoCollapse))
         {
-            if (curPlayer != null && curPlayer.active && !curPlayer.dead)
+            if (curPlayer != null && curPlayer.active)
             {
                 ImGui.TextColored(new Vector4(1f, 0.8f, 0.4f, 1f), $"当前玩家：{curPlayer.name}");
 
@@ -575,38 +665,41 @@ internal class HeadUIManager
     }
     #endregion
 
-    #region 辅助方法：给予物品给本地玩家
+    #region 给予物品给本地玩家
+    /// <summary>
+    /// 将指定物品（ID和数量）给予本地玩家，并输出聊天提示。
+    /// </summary>
     private static void GiveItemToLocal(int itemID, int stack)
     {
         Player local = Main.LocalPlayer;
         if (local != null)
-            Utils.GiveItem(local, itemID, stack, false); // 使用已有的 GiveItem 方法
+            Utils.GiveItem(local, itemID, stack, false);
         ClientLoader.Chat.WriteLine($"获得 {Lang.GetItemNameValue(itemID)} x{stack}", Color.Yellow);
     }
     #endregion
 
     #region 寻宝功能
-    // 判断是否为宝藏图格（箱子、生命水晶、矿物）
+    /// <summary>
+    /// 判断给定图格ID是否属于宝藏（箱子、生命水晶、矿石或额外列表中的图格）。
+    /// </summary>
     private static bool IsTreasure(int tileID)
     {
-        // 箱子
+        // 箱子（包括普通箱子和金箱子等）
         if (TileID.Sets.BasicChest[tileID])
             return true;
-
         // 生命水晶
         if (tileID == TileID.Heart) return true;
-
-        // 额外图格列表
+        // 额外寻宝表
         if (Config.TreasureList.Contains(tileID)) return true;
-
-        // 矿物列表
+        // 矿物（所有原版矿石）
         return TileID.Sets.Ore[tileID];
     }
 
-    // 扫描指定范围内的宝藏，并产生粒子提示
+    /// <summary>
+    /// 以玩家为中心，扫描指定半径内的宝藏图格，并在每个宝藏位置生成金色粒子特效。
+    /// </summary>
     public static void ScanTreasure(Player plr, int range)
     {
-        // 计算扫描区域（以玩家为中心）
         int left = Math.Max(0, (int)(plr.position.X / 16) - range);
         int right = Math.Min(Main.maxTilesX - 1, (int)(plr.position.X / 16) + range);
         int top = Math.Max(0, (int)(plr.position.Y / 16) - range);
@@ -620,9 +713,9 @@ internal class HeadUIManager
                 Tile? tile = Main.tile[x, y];
                 if (tile.HasValue && tile.Value.active() && IsTreasure(tile.Value.type))
                 {
-                    // 在方块中心产生金色粒子
+                    // 图格中心世界坐标
                     Vector2 worldPos = new Vector2(x * 16 + 8, y * 16 + 8);
-
+                    // 产生3个金色火焰粒子
                     for (int i = 0; i < 3; i++)
                     {
                         Dust.NewDust(worldPos, 0, 0, DustID.GoldFlame, 0f, 0f, 0, default, 1.2f);
@@ -634,36 +727,10 @@ internal class HeadUIManager
     }
     #endregion
 
-    #region 获取图格的中文名称
-    public static string GetTileName(int tileID)
-    {
-        // 通过 createTile 反向查找物品名
-        foreach (var kv in ContentSamples.ItemsByType)
-        {
-            Item item = kv.Value;
-            if (item != null && item.createTile == tileID)
-                return Lang.GetItemNameValue(item.type);
-        }
-
-        return string.Empty;
-    }
-    #endregion
-
-    #region 获取图格的物品属性
-    public static WorldItem GetTileItem(int x, int y)
-    {
-        var noPrefix = false;
-        WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _, out noPrefix);
-        WorldItem item = new();
-        item.SetDefaults(type);
-        item.stack = stack;
-        return item;
-    }
-    #endregion
-
     #region 渐变色方法
     /// <summary>
-    /// 在指定位置绘制渐变色文本（逐字渐变）
+    /// 在指定位置绘制渐变色文本（逐字渐变）。
+    /// 当文本长度为1时直接使用起始颜色，避免除零错误。
     /// </summary>
     /// <param name="drawList">ImGui 绘图列表</param>
     /// <param name="pos">起始绘制位置（左上角）</param>
@@ -679,7 +746,7 @@ internal class HeadUIManager
 
         for (int idx = 0; idx < text.Length; idx++)
         {
-            // 当长度为1时，t = 0，直接使用起始颜色
+            // 单字符时直接用起始颜色，避免除以0
             float t = (tChars == 1) ? 0f : idx / (tChars - 1);
             Vector4 gradVec = Vector4.Lerp(sCol, eCol, t);
             uint gradCol = ImGui.GetColorU32(gradVec);
