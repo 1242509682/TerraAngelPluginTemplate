@@ -808,9 +808,6 @@ public class UITool : Tool
             WorldInfo();
             ClientLoader.Chat.WriteLine("已显示当前世界信息,请查看终端", color);
         }
-
-        // 绘制头顶UI的更多操作弹窗
-        HeadUIManager.DrawMoreWin();
     }
     #endregion
 

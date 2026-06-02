@@ -321,6 +321,9 @@ public class MyPlugin(string path) : Plugin(path)
 
         // 绘制UI后检测点击
         CheckClicks();
+
+        // 绘制头顶UI的更多操作弹窗
+        DrawMoreWin();
     }
     #endregion
 
