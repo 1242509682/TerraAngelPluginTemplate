@@ -24,6 +24,20 @@ internal class HeadUIManager
     public static Item? defIcon;         // 防御图标（物品实例，如钴蓝护盾）
     public static Item? lifeIcon;        // 生命图标（物品实例，如心）
 
+    // 全局UI重叠检测（所有头顶UI共享）
+    private static List<Rectangle> usedRects = new();   // 本帧已绘制的UI矩形
+    private static long lastFrame = -1;                 // 上次清空的帧号
+
+    // 每帧清空一次矩形列表（利用帧号避免重复清空）
+    private static void clearRect()
+    {
+        if (Main.GameUpdateCount != lastFrame)
+        {
+            usedRects.Clear();
+            lastFrame = Main.GameUpdateCount;
+        }
+    }
+
     // 玩家UI内部类：存储单个玩家的屏幕面板位置、尺寸和距离
     private class PInfo
     {
@@ -48,7 +62,7 @@ internal class HeadUIManager
     private class CArea
     {
         public Rectangle rect;   // 屏幕矩形区域
-        public Player? player;     // 关联数据（玩家对象）
+        public Player? player;   // 关联数据（玩家对象）
     }
 
     private static List<CArea> areas = new();      // 存储当前帧所有可点击面板区域
@@ -65,6 +79,10 @@ internal class HeadUIManager
     private static long lastRef = 0;               // 上次清空缓存的帧计数
     private const int refInt = 60;                 // 每 60 帧清空一次缓存
 
+    // NPC 伤害 UI 相关
+    public static NPC? curNPC = null;           // 当前受击的高亮 NPC
+    public static int NpcDamage = 0;            // 最后一次伤害值
+
     #region 玩家头顶UI
     /// <summary>
     /// 绘制其他玩家的头顶信息面板（包含名称、属性、血条等）。
@@ -72,6 +90,8 @@ internal class HeadUIManager
     /// </summary>
     public static unsafe void DrawHeadUI()
     {
+        clearRect();   // 每帧清空一次全局矩形列表
+
         // 使用中文字体，确保名称和数值正常显示
         ImGui.PushFont(chFont);
 
@@ -91,7 +111,9 @@ internal class HeadUIManager
         for (int i = 0; i < Main.maxPlayers; i++)
         {
             Player plr = Main.player[i];
-            if (!plr.active || plr.dead || plr.whoAmI == Main.myPlayer) continue;
+            if (!plr.active || plr.dead) continue;
+
+            if (!Config.ShowMeHeadUI && plr.whoAmI == Main.myPlayer) continue;
 
             // 计算玩家头顶的屏幕坐标（头顶上方10像素）
             Vector2 hPos = Util.WorldToScreenDynamic(plr.Top - new Vector2(0, 10));
@@ -176,8 +198,6 @@ internal class HeadUIManager
             (int)Util.WorldToScreenDynamic(local.Hitbox.TopLeft()).Y,
             local.Hitbox.Width, local.Hitbox.Height);
 
-        List<Rectangle> occ = new(); // 已绘制的面板矩形（用于防止UI重叠）
-
         // === 流光 + 呼吸效果参数（每帧变化） ===
         float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;  // 颜色流动相位（0~1）
         float breath = 0.85f + 0.25f * (float)Math.Cos(Main.GameUpdateCount * 0.06); // 呼吸亮度因子
@@ -221,8 +241,8 @@ internal class HeadUIManager
             float defItemW = iSz.X + 4 + dSz.X;                      // 防御项
             float lifeItemW = iSz.X + 4 + lSz.X;                     // 生命项
             float spc = 8;                                           // 项间间距
-            float totalW = itemW + nameSz.X + spc + atkItemW + spc + defItemW + spc + lifeItemW;
             float pad = 8;                                           // 左右内边距
+            float totalW = itemW + nameSz.X + spc + atkItemW + spc + defItemW + spc + lifeItemW;
             float panelW = totalW + pad * 2;                         // 面板总宽度
 
             // 行高：取图标和各文本高度的最大值
@@ -232,15 +252,11 @@ internal class HeadUIManager
             // 面板位置：头顶上方22像素，水平居中
             Vector2 pPos = hPos - new Vector2(pSz.X / 2, pSz.Y) + new Vector2(0, -22);
 
-            // 重叠与遮挡检测
             Rectangle rect = new Rectangle((int)pPos.X, (int)pPos.Y, (int)pSz.X, (int)pSz.Y);
             // 避免遮挡本地玩家自己
             if (rect.Intersects(localHit)) continue;
-            // 避免与其他已绘制面板重叠
-            bool overlap = false;
-            foreach (var r in occ) if (rect.Intersects(r)) { overlap = true; break; }
-            if (overlap) continue;
-            occ.Add(rect);
+            // 避免与其他已绘制面板重叠（全局检测）
+            if (usedRects.Any(r => rect.Intersects(r))) continue;
 
             // 将计算好的精确位置和尺寸存回候选信息（供后续点击区域使用）
             info.pPos = pPos;
@@ -329,8 +345,203 @@ internal class HeadUIManager
             Rectangle wholeRect = new Rectangle((int)pPos.X, (int)pPos.Y, (int)pSz.X, (int)pSz.Y);
             areas.Add(new CArea { rect = wholeRect, player = plr });
 
+            // 将当前面板加入全局列表，供后续UI重叠检测
+            usedRects.Add(rect);
+
             idx++; // 面板索引递增
         }
+
+        ImGui.PopFont();
+    }
+    #endregion
+
+    #region 正在伤害的NPC 头顶UI
+    /// <summary>
+    /// 绘制当前受击 NPC 的头顶信息面板（单行：名称、攻防、伤害、距离，血条内显示生命值）
+    /// </summary>
+    public static void DrawNPCUI()
+    {
+        clearRect();   // 每帧清空一次全局矩形列表
+
+        // 使用中文字体
+        ImGui.PushFont(chFont);
+
+        if (!Config.ShowNPCDamageUI) { ImGui.PopFont(); return; }
+        if (curNPC == null || !curNPC.active || curNPC.life <= 0) { ImGui.PopFont(); return; }
+
+        Player local = Main.LocalPlayer;
+        if (local == null) { ImGui.PopFont(); return; }
+
+        // 距离检查
+        float dist = local.Center.Distance(curNPC.Center) / 16f;
+        if (dist > Config.NPCDamageUIDistance) { ImGui.PopFont(); return; }
+
+        // 鼠标悬浮检测（如果开启）
+        Vector2 mouse = InputSystem.MousePosition;
+        if (Config.ShowNPCUIOnlyOnHover)
+        {
+            Rectangle hitbox = new Rectangle(
+                (int)Util.WorldToScreenDynamic(curNPC.Hitbox.TopLeft()).X,
+                (int)Util.WorldToScreenDynamic(curNPC.Hitbox.TopLeft()).Y,
+                curNPC.Hitbox.Width, curNPC.Hitbox.Height);
+            if (!hitbox.Contains((int)mouse.X, (int)mouse.Y))
+            { ImGui.PopFont(); return; }
+        }
+
+        // 计算头顶屏幕坐标（上方10像素）
+        Vector2 headPos = Util.WorldToScreenDynamic(curNPC.Top - new Vector2(0, 10));
+
+        // 获取 NPC 数值
+        int npcAtk = curNPC.damage;
+        int npcDef = curNPC.defense;
+        int npcLife = curNPC.life;
+        int npcLifeMax = curNPC.lifeMax;
+
+        // 准备文本
+        string npcTitle = $"{curNPC.FullName}({curNPC.type})";          // 名称(ID)
+        string dmgText = NpcDamage > 0 ? $"-{NpcDamage}" : "0";         // 伤害值（始终显示）
+        string distText = $"{(int)dist}格";                              // 距离
+        string atkStr = npcAtk.ToString();                               // 攻击力
+        string defStr = npcDef.ToString();                               // 防御力
+        string lifeText = $"{npcLife}/{npcLifeMax}";                     // 生命值/生命上限
+
+        // 预计算尺寸
+        Vector2 titleSz = ImGui.CalcTextSize(npcTitle);
+        Vector2 dmgSz = ImGui.CalcTextSize(dmgText);
+        Vector2 distSz = ImGui.CalcTextSize(distText);
+        Vector2 atkSz = ImGui.CalcTextSize(atkStr);
+        Vector2 defSz = ImGui.CalcTextSize(defStr);
+        Vector2 lifeSz = ImGui.CalcTextSize(lifeText);
+        Vector2 iconSz = new Vector2(14, 14);   // 图标大小
+
+        // 组合项宽度
+        float atkItemW = iconSz.X + 4 + atkSz.X;    // 攻击图标 + 间距 + 数值
+        float defItemW = iconSz.X + 4 + defSz.X;    // 防御图标 + 间距 + 数值
+
+        float spc = 6;          // 项目间距
+        float pad = 8;          // 左右内边距
+        float margin = 6;       // 上下内边距
+        float gap = 4;          // 内容区域与血条之间的间距
+        float bloodH = 18;      // 血条高度（容纳文字）
+
+        // 内容区域高度（取所有元素的最大高度）
+        float contentH = Math.Max(iconSz.Y, Math.Max(titleSz.Y, Math.Max(atkSz.Y, Math.Max(defSz.Y, Math.Max(dmgSz.Y, distSz.Y)))));
+        float totalH = margin * 2 + contentH + gap + bloodH;   // 面板总高度
+
+        // 第一行总宽度
+        float rowW = titleSz.X + spc + atkItemW + spc + defItemW + spc + dmgSz.X + spc + distSz.X;
+        float panelW = rowW + pad * 2;
+
+        // 面板位置（头顶上方22像素，水平居中）
+        Vector2 pPos = headPos - new Vector2(panelW / 2, totalH) + new Vector2(0, -22);
+        Rectangle rect = new Rectangle((int)pPos.X, (int)pPos.Y, (int)panelW, (int)totalH);
+
+        // 避免遮挡本地玩家
+        Player localPlayer = Main.LocalPlayer;
+        if (localPlayer != null)
+        {
+            Rectangle localHit = new Rectangle(
+                (int)Util.WorldToScreenDynamic(localPlayer.Hitbox.TopLeft()).X,
+                (int)Util.WorldToScreenDynamic(localPlayer.Hitbox.TopLeft()).Y,
+                localPlayer.Hitbox.Width, localPlayer.Hitbox.Height);
+            if (rect.Intersects(localHit)) { ImGui.PopFont(); return; }
+        }
+
+        // 避免与其他头顶UI重叠（全局检测）
+        if (usedRects.Any(r => rect.Intersects(r))) { ImGui.PopFont(); return; }
+
+        // 流光 & 呼吸参数
+        float flow = (float)(Main.GameUpdateCount * 0.015) % 1f;
+        float breath = 0.85f + 0.25f * (float)Math.Cos(Main.GameUpdateCount * 0.06);
+        breath = Math.Clamp(breath, 0.6f, 1.1f);
+        Vector4 colA = new Vector4(0.2f, 0.8f, 1.0f, 1f);
+        Vector4 colB = new Vector4(1.0f, 0.6f, 0.2f, 1f);
+
+        ImDrawListPtr dl = ImGui.GetBackgroundDrawList();
+
+        // 外框渐变
+        uint cTL = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.00f + flow) % 1f) * breath);
+        uint cTR = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.25f + flow) % 1f) * breath);
+        uint cBR = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.50f + flow) % 1f) * breath);
+        uint cBL = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.75f + flow) % 1f) * breath);
+        Vector2 outPos = pPos - new Vector2(1, 1);
+        Vector2 outSz = new Vector2(panelW, totalH) + new Vector2(2, 2);
+        dl.AddRectFilledMultiColor(outPos, outPos + outSz, cTL, cTR, cBR, cBL);
+
+        // 内部背景
+        uint bgCol = ImGui.GetColorU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
+        dl.AddRectFilled(pPos, pPos + new Vector2(panelW, totalH), bgCol, 6f);
+
+        // ========== 绘制第一行（所有信息水平排列） ==========
+        float startX = pPos.X + pad;
+        float centerY = pPos.Y + margin + contentH / 2;   // 垂直居中于内容区域
+        float curX = startX;
+
+        // 渐变色定义
+        Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f); // 淡青
+        Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f); // 淡黄
+        Vector4 cyan = new Vector4(0f, 1f, 1f, 1f);        // 青色（攻击）
+        Vector4 skyBlue = new Vector4(0.53f, 0.81f, 0.98f, 1f); // 天蓝（防御）
+        Vector4 yellow = new Vector4(1f, 0.9f, 0.2f, 1f);   // 黄色（伤害）
+        Vector4 white = new Vector4(1f, 1f, 1f, 1f);        // 白色（距离）
+
+        // 1. 名称（渐变色）
+        Vector2 namePos = new Vector2(curX, centerY - titleSz.Y / 2);
+        DrawGrad(dl, namePos, npcTitle, gS, gE);
+        curX += titleSz.X + spc;
+
+        // 2. 攻击图标 + 攻击力
+        Vector2 atkIconPos = new Vector2(curX, centerY - iconSz.Y / 2);
+        ImGuiUtil.DrawItemCentered(dl, atkIcon, atkIconPos + iconSz / 2, iconSz.X);
+        Vector2 atkTxtPos = new Vector2(curX + iconSz.X + 4, centerY - atkSz.Y / 2);
+        DrawGrad(dl, atkTxtPos, atkStr, cyan, cyan);
+        curX += atkItemW + spc;
+
+        // 3. 防御图标 + 防御力
+        Vector2 defIconPos = new Vector2(curX, centerY - iconSz.Y / 2);
+        ImGuiUtil.DrawItemCentered(dl, defIcon, defIconPos + iconSz / 2, iconSz.X);
+        Vector2 defTxtPos = new Vector2(curX + iconSz.X + 4, centerY - defSz.Y / 2);
+        DrawGrad(dl, defTxtPos, defStr, skyBlue, skyBlue);
+        curX += defItemW + spc;
+
+        // 4. 伤害值（黄色）
+        Vector2 dmgPos = new Vector2(curX, centerY - dmgSz.Y / 2);
+        DrawGrad(dl, dmgPos, dmgText, yellow, yellow);
+        curX += dmgSz.X + spc;
+
+        // 5. 距离（白色）
+        Vector2 distPos = new Vector2(curX, centerY - distSz.Y / 2);
+        DrawGrad(dl, distPos, distText, white, white);
+
+        // ========== 绘制血条（底部，内部显示生命值文字，使用渐变填充） ==========
+        float barW = panelW - pad * 2;
+        float barX = pPos.X + pad;
+        float barY = pPos.Y + totalH - bloodH - margin;   // 距离底部 margin 像素
+        Vector2 barPos = new Vector2(barX, barY);
+        Vector2 barSz = new Vector2(barW, bloodH);
+
+        // 血条背景（深灰色）
+        dl.AddRectFilled(barPos, barPos + barSz, ImGui.GetColorU32(new Vector4(0.2f, 0.2f, 0.2f, 0.9f)), 3f);
+
+        // 生命值百分比填充（水平渐变，从 colA 到 colB 乘以呼吸亮度）
+        float hpPercent = (float)npcLife / npcLifeMax;
+        if (hpPercent > 0)
+        {
+            Vector2 fillPos = barPos;
+            Vector2 fillSz = new Vector2(barW * hpPercent, bloodH);
+            uint leftCol = ImGui.GetColorU32(colA * breath);
+            uint rightCol = ImGui.GetColorU32(colB * breath);
+            dl.AddRectFilledMultiColor(fillPos, fillPos + fillSz, leftCol, rightCol, rightCol, leftCol);
+        }
+
+        // 在血条内部绘制生命值文字（居中，白色，裁剪到血条区域）
+        Vector2 lifeTextPos = barPos + new Vector2(barW / 2 - lifeSz.X / 2, (bloodH - lifeSz.Y) / 2);
+        dl.PushClipRect(barPos, barPos + barSz, true);
+        dl.AddText(lifeTextPos, ImGui.GetColorU32(new Vector4(1f, 1f, 0.5f, 1f)), lifeText);
+        dl.PopClipRect();
+
+        // 将当前面板加入全局列表，供后续UI重叠检测
+        usedRects.Add(rect);
 
         ImGui.PopFont();
     }
@@ -342,6 +553,8 @@ internal class HeadUIManager
     /// </summary>
     public static void DrawTileUI()
     {
+        clearRect();   // 每帧清空一次全局矩形列表
+
         // 如果配置中未启用图格UI或者当前处于游戏菜单界面，则直接返回
         if (!Config.ShowTileUI || Main.gameMenu) return;
 
@@ -473,9 +686,6 @@ internal class HeadUIManager
             toDraw = cand;
         }
 
-        // 用于记录已经绘制过的面板矩形，避免重叠
-        List<Rectangle> occ = new();
-
         // 渐变色起始和结束（用于文本）
         Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f);
         Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f);
@@ -502,11 +712,8 @@ internal class HeadUIManager
             foreach (var hit in hits) if (rect.Intersects(hit)) { blocked = true; break; }
             if (blocked) continue;
 
-            // 避免与已经绘制的其他图格面板重叠
-            bool overlap = false;
-            foreach (var o in occ) if (rect.Intersects(o)) { overlap = true; break; }
-            if (overlap) continue;
-            occ.Add(rect);   // 记录当前面板区域
+            // 避免与其他头顶UI重叠（全局检测）
+            if (usedRects.Any(r => rect.Intersects(r))) continue;
 
             // 计算外框流光渐变矩形的四个角颜色（随流动和时间变化）
             uint cTL = ImGui.GetColorU32(Vector4.Lerp(colA, colB, (0.00f + flow) % 1f) * breath);
@@ -531,6 +738,9 @@ internal class HeadUIManager
             Vector2 txtSz = ImGui.CalcTextSize(txt);
             Vector2 tPos = info.p + new Vector2(padVal + iconSize + spcVal, (info.s.Y - txtSz.Y) / 2);
             DrawGrad(dl, tPos, txt, gS, gE);
+
+            // 将当前面板加入全局列表，供后续UI重叠检测
+            usedRects.Add(rect);
         }
 
         // 恢复字体

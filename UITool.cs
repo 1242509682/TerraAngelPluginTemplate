@@ -160,7 +160,13 @@ public class UITool : Tool
 
                 if (showHeadUI)
                 {
-                    // ========== 新增：仅鼠标悬浮显示复选框 ==========
+                    ImGui.SameLine();
+                    bool showMeHeadUI = Config.ShowMeHeadUI;
+                    if (ImGui.Checkbox("显示自己UI", ref showMeHeadUI))
+                    {
+                        Config.ShowMeHeadUI = showMeHeadUI;
+                    }
+
                     bool hoverOnly = Config.ShowHeadUIOnlyOnHover;
                     if (ImGui.Checkbox("鼠标悬停", ref hoverOnly))
                     {
@@ -218,6 +224,31 @@ public class UITool : Tool
                 if (ImGui.SliderFloat("##HeadDist2", ref range, 10, 200, "%.0f格"))
                 {
                     Config.TreasureRange = (int)range;
+                }
+
+                // NPC 伤害头顶 UI 设置
+                ImGui.Separator();
+                bool showNPCUI = Config.ShowNPCDamageUI;
+                if (ImGui.Checkbox("显示NPC伤害UI", ref showNPCUI))
+                {
+                    Config.ShowNPCDamageUI = showNPCUI;
+                }
+                if (showNPCUI)
+                {
+                    bool npcHoverOnly = Config.ShowNPCUIOnlyOnHover;
+                    ImGui.SameLine();
+                    if (ImGui.Checkbox("NPC悬停", ref npcHoverOnly))
+                    {
+                        Config.ShowNPCUIOnlyOnHover = npcHoverOnly;
+                    }
+                    ImGui.Text("NPC显示距离:");
+                    ImGui.SameLine();
+                    ImGui.SetNextItemWidth(150);
+                    int npcDist = Config.NPCDamageUIDistance;
+                    if (ImGui.SliderInt("##NPCDist", ref npcDist, 10, 200, "%d 格"))
+                    {
+                        Config.NPCDamageUIDistance = npcDist;
+                    }
                 }
 
                 ImGui.TreePop();

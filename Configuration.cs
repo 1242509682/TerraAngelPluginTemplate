@@ -153,7 +153,7 @@ internal class Configuration
     [JsonProperty("伤害倍率开关")]
     public bool DamageMultiplierEnabled = false;  // 伤害倍率功能总开关
     [JsonProperty("伤害倍率")]
-    public float DamageMultiplier { get; set; } = 2f;
+    public float DamageMultiplier { get; set; } = 1f;
     [JsonProperty("伤害倍率按键")]
     public Keys DamageMultiplierKey = Keys.N;
 
@@ -193,12 +193,22 @@ internal class Configuration
 
     [JsonProperty("显示玩家头顶UI", Order = 50)]
     public bool ShowPlayerHeadUI = true;
+    [JsonProperty("显示自己头顶UI", Order = 50)]
+    public bool ShowMeHeadUI = true;
     [JsonProperty("显示玩家头顶UI距离", Order = 51)]
     public float HeadDist = 40f;
     [JsonProperty("头顶UI快捷键", Order = 52)]
     public Keys HeadUIKey = Keys.U;
     [JsonProperty("鼠标悬停显示玩家UI", Order = 53)]
     public bool ShowHeadUIOnlyOnHover = false;
+
+    // NPC 伤害 UI 相关
+    [JsonProperty("显示NPC伤害UI", Order = 56)]
+    public bool ShowNPCDamageUI = true;
+    [JsonProperty("NPC伤害UI仅鼠标悬停显示", Order = 57)]
+    public bool ShowNPCUIOnlyOnHover = false;
+    [JsonProperty("NPC伤害UI显示距离(格)", Order = 58)]
+    public int NPCDamageUIDistance = 60;
 
     [JsonProperty("寻宝按键", Order = 60)]
     public Keys TreasureKey = Keys.O;

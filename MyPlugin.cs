@@ -300,12 +300,6 @@ public class MyPlugin(string path) : Plugin(path)
             ClientLoader.Chat.WriteLine($"显示头顶UI已 [c/9DA2E7:{status}]", Color.Yellow);
         }
 
-        // 绘制其他玩家头顶UI
-        if (Config.ShowPlayerHeadUI && !Main.mapFullscreen && !Main.gameMenu)
-        {
-            unsafe { DrawHeadUI(); }
-        }
-
         // 寻宝功能 快捷键 O
         if (InputSystem.IsKeyPressed(Config.TreasureKey))
         {
@@ -317,6 +311,18 @@ public class MyPlugin(string path) : Plugin(path)
         if (Config.ShowTileUI && !Main.mapFullscreen && !Main.gameMenu)
         {
             DrawTileUI();
+        }
+
+        // 绘制玩家头顶UI
+        if (Config.ShowPlayerHeadUI && !Main.mapFullscreen && !Main.gameMenu)
+        {
+            unsafe { DrawHeadUI(); }
+        }
+
+        // 绘制 NPC 伤害头顶 UI
+        if (Config.ShowNPCDamageUI && !Main.mapFullscreen && !Main.gameMenu)
+        {
+            DrawNPCUI();
         }
 
         // 绘制UI后检测点击
@@ -352,6 +358,22 @@ public class MyPlugin(string path) : Plugin(path)
         if (Config.Enabled && Config.DamageMultiplier > 1f && e.Owner == Main.myPlayer)
         {
             e.Damage = (int)(e.Damage * Config.DamageMultiplier);
+        }
+
+        // 记录受击 NPC 用于 UI 显示
+        if (Config.ShowNPCDamageUI && e.Owner == Main.myPlayer && e.NPC != null && e.NPC.active && e.Damage > 0)
+        {
+            // 如果攻击了新的 NPC，则切换高亮
+            if (curNPC != e.NPC)
+                curNPC = e.NPC;
+            
+            NpcDamage = e.Damage;
+        }
+
+        // 如果 NPC 死亡，清除高亮
+        if (curNPC != null && (!curNPC.active || curNPC.life <= 0))
+        {
+            curNPC = null;
         }
     }
     #endregion
