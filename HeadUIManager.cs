@@ -231,9 +231,11 @@ internal class HeadUIManager
             int atk = plr.GetWeaponDamage(plr.HeldItem);
             int def = plr.statDefense;
             int life = plr.statLife;
+            int lifeMax = plr.statLifeMax;
+            string lifeValue = $"{life}/{lifeMax}";   // 直接显示 "当前/最大"
             Vector2 aSz = ImGui.CalcTextSize(atk.ToString());
             Vector2 dSz = ImGui.CalcTextSize(def.ToString());
-            Vector2 lSz = ImGui.CalcTextSize(life.ToString());
+            Vector2 lSz = ImGui.CalcTextSize(lifeValue);
 
             // 各项宽度计算（图标+数值+间距）
             float itemW = hasHeld ? iSz.X + 4 : 0;                    // 手持物品宽度
@@ -318,28 +320,33 @@ internal class HeadUIManager
             ImGuiUtil.DrawItemCentered(dl, lifeIcon!, lIconPos + iSz / 2, iSz.X);
             Vector2 lTxtPos = new Vector2(curX + iSz.X + 4, centerY - lSz.Y / 2);
             Vector4 darkRed = new Vector4(1f, 0.4f, 0.4f, 1f);     // 深红色
-            DrawGrad(dl, lTxtPos, life.ToString(), darkRed, darkRed);
+            DrawGrad(dl, lTxtPos, lifeValue, darkRed, darkRed);
             curX += iSz.X + 4 + lSz.X + spc;
 
-            // --- 血条（底部细条，渐变） ---
+            // --- 血条（底部细条，渐变，带裁剪避免溢出圆角） ---
             float hpW = pSz.X - pad * 2;               // 血条宽度（扣除左右边距）
             float hpX = pPos.X + pad;
-            float hpY = pPos.Y + panelH - 8;           // 距离底部8像素
-            float lp = (float)plr.statLife / plr.statLifeMax;
+            float hpY = pPos.Y + panelH - 6;           // 距离底部6像素（原8像素可能太近）
+            float lp = Math.Clamp((float)plr.statLife / plr.statLifeMax, 0f, 1f);
             Vector2 hpPos = new Vector2(hpX, hpY);
             Vector2 hpSz = new Vector2(hpW, 4);        // 血条高度4像素
+
+            // 先裁剪到面板内部（避免圆角处穿出）
+            dl.PushClipRect(pPos, pPos + pSz, true);
             // 深灰色背景
-            dl.AddRectFilled(hpPos, hpPos + hpSz, ImGui.GetColorU32(new Vector4(0.3f, 0.3f, 0.3f, 1f)));
+            dl.AddRectFilled(hpPos, hpPos + hpSz, ImGui.GetColorU32(new Vector4(0.3f, 0.3f, 0.3f, 1f)), 0f);
             if (lp > 0f)
             {
-                // 渐变前景（从左到右 colA -> colB，并乘以呼吸亮度）
+                float fillW = hpW * lp;
+                // 防止浮点误差导致超出
+                fillW = Math.Min(fillW, hpW);
                 Vector2 fillPos = hpPos;
-                Vector2 fillSz = new Vector2(hpSz.X * lp, hpSz.Y);
+                Vector2 fillSz = new Vector2(fillW, hpSz.Y);
                 uint leftCol = ImGui.GetColorU32(colA * breath);
                 uint rightCol = ImGui.GetColorU32(colB * breath);
-                // 水平渐变（左上/右上同左色，右下/左下同右色，实际上需要左->右渐变，这里设置四个角）
                 dl.AddRectFilledMultiColor(fillPos, fillPos + fillSz, leftCol, rightCol, rightCol, leftCol);
             }
+            dl.PopClipRect();
 
             // --- 记录可点击区域（用于打开更多菜单） ---
             Rectangle wholeRect = new Rectangle((int)pPos.X, (int)pPos.Y, (int)pSz.X, (int)pSz.Y);
