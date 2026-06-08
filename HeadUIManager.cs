@@ -434,7 +434,7 @@ internal class HeadUIManager
 
         // 计算血条比例（分母用缓存的最大值，分子不超过分母）
         float hpPercent = (float)Math.Min(rawLife, seenMax) / seenMax;
-        string lifeText = $"{rawLife}/{rawLifeMax}";   // 文字显示真实值
+        string lifeText = $"{rawLife}/{seenMax}";   // 文字显示真实值
 
         // 准备其他文本
         string npcTitle = $"{curNPC.FullName}({curNPC.type})";
