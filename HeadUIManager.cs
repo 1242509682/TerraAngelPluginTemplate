@@ -82,6 +82,7 @@ internal class HeadUIManager
     // NPC 伤害 UI 相关
     public static NPC? curNPC = null;           // 当前受击的高亮 NPC
     public static int NpcDamage = 0;            // 最后一次伤害值
+    public static Dictionary<NPC, int> maxLifeSeen = new();
 
     #region 玩家头顶UI
     /// <summary>
@@ -366,6 +367,9 @@ internal class HeadUIManager
     /// <summary>
     /// 绘制当前受击 NPC 的头顶信息面板（单行：名称、攻防、伤害、距离，血条内显示生命值）
     /// </summary>
+    /// <summary>
+    /// 绘制当前受击 NPC 的头顶信息面板（单行：名称、攻防、伤害、距离，血条内显示生命值）
+    /// </summary>
     public static void DrawNPCUI()
     {
         clearRect();   // 每帧清空一次全局矩形列表
@@ -373,14 +377,25 @@ internal class HeadUIManager
         // 使用中文字体
         ImGui.PushFont(chFont);
 
-        if (!Config.ShowNPCDamageUI) { ImGui.PopFont(); return; }
-        if (curNPC == null || !curNPC.active || curNPC.life <= 0) { ImGui.PopFont(); return; }
+        if (!Config.ShowNPCDamageUI ||
+            curNPC == null || !curNPC.active ||
+            curNPC.life <= 0)
+        {
+            // 清理失效 NPC 的缓存
+            if (curNPC != null && (!curNPC.active || curNPC.life <= 0))
+            {
+                maxLifeSeen.Remove(curNPC);
+                curNPC = null;
+            }
+            ImGui.PopFont();
+            return;
+        }
 
-        Player local = Main.LocalPlayer;
-        if (local == null) { ImGui.PopFont(); return; }
+        Player plr = Main.LocalPlayer;
+        if (plr == null) { ImGui.PopFont(); return; }
 
         // 距离检查
-        float dist = local.Center.Distance(curNPC.Center) / 16f;
+        float dist = plr.Center.Distance(curNPC.Center) / 16f;
         if (dist > Config.NPCDamageUIDistance) { ImGui.PopFont(); return; }
 
         // 鼠标悬浮检测（如果开启）
@@ -398,19 +413,35 @@ internal class HeadUIManager
         // 计算头顶屏幕坐标（上方10像素）
         Vector2 headPos = Util.WorldToScreenDynamic(curNPC.Top - new Vector2(0, 10));
 
-        // 获取 NPC 数值
+        // 获取 NPC 原始数值
+        int rawLife = curNPC.life;
+        int rawLifeMax = curNPC.lifeMax;
         int npcAtk = curNPC.damage;
         int npcDef = curNPC.defense;
-        int npcLife = curNPC.life;
-        int npcLifeMax = curNPC.lifeMax;
 
-        // 准备文本
-        string npcTitle = $"{curNPC.FullName}({curNPC.type})";          // 名称(ID)
-        string dmgText = NpcDamage > 0 ? $"-{NpcDamage}" : "0";         // 伤害值（始终显示）
-        string distText = $"{(int)dist}格";                              // 距离
-        string atkStr = npcAtk.ToString();                               // 攻击力
-        string defStr = npcDef.ToString();                               // 防御力
-        string lifeText = $"{npcLife}/{npcLifeMax}";                     // 生命值/生命上限
+        // ----- 缓存服务端真实最大生命（客户端不同步的解决方案）-----
+        if (!maxLifeSeen.TryGetValue(curNPC, out int seenMax))
+            seenMax = rawLifeMax;
+
+        // 如果当前生命超过缓存，说明服务端提高了上限
+        if (rawLife > seenMax)
+            seenMax = rawLife;
+        // 如果客户端收到的 lifeMax 比缓存大，也更新（防御）
+        if (rawLifeMax > seenMax)
+            seenMax = rawLifeMax;
+
+        maxLifeSeen[curNPC] = seenMax;
+
+        // 计算血条比例（分母用缓存的最大值，分子不超过分母）
+        float hpPercent = (float)Math.Min(rawLife, seenMax) / seenMax;
+        string lifeText = $"{rawLife}/{rawLifeMax}";   // 文字显示真实值
+
+        // 准备其他文本
+        string npcTitle = $"{curNPC.FullName}({curNPC.type})";
+        string dmgText = NpcDamage > 0 ? $"-{NpcDamage}" : "0";
+        string distText = $"{(int)dist}格";
+        string atkStr = npcAtk.ToString();
+        string defStr = npcDef.ToString();
 
         // 预计算尺寸
         Vector2 titleSz = ImGui.CalcTextSize(npcTitle);
@@ -422,24 +453,21 @@ internal class HeadUIManager
         Vector2 iconSz = new Vector2(14, 14);   // 图标大小
 
         // 组合项宽度
-        float atkItemW = iconSz.X + 4 + atkSz.X;    // 攻击图标 + 间距 + 数值
-        float defItemW = iconSz.X + 4 + defSz.X;    // 防御图标 + 间距 + 数值
+        float atkItemW = iconSz.X + 4 + atkSz.X;
+        float defItemW = iconSz.X + 4 + defSz.X;
 
         float spc = 6;          // 项目间距
         float pad = 8;          // 左右内边距
         float margin = 6;       // 上下内边距
         float gap = 4;          // 内容区域与血条之间的间距
-        float bloodH = 18;      // 血条高度（容纳文字）
+        float bloodH = 18;      // 血条高度
 
-        // 内容区域高度（取所有元素的最大高度）
         float contentH = Math.Max(iconSz.Y, Math.Max(titleSz.Y, Math.Max(atkSz.Y, Math.Max(defSz.Y, Math.Max(dmgSz.Y, distSz.Y)))));
-        float totalH = margin * 2 + contentH + gap + bloodH;   // 面板总高度
+        float totalH = margin * 2 + contentH + gap + bloodH;
 
-        // 第一行总宽度
         float rowW = titleSz.X + spc + atkItemW + spc + defItemW + spc + dmgSz.X + spc + distSz.X;
         float panelW = rowW + pad * 2;
 
-        // 面板位置（头顶上方22像素，水平居中）
         Vector2 pPos = headPos - new Vector2(panelW / 2, totalH) + new Vector2(0, -22);
         Rectangle rect = new Rectangle((int)pPos.X, (int)pPos.Y, (int)panelW, (int)totalH);
 
@@ -454,7 +482,7 @@ internal class HeadUIManager
             if (rect.Intersects(localHit)) { ImGui.PopFont(); return; }
         }
 
-        // 避免与其他头顶UI重叠（全局检测）
+        // 避免与其他头顶UI重叠
         if (usedRects.Any(r => rect.Intersects(r))) { ImGui.PopFont(); return; }
 
         // 流光 & 呼吸参数
@@ -479,75 +507,71 @@ internal class HeadUIManager
         uint bgCol = ImGui.GetColorU32(new Vector4(0.1f, 0.1f, 0.1f, 0.75f));
         dl.AddRectFilled(pPos, pPos + new Vector2(panelW, totalH), bgCol, 6f);
 
-        // ========== 绘制第一行（所有信息水平排列） ==========
+        // ========== 绘制第一行 ==========
         float startX = pPos.X + pad;
-        float centerY = pPos.Y + margin + contentH / 2;   // 垂直居中于内容区域
+        float centerY = pPos.Y + margin + contentH / 2;
         float curX = startX;
 
-        // 渐变色定义
-        Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f); // 淡青
-        Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f); // 淡黄
-        Vector4 cyan = new Vector4(0f, 1f, 1f, 1f);        // 青色（攻击）
-        Vector4 skyBlue = new Vector4(0.53f, 0.81f, 0.98f, 1f); // 天蓝（防御）
-        Vector4 yellow = new Vector4(1f, 0.9f, 0.2f, 1f);   // 黄色（伤害）
-        Vector4 white = new Vector4(1f, 1f, 1f, 1f);        // 白色（距离）
+        Vector4 gS = new Vector4(0.65f, 0.84f, 0.92f, 1f);
+        Vector4 gE = new Vector4(0.96f, 0.97f, 0.69f, 1f);
+        Vector4 cyan = new Vector4(0f, 1f, 1f, 1f);
+        Vector4 skyBlue = new Vector4(0.53f, 0.81f, 0.98f, 1f);
+        Vector4 yellow = new Vector4(1f, 0.9f, 0.2f, 1f);
+        Vector4 white = new Vector4(1f, 1f, 1f, 1f);
 
-        // 1. 名称（渐变色）
+        // 1. 名称
         Vector2 namePos = new Vector2(curX, centerY - titleSz.Y / 2);
         DrawGrad(dl, namePos, npcTitle, gS, gE);
         curX += titleSz.X + spc;
 
-        // 2. 攻击图标 + 攻击力
+        // 2. 攻击
         Vector2 atkIconPos = new Vector2(curX, centerY - iconSz.Y / 2);
         ImGuiUtil.DrawItemCentered(dl, atkIcon, atkIconPos + iconSz / 2, iconSz.X);
         Vector2 atkTxtPos = new Vector2(curX + iconSz.X + 4, centerY - atkSz.Y / 2);
         DrawGrad(dl, atkTxtPos, atkStr, cyan, cyan);
         curX += atkItemW + spc;
 
-        // 3. 防御图标 + 防御力
+        // 3. 防御
         Vector2 defIconPos = new Vector2(curX, centerY - iconSz.Y / 2);
         ImGuiUtil.DrawItemCentered(dl, defIcon, defIconPos + iconSz / 2, iconSz.X);
         Vector2 defTxtPos = new Vector2(curX + iconSz.X + 4, centerY - defSz.Y / 2);
         DrawGrad(dl, defTxtPos, defStr, skyBlue, skyBlue);
         curX += defItemW + spc;
 
-        // 4. 伤害值（黄色）
+        // 4. 伤害
         Vector2 dmgPos = new Vector2(curX, centerY - dmgSz.Y / 2);
         DrawGrad(dl, dmgPos, dmgText, yellow, yellow);
         curX += dmgSz.X + spc;
 
-        // 5. 距离（白色）
+        // 5. 距离
         Vector2 distPos = new Vector2(curX, centerY - distSz.Y / 2);
         DrawGrad(dl, distPos, distText, white, white);
 
-        // ========== 绘制血条（底部，内部显示生命值文字，使用渐变填充） ==========
+        // ========== 绘制血条 ==========
         float barW = panelW - pad * 2;
         float barX = pPos.X + pad;
-        float barY = pPos.Y + totalH - bloodH - margin;   // 距离底部 margin 像素
+        float barY = pPos.Y + totalH - bloodH - margin;
         Vector2 barPos = new Vector2(barX, barY);
         Vector2 barSz = new Vector2(barW, bloodH);
 
-        // 血条背景（深灰色）
+        dl.PushClipRect(barPos, barPos + barSz, true);
         dl.AddRectFilled(barPos, barPos + barSz, ImGui.GetColorU32(new Vector4(0.2f, 0.2f, 0.2f, 0.9f)), 3f);
 
-        // 生命值百分比填充（水平渐变，从 colA 到 colB 乘以呼吸亮度）
-        float hpPercent = (float)npcLife / npcLifeMax;
         if (hpPercent > 0)
         {
+            float fillW = Math.Min(barW * hpPercent, barW);
             Vector2 fillPos = barPos;
-            Vector2 fillSz = new Vector2(barW * hpPercent, bloodH);
+            Vector2 fillSz = new Vector2(fillW, bloodH);
             uint leftCol = ImGui.GetColorU32(colA * breath);
             uint rightCol = ImGui.GetColorU32(colB * breath);
             dl.AddRectFilledMultiColor(fillPos, fillPos + fillSz, leftCol, rightCol, rightCol, leftCol);
         }
 
-        // 在血条内部绘制生命值文字（居中，白色，裁剪到血条区域）
         Vector2 lifeTextPos = barPos + new Vector2(barW / 2 - lifeSz.X / 2, (bloodH - lifeSz.Y) / 2);
-        dl.PushClipRect(barPos, barPos + barSz, true);
         dl.AddText(lifeTextPos, ImGui.GetColorU32(new Vector4(1f, 1f, 0.5f, 1f)), lifeText);
+
         dl.PopClipRect();
 
-        // 将当前面板加入全局列表，供后续UI重叠检测
         usedRects.Add(rect);
 
         ImGui.PopFont();

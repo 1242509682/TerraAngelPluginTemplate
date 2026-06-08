@@ -307,29 +307,27 @@ public class MyPlugin(string path) : Plugin(path)
             ScanTreasure(Main.LocalPlayer, Config.TreasureRange);
         }
 
-        // 绘制图格头顶UI
-        if (Config.ShowTileUI && !Main.mapFullscreen && !Main.gameMenu)
+        // 
+        if (!Main.mapFullscreen && !Main.gameMenu)
         {
-            DrawTileUI();
+            // 绘制图格头顶UI
+            if (Config.ShowTileUI)
+                DrawTileUI();
+
+            // 绘制玩家头顶UI
+            if (Config.ShowPlayerHeadUI)
+                unsafe { DrawHeadUI(); }
+
+            // 绘制 NPC 伤害头顶 UI
+            if (Config.ShowNPCDamageUI) 
+                DrawNPCUI();
+
+            // 绘制UI后检测点击
+            CheckClicks();
+
+            // 绘制头顶UI的更多操作弹窗
+            DrawMoreWin();
         }
-
-        // 绘制玩家头顶UI
-        if (Config.ShowPlayerHeadUI && !Main.mapFullscreen && !Main.gameMenu)
-        {
-            unsafe { DrawHeadUI(); }
-        }
-
-        // 绘制 NPC 伤害头顶 UI
-        if (Config.ShowNPCDamageUI && !Main.mapFullscreen && !Main.gameMenu)
-        {
-            DrawNPCUI();
-        }
-
-        // 绘制UI后检测点击
-        CheckClicks();
-
-        // 绘制头顶UI的更多操作弹窗
-        DrawMoreWin();
     }
     #endregion
 
@@ -339,6 +337,7 @@ public class MyPlugin(string path) : Plugin(path)
         var npc = e.npc;
         // 排除城镇NPC、友好NPC、雕像怪、傀儡
         if (npc == null || !npc.active || !Config.Enabled || npc.SpawnedFromStatue || npc.type == 488) return;
+
         if (Config.NPCAutoHeal)
         {
             Utils.NPCAutoHeal(npc, e.whoAmI);  // npc自动回血
@@ -348,6 +347,13 @@ public class MyPlugin(string path) : Plugin(path)
         if (Config.AutoTalkNPC && npc.townNPC)
         {
             Utils.AutoNPCTalks(npc, e.whoAmI);
+        }
+
+        // 如果 NPC 死亡，清除高亮
+        if (curNPC != null && (!curNPC.active || curNPC.life <= 0))
+        {
+            maxLifeSeen.Remove(curNPC);
+            curNPC = null;
         }
     }
     #endregion
@@ -366,13 +372,14 @@ public class MyPlugin(string path) : Plugin(path)
             // 如果攻击了新的 NPC，则切换高亮
             if (curNPC != e.NPC)
                 curNPC = e.NPC;
-            
+
             NpcDamage = e.Damage;
         }
 
         // 如果 NPC 死亡，清除高亮
         if (curNPC != null && (!curNPC.active || curNPC.life <= 0))
         {
+            maxLifeSeen.Remove(curNPC);
             curNPC = null;
         }
     }

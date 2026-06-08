@@ -300,7 +300,8 @@ internal class Configuration
         TreasureRange = 35;
         TreasureList = new()
         {
-            TileID.Torches
+            TileID.LifeFruit,
+            TileID.PlanteraBulb,
         };
     }
     #endregion
