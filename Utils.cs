@@ -2652,12 +2652,14 @@ internal class Utils
         foreach (var kv in ContentSamples.ItemsByType)
         {
             Item item = kv.Value;
-            if (item != null && item.createTile == tileID)
+            if (item != null && (item.createTile == tileID || item.createWall == tileID))
                 name = Lang.GetItemNameValue(item.type);
         }
 
+        // 如果物品模板没有这个图格名称
         if (string.IsNullOrEmpty(name))
         {
+            // 从配方类里获取图格名 再拿不到 就返回图格英文名
             name = !string.IsNullOrEmpty(Recipe.GetRequiredTileName(tileID)) ?
                    $"{Recipe.GetRequiredTileName(tileID)}[{tileID}]" :
                    $"{TileID.Search.GetName(tileID)}({tileID})";
