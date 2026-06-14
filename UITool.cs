@@ -2758,8 +2758,9 @@ public class UITool : Tool
 
         // 手持物品添加
         Item? held = Main.LocalPlayer.HeldItem;
-        int heldTile = (held != null && !held.IsAir) ? held.createTile : -1;
-        if (held != null && held.IsAir && heldTile > 0)
+        int heldTile = held.createTile > 0 ? held.createTile : -1;
+        int heldWall = held.createWall > 0 ? held.createWall : -1;
+        if (held != null && !held.IsAir && (heldTile > 0 || heldWall > 0))
         {
             if (ImGui.Button($"添加手持物品：{held.Name}"))
             {

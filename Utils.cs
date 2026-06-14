@@ -2657,7 +2657,11 @@ internal class Utils
         }
 
         if (string.IsNullOrEmpty(name))
-            name = $"{TileID.Search.GetName(tileID)}({tileID})";
+        {
+            name = !string.IsNullOrEmpty(Recipe.GetRequiredTileName(tileID)) ?
+                   $"{Recipe.GetRequiredTileName(tileID)}[{tileID}]" :
+                   $"{TileID.Search.GetName(tileID)}({tileID})";
+        }
 
         return name;
     }
