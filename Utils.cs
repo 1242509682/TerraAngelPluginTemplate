@@ -1987,7 +1987,7 @@ internal class Utils
             slot = -1;
             for (int i = 0; i < shopItem.Length; i++)
             {
-                if (!shopItem[i].active)
+                if (shopItem[i].type == 0)
                 {
                     slot = i;
                     break;
@@ -2678,7 +2678,7 @@ internal class Utils
         var noPrefix = false;
         WorldGen.KillTile_GetItemDrops(x, y, Main.tile[x, y], out int type, out int stack, out _, out _, out noPrefix);
         WorldItem item = new();
-        item.SetDefaults(type);
+        item.inner.SetDefaults(type);
         item.stack = stack;
         return item;
     }

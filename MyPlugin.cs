@@ -21,7 +21,7 @@ public class MyPlugin(string path) : Plugin(path)
     #region 插件信息
     public override string Name => typeof(MyPlugin).Namespace!;
     public string Author => "羽学";
-    public Version Version => new(1, 1, 9);
+    public Version Version => new(1, 2, 0);
     #endregion
 
     #region 注册与卸载
