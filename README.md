@@ -74,7 +74,7 @@
 <summary>📜 更新日志（点击展开）</summary>
 
 ### v1.2.0
-- 更新MonoMod.RuntimeDetour依赖至v25.3.6
+- 更新依赖:MonoMod.RuntimeDetour 25.3.3 => 25.3.6
 - 适配泰拉瑞亚v1.4.5.8
 
 ### v1.1.9
